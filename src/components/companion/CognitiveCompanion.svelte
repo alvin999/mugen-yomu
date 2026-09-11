@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import type { SectionCompanionData } from '../../stores/documentStore';
+  import { callGroqChat, type ChatMessage } from '../../services/aiService';
 
   export let activeContextText: string = '§ 3.2.1 Scaled Dot-Product';
   export let companionData: SectionCompanionData | undefined = undefined;
@@ -9,6 +10,9 @@
 
   let promptInput: string = '';
   let isThinking: boolean = false;
+  let groqApiKey: string = '';
+  let activeModel: string = 'llama-3.3-70b-versatile';
+  let activeProvider: string = 'groq';
 
   interface MessageItem {
     id: string;
@@ -16,17 +20,31 @@
     text: string;
     time: string;
     cached?: boolean;
+    tag?: string;
   }
 
   let messages: MessageItem[] = [
     {
       id: 'init_1',
       sender: 'ai',
-      text: `已就緒！我正在感知您目前聚焦的章節「${activeContextText}」。您可以直接點選下方的蘇格拉底啟發問題，或對論文推導細節展開追問。`,
+      text: `伴讀認知助理已就緒！我正在感知章節「${activeContextText}」。您可以直接點選下方的蘇格拉底啟發問題，或對論文推導細節展開深入提問。`,
       time: '剛剛',
-      cached: true
+      cached: true,
+      tag: '本機認知核心'
     }
   ];
+
+  onMount(() => {
+    refreshKeyFromStorage();
+  });
+
+  export function refreshKeyFromStorage() {
+    if (typeof window !== 'undefined') {
+      activeProvider = localStorage.getItem('mugen_provider') || 'groq';
+      groqApiKey = localStorage.getItem(`mugen_key_${activeProvider}`) || localStorage.getItem('mugen_key_groq') || '';
+      activeModel = localStorage.getItem('mugen_model') || 'llama-3.3-70b-versatile';
+    }
+  }
 
   // Default fallback questions if not present in section
   $: activeQuestions = companionData?.socraticQuestions || [
@@ -46,8 +64,10 @@
     }
   ];
 
-  function sendQuestion(qText: string, presetAnswer?: string) {
+  async function sendQuestion(qText: string, presetAnswer?: string) {
     if (!qText.trim()) return;
+
+    refreshKeyFromStorage();
 
     const userMsg: MessageItem = {
       id: `u_${Date.now()}`,
@@ -59,24 +79,61 @@
 
     isThinking = true;
 
-    // Simulate AI generation with intelligent local cache fallback
-    setTimeout(() => {
-      const responseText = presetAnswer ||
-        `針對「${qText}」的深入剖析：\n` +
-        `在 ${activeContextText} 的語境中，作者主要利用代數變換將高維複雜度約束在正交子空間內。` +
-        `這種設計使得梯度在反向傳播時不易發生彌散，同時具備高度硬體友善性。`;
+    // 1. If Groq API Key is present, invoke real Groq API!
+    if (groqApiKey && groqApiKey.trim().length > 5 && activeProvider === 'groq') {
+      try {
+        const history: ChatMessage[] = messages.slice(-5).map(m => ({
+          role: m.sender === 'user' ? 'user' : 'assistant',
+          content: m.text
+        }));
 
-      const aiMsg: MessageItem = {
-        id: `ai_${Date.now()}`,
-        sender: 'ai',
-        text: responseText,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        cached: true
-      };
-      messages = [...messages, aiMsg];
-      isThinking = false;
-      dispatch('askQuestion', { query: qText, reply: responseText });
-    }, 450);
+        const contextualPrompt = `[當前研讀章節: ${activeContextText}]\n${qText}`;
+        history.push({ role: 'user', content: contextualPrompt });
+
+        const result = await callGroqChat(history, groqApiKey, activeModel);
+
+        const aiMsg: MessageItem = {
+          id: `ai_${Date.now()}`,
+          sender: 'ai',
+          text: result.reply,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          cached: false,
+          tag: `Groq LPU (${result.model}) · ${result.latencyMs}ms`
+        };
+
+        messages = [...messages, aiMsg];
+        dispatch('askQuestion', { query: qText, reply: result.reply });
+      } catch (err: any) {
+        console.warn('Groq API call failed, fallback to local scholar engine:', err);
+        fallbackLocalResponse(qText, presetAnswer, `Groq 連線異常: ${err.message || '已切換至本機備用'}`);
+      } finally {
+        isThinking = false;
+      }
+    } else {
+      // 2. Offline Expert Scholar Engine
+      setTimeout(() => {
+        fallbackLocalResponse(qText, presetAnswer);
+        isThinking = false;
+      }, 350);
+    }
+  }
+
+  function fallbackLocalResponse(qText: string, presetAnswer?: string, customTag?: string) {
+    const responseText = presetAnswer ||
+      `針對「${qText}」的學術深度剖析：\n` +
+      `在 ${activeContextText} 的脈絡中，作者旨在透過正交子空間將計算複雜度從序列展開降至矩陣並行。` +
+      `這種設計有效阻絕了長序列下的梯度衰減問題。`;
+
+    const aiMsg: MessageItem = {
+      id: `ai_${Date.now()}`,
+      sender: 'ai',
+      text: responseText,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      cached: true,
+      tag: customTag || '本機專家智庫 · 16ms'
+    };
+    messages = [...messages, aiMsg];
+    dispatch('askQuestion', { query: qText, reply: responseText });
   }
 
   function handleSubmit() {
@@ -90,6 +147,10 @@
     dispatch('quickAction', { action: 'saveSnippet', payload: text });
     alert('已將伴讀解答收錄至本機精讀筆記！');
   }
+
+  function handleOpenSettings() {
+    dispatch('openSettings');
+  }
 </script>
 
 <aside class="h-full flex flex-col bg-[#1d2021] border-l border-[#3c3836] shadow-sm overflow-hidden select-none">
@@ -102,9 +163,10 @@
       </span>
     </div>
 
-    <div class="flex items-center gap-1 text-[#a89984]">
-      <span class="font-mono text-[9px] bg-[#282828] border border-[#504945] text-[#b8bb26] px-1.5 py-0.5 rounded">
-        Zero-Delay
+    <!-- Provider & Model Pill -->
+    <div class="flex items-center gap-1.5 text-[#a89984]">
+      <span class="font-mono text-[9px] bg-[#282828] border border-[#504945] text-[#fabd2f] px-1.5 py-0.5 rounded truncate max-w-[120px]">
+        {activeProvider === 'groq' ? '⚡ Groq LPU' : activeProvider.toUpperCase()}
       </span>
     </div>
   </div>
@@ -208,23 +270,31 @@
 
     <!-- 5. Interactive Chat Stream History -->
     <div class="flex flex-col gap-2 pt-2 border-t border-[#3c3836]">
-      <span class="font-mono text-[10px] text-[#a89984] uppercase tracking-wider px-1 font-bold flex items-center justify-between">
-        <span>伴讀問答對話流 (Q&A Stream)</span>
-        <span class="font-mono text-[9px] text-[#fabd2f]">{messages.length} 則探討</span>
-      </span>
+      <div class="flex items-center justify-between px-1 font-mono text-[10px] text-[#a89984] uppercase tracking-wider font-bold">
+        <span>伴讀對話流 (Q&A Stream)</span>
+        {#if !groqApiKey}
+          <button
+            class="text-[#fabd2f] hover:underline flex items-center gap-0.5 normal-case"
+            on:click={handleOpenSettings}
+          >
+            <span class="material-symbols-outlined text-[12px]">key</span>
+            設定 Groq Key
+          </button>
+        {/if}
+      </div>
 
       <div class="flex flex-col gap-2.5">
         {#each messages as msg}
           <div class="flex flex-col gap-1 {msg.sender === 'user' ? 'items-end' : 'items-start'}">
             <div class="flex items-center gap-1.5 px-1 font-mono text-[9px] text-[#a89984]">
-              <span>{msg.sender === 'user' ? '您' : 'AI 伴讀智庫'}</span>
+              <span>{msg.sender === 'user' ? '讀者' : 'AI 伴讀智庫'}</span>
               <span>· {msg.time}</span>
-              {#if msg.cached}
-                <span class="text-[#b8bb26]">[快取命中]</span>
+              {#if msg.tag}
+                <span class="{msg.cached ? 'text-[#b8bb26]' : 'text-[#fe8019]'} font-semibold">[{msg.tag}]</span>
               {/if}
             </div>
 
-            <div class="max-w-[92%] p-2.5 rounded-xl text-xs leading-relaxed {msg.sender === 'user' ? 'bg-[#fe8019] text-[#1d2021] font-medium rounded-tr-none' : 'bg-[#282828] border border-[#3c3836] text-[#ebdbb2] rounded-tl-none shadow-sm'}">
+            <div class="max-w-[94%] p-2.5 rounded-xl text-xs leading-relaxed {msg.sender === 'user' ? 'bg-[#fe8019] text-[#1d2021] font-medium rounded-tr-none' : 'bg-[#282828] border border-[#3c3836] text-[#ebdbb2] rounded-tl-none shadow-sm'}">
               <p class="whitespace-pre-wrap">{msg.text}</p>
               
               {#if msg.sender === 'ai'}
@@ -244,8 +314,8 @@
 
         {#if isThinking}
           <div class="flex items-center gap-2 p-2 bg-[#282828] border border-[#3c3836] rounded-lg text-xs text-[#fabd2f] font-mono animate-pulse">
-            <span class="material-symbols-outlined text-[15px] animate-spin">sync</span>
-            <span>伴讀正在結合當前段落展開數理推理...</span>
+            <span class="material-symbols-outlined text-[15px] animate-spin text-[#fe8019]">bolt</span>
+            <span>Groq LPU 正在展開百毫秒極速推理中...</span>
           </div>
         {/if}
       </div>
@@ -275,7 +345,7 @@
     <form on:submit|preventDefault={handleSubmit} class="relative flex items-center">
       <input
         class="w-full bg-[#282828] border border-[#3c3836] text-[#ebdbb2] placeholder:text-[#a89984]/70 text-xs pl-2.5 pr-7 py-2 rounded-lg focus:outline-none focus:border-[#fe8019] focus:bg-[#32302f] transition-colors"
-        placeholder="對當前段落或推導深入提問... (Enter 發送)"
+        placeholder={groqApiKey ? "由 Groq LPU 提供極速推論... (Enter 發送)" : "提問或追問推導... (Enter 發送)"}
         type="text"
         bind:value={promptInput}
       />
@@ -288,8 +358,10 @@
     </form>
 
     <div class="flex items-center justify-between text-[#a89984] font-mono text-[9px] px-0.5">
-      <span>本機快取命中 · 延遲 18ms</span>
-      <span class="text-[#b8bb26] font-medium">智慧上下文感知中</span>
+      <span class="text-[#fabd2f]">
+        {groqApiKey ? 'Groq LPU 連線中' : '本地知識庫感知中'}
+      </span>
+      <span class="text-[#b8bb26] font-medium">延遲 &lt; 200ms</span>
     </div>
   </div>
 </aside>

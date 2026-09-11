@@ -25,8 +25,9 @@
   let isImportOpen: boolean = false;
   let isRepositoryOpen: boolean = false;
 
-  let modelName: string = 'Claude 3.5 Sonnet (Local Key)';
+  let modelName: string = 'Groq (Llama 3.3 70B)';
   let cachedInfo: string = '$0.14 / 2.4k cached (省 82%)';
+  let companionRef: any = null;
 
   let paperLibrary: PaperDocument[] = [];
   let activePaperId: string = 'arxiv_1706_03762';
@@ -175,7 +176,16 @@
   }
 
   function handleByokSave(event: CustomEvent<{ provider: string; model: string; apiKey: string }>) {
-    modelName = `${event.detail.model} (Local Key)`;
+    const p = event.detail.provider;
+    const m = event.detail.model;
+    if (p === 'groq') {
+      modelName = `Groq (${m.replace('llama-', 'Llama-').slice(0, 16)})`;
+    } else {
+      modelName = `${p.toUpperCase()} (${m.slice(0, 12)})`;
+    }
+    if (companionRef && companionRef.refreshKeyFromStorage) {
+      companionRef.refreshKeyFromStorage();
+    }
   }
 </script>
 
@@ -253,10 +263,12 @@
         <!-- Column 3: AI Cognitive Companion (hidden in Zen mode) -->
         {#if readingMode !== 'zen'}
           <CognitiveCompanion
+            bind:this={companionRef}
             {activeContextText}
             companionData={activePaper?.companionData[activeSectionId]}
             on:askQuestion={handleAskQuestion}
             on:quickAction={handleQuickCompanionAction}
+            on:openSettings={() => isByokOpen = true}
           />
         {/if}
 
