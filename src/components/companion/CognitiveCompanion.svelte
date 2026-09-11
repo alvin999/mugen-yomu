@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import type { SectionCompanionData } from '../../stores/documentStore';
-  import { callGroqChat, type ChatMessage } from '../../services/aiService';
+  import { callProviderChat, type ChatMessage } from '../../services/aiService';
 
   export let activeContextText: string = '§ 3.2.1 Scaled Dot-Product';
   export let companionData: SectionCompanionData | undefined = undefined;
@@ -10,7 +10,8 @@
 
   let promptInput: string = '';
   let isThinking: boolean = false;
-  let groqApiKey: string = '';
+  let apiKey: string = '';
+  let ollamaUrl: string = 'http://localhost:11434';
   let activeModel: string = 'llama-3.3-70b-versatile';
   let activeProvider: string = 'groq';
 
@@ -41,8 +42,9 @@
   export function refreshKeyFromStorage() {
     if (typeof window !== 'undefined') {
       activeProvider = localStorage.getItem('mugen_provider') || 'groq';
-      groqApiKey = localStorage.getItem(`mugen_key_${activeProvider}`) || localStorage.getItem('mugen_key_groq') || '';
+      apiKey = localStorage.getItem(`mugen_key_${activeProvider}`) || localStorage.getItem('mugen_key_groq') || '';
       activeModel = localStorage.getItem('mugen_model') || 'llama-3.3-70b-versatile';
+      ollamaUrl = localStorage.getItem('mugen_ollama_url') || 'http://localhost:11434';
     }
   }
 
@@ -79,8 +81,9 @@
 
     isThinking = true;
 
-    // 1. If Groq API Key is present, invoke real Groq API!
-    if (groqApiKey && groqApiKey.trim().length > 5 && activeProvider === 'groq') {
+    const isLocalOllama = activeProvider === 'ollama';
+    // 1. If API Key is present or Ollama local is chosen, invoke live AI!
+    if ((apiKey && apiKey.trim().length > 5) || isLocalOllama) {
       try {
         const history: ChatMessage[] = messages.slice(-5).map(m => ({
           role: m.sender === 'user' ? 'user' : 'assistant',
@@ -90,22 +93,24 @@
         const contextualPrompt = `[當前研讀章節: ${activeContextText}]\n${qText}`;
         history.push({ role: 'user', content: contextualPrompt });
 
-        const result = await callGroqChat(history, groqApiKey, activeModel);
+        const result = await callProviderChat(activeProvider, history, apiKey, activeModel, ollamaUrl);
 
         const aiMsg: MessageItem = {
           id: `ai_${Date.now()}`,
           sender: 'ai',
           text: result.reply,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          cached: false,
-          tag: `Groq LPU (${result.model}) · ${result.latencyMs}ms`
+          cached: result.cached,
+          tag: result.cached
+            ? `本機快取 · ${result.model} · ${result.latencyMs}ms`
+            : `${result.provider.toUpperCase()} (${result.model}) · ${result.latencyMs}ms`
         };
 
         messages = [...messages, aiMsg];
-        dispatch('askQuestion', { query: qText, reply: result.reply });
+        dispatch('askQuestion', { query: qText, reply: result.reply, cached: result.cached });
       } catch (err: any) {
-        console.warn('Groq API call failed, fallback to local scholar engine:', err);
-        fallbackLocalResponse(qText, presetAnswer, `Groq 連線異常: ${err.message || '已切換至本機備用'}`);
+        console.warn(`${activeProvider} API call failed, fallback to local scholar engine:`, err);
+        fallbackLocalResponse(qText, presetAnswer, `${activeProvider.toUpperCase()} 連線異常: ${err.message || '已切換至本機備用'}`);
       } finally {
         isThinking = false;
       }
@@ -272,13 +277,13 @@
     <div class="flex flex-col gap-2 pt-2 border-t border-[#3c3836]">
       <div class="flex items-center justify-between px-1 font-mono text-[10px] text-[#a89984] uppercase tracking-wider font-bold">
         <span>伴讀對話流 (Q&A Stream)</span>
-        {#if !groqApiKey}
+        {#if !apiKey && activeProvider !== 'ollama'}
           <button
             class="text-[#fabd2f] hover:underline flex items-center gap-0.5 normal-case"
             on:click={handleOpenSettings}
           >
             <span class="material-symbols-outlined text-[12px]">key</span>
-            設定 Groq Key
+            設定 {activeProvider.toUpperCase()} Key
           </button>
         {/if}
       </div>
@@ -315,7 +320,7 @@
         {#if isThinking}
           <div class="flex items-center gap-2 p-2 bg-[#282828] border border-[#3c3836] rounded-lg text-xs text-[#fabd2f] font-mono animate-pulse">
             <span class="material-symbols-outlined text-[15px] animate-spin text-[#fe8019]">bolt</span>
-            <span>Groq LPU 正在展開百毫秒極速推理中...</span>
+            <span>{activeProvider === 'groq' ? 'Groq LPU' : activeProvider.toUpperCase()} 正在展開學術推理中...</span>
           </div>
         {/if}
       </div>
@@ -345,7 +350,7 @@
     <form on:submit|preventDefault={handleSubmit} class="relative flex items-center">
       <input
         class="w-full bg-[#282828] border border-[#3c3836] text-[#ebdbb2] placeholder:text-[#a89984]/70 text-xs pl-2.5 pr-7 py-2 rounded-lg focus:outline-none focus:border-[#fe8019] focus:bg-[#32302f] transition-colors"
-        placeholder={groqApiKey ? "由 Groq LPU 提供極速推論... (Enter 發送)" : "提問或追問推導... (Enter 發送)"}
+        placeholder={(apiKey || activeProvider === 'ollama') ? `${activeProvider.toUpperCase()} 伴讀推論中... (Enter 發送)` : "提問或追問推導... (Enter 發送)"}
         type="text"
         bind:value={promptInput}
       />
@@ -359,7 +364,7 @@
 
     <div class="flex items-center justify-between text-[#a89984] font-mono text-[9px] px-0.5">
       <span class="text-[#fabd2f]">
-        {groqApiKey ? 'Groq LPU 連線中' : '本地知識庫感知中'}
+        {(apiKey || activeProvider === 'ollama') ? `${activeProvider.toUpperCase()} (${activeModel.slice(0, 16)}) 連線中` : '本地知識庫感知中'}
       </span>
       <span class="text-[#b8bb26] font-medium">延遲 &lt; 200ms</span>
     </div>

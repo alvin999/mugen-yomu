@@ -5,6 +5,7 @@
   import DensityRibbon from './layout/DensityRibbon.svelte';
   import ReadingMap from './reading-map/ReadingMap.svelte';
   import BilingualReader from './reader/BilingualReader.svelte';
+  import DerivationsFiguresView from './reader/DerivationsFiguresView.svelte';
   import CognitiveCompanion from './companion/CognitiveCompanion.svelte';
   import ByokModal from './byok/ByokModal.svelte';
   import ImportPaperModal from './repository/ImportPaperModal.svelte';
@@ -17,6 +18,7 @@
     type PaperDocument
   } from '../stores/documentStore';
   import { flattenSections } from '../stores/readingStore';
+  import { getCacheStats, type CacheStats } from '../services/cacheService';
 
   // State Management
   let readingMode: 'bilingual' | 'zen' | 'figures' = 'bilingual';
@@ -24,10 +26,13 @@
   let isByokOpen: boolean = false;
   let isImportOpen: boolean = false;
   let isRepositoryOpen: boolean = false;
+  let isRailCollapsed: boolean = false;
 
   let modelName: string = 'Groq (Llama 3.3 70B)';
   let cachedInfo: string = '$0.14 / 2.4k cached (省 82%)';
+  let cacheStats: CacheStats | null = null;
   let companionRef: any = null;
+  let readerRef: any = null;
 
   let paperLibrary: PaperDocument[] = [];
   let activePaperId: string = 'mugen_yomu_user_manual';
@@ -45,7 +50,12 @@
     if (current) {
       setPaper(current);
     }
+    refreshCacheStats();
   });
+
+  async function refreshCacheStats() {
+    cacheStats = await getCacheStats();
+  }
 
   function setPaper(paper: PaperDocument) {
     activePaper = paper;
@@ -76,6 +86,14 @@
       const found = allSecs.find(s => s.id === activeSectionId);
       activeContextText = found ? `§ ${found.title}` : `§ ${activeSectionId}`;
     }
+    if (readingMode === 'figures') {
+      readingMode = 'bilingual';
+    }
+    setTimeout(() => {
+      if (readerRef && readerRef.scrollToTarget) {
+        readerRef.scrollToTarget('sec-' + activeSectionId);
+      }
+    }, 60);
   }
 
   function handleSelectFigure(event: CustomEvent<{ figId: string }>) {
@@ -83,6 +101,9 @@
   }
 
   function handleSelectEquation(event: CustomEvent<{ eqId: string }>) {
+    if (readingMode === 'figures') {
+      readingMode = 'bilingual';
+    }
     if (activePaper?.sections) {
       const allSecs = flattenSections(activePaper.sections);
       const formulaSec = allSecs.find(s => s.formulas && s.formulas.some((f: any) => f.id === event.detail.eqId)) ||
@@ -90,11 +111,13 @@
       if (formulaSec) {
         activeSectionId = formulaSec.id;
         activeContextText = `§ ${formulaSec.title}`;
-        return;
       }
     }
-    activeSectionId = '3.2';
-    activeContextText = '§ 3.2 Complex Sentence Deconstruction';
+    setTimeout(() => {
+      if (readerRef && readerRef.scrollToTarget) {
+        readerRef.scrollToTarget('eq-' + event.detail.eqId);
+      }
+    }, 60);
   }
 
   function handleReaderAction(event: CustomEvent<{ action: string; payload?: any }>) {
@@ -118,11 +141,14 @@
         }
       ];
       alert(`已為「${noteTitle}」新增精讀筆記！`);
+    } else if (action === 'translationCompleted') {
+      refreshCacheStats();
     }
   }
 
   function handleAskQuestion(event: CustomEvent<{ query: string; reply?: string }>) {
     activeContextText = `探討中: ${event.detail.query.slice(0, 18)}...`;
+    refreshCacheStats();
   }
 
   function handleQuickCompanionAction(event: CustomEvent<{ action: string; payload?: any }>) {
@@ -142,7 +168,6 @@
 
   function handleExportNotes() {
     if (capturedNotes.length === 0) {
-      // Create initial sample notes if empty
       capturedNotes = [
         {
           title: `精讀標註 · ${activePaper?.title || 'Attention Is All You Need'}`,
@@ -193,23 +218,28 @@
     if (companionRef && companionRef.refreshKeyFromStorage) {
       companionRef.refreshKeyFromStorage();
     }
+    refreshCacheStats();
   }
 </script>
 
 <div class="flex h-screen w-screen bg-[#282828] text-[#ebdbb2] overflow-hidden select-text">
-  <!-- Left Navigation Rail (Fixed 64px) -->
+  <!-- Left Navigation Rail (Collapsible: 64px / 240px) -->
   <NavigationRail
     paperCount={paperLibrary.length}
+    bind:isCollapsed={isRailCollapsed}
     on:openRepository={() => isRepositoryOpen = true}
+    on:toggleCollapse={(e) => isRailCollapsed = e.detail.isCollapsed}
     on:navigate={(e) => {
       if (e.detail.path === 'cognitive-notes') {
         handleExportNotes();
+      } else if (e.detail.path === 'prompt-formula-lab') {
+        readingMode = 'figures';
       }
     }}
   />
 
-  <!-- Main Content Body (Offset left by 64px rail) -->
-  <div class="pl-64 flex-1 flex flex-col h-full overflow-hidden">
+  <!-- Main Content Body (Offset left dynamically by rail width) -->
+  <div class="transition-all duration-300 ease-in-out {isRailCollapsed ? 'pl-16' : 'pl-60'} flex-1 flex flex-col h-full overflow-hidden">
     <!-- Top Fixed Header -->
     <AppHeader
       {activePaper}
@@ -217,6 +247,8 @@
       bind:zoomLevel
       {modelName}
       {cachedInfo}
+      {isRailCollapsed}
+      {cacheStats}
       on:modeChange={handleModeChange}
       on:zoomChange={handleZoomChange}
       on:openSettings={() => isByokOpen = true}
@@ -234,52 +266,65 @@
         embeddingDim={384}
       />
 
-      <!-- Studio Layout Grid (Dynamic by readingMode) -->
-      <div class="flex-1 overflow-hidden grid transition-all duration-300 {
-        readingMode === 'zen'
-          ? 'grid-cols-1'
-          : readingMode === 'figures'
-          ? 'grid-cols-[270px_minmax(0,1fr)_minmax(0,1fr)]'
-          : 'grid-cols-[270px_minmax(0,1fr)_390px]'
-      }">
-
-        <!-- Column 1: Reading Map (hidden in Zen mode) -->
-        {#if readingMode !== 'zen'}
-          <ReadingMap
-            sections={activePaper?.sections || []}
-            {activeSectionId}
-            arxivId={activePaper?.arxivId}
-            sourceUrl={activePaper?.sourceUrl}
-            on:selectSection={handleSelectSection}
-            on:selectFigure={handleSelectFigure}
-            on:selectEquation={handleSelectEquation}
-          />
-        {/if}
-
-        <!-- Column 2: Bilingual Paper Reader (Scaled by zoomLevel) -->
-        <div class="h-full overflow-hidden" style="zoom: {zoomLevel}%">
-          <BilingualReader
+      <!-- Workspace Studio Layout -->
+      {#if readingMode === 'figures'}
+        <!-- Derivations & Figures Comparative Studio Canvas -->
+        <div class="flex-1 overflow-hidden">
+          <DerivationsFiguresView
             paper={activePaper}
-            {activeSectionId}
-            {readingMode}
-            on:selectSection={handleSelectSection}
-            on:readerAction={handleReaderAction}
+            on:selectSection={(e) => {
+              readingMode = 'bilingual';
+              handleSelectSection(e);
+            }}
           />
         </div>
+      {:else}
+        <!-- Standard Triad / Zen Studio Layout Grid -->
+        <div class="flex-1 overflow-hidden grid transition-all duration-300 {
+          readingMode === 'zen'
+            ? 'grid-cols-1'
+            : 'grid-cols-[270px_minmax(0,1fr)_390px]'
+        }">
 
-        <!-- Column 3: AI Cognitive Companion (hidden in Zen mode) -->
-        {#if readingMode !== 'zen'}
-          <CognitiveCompanion
-            bind:this={companionRef}
-            {activeContextText}
-            companionData={activePaper?.companionData[activeSectionId]}
-            on:askQuestion={handleAskQuestion}
-            on:quickAction={handleQuickCompanionAction}
-            on:openSettings={() => isByokOpen = true}
-          />
-        {/if}
+          <!-- Column 1: Reading Map (hidden in Zen mode) -->
+          {#if readingMode !== 'zen'}
+            <ReadingMap
+              sections={activePaper?.sections || []}
+              {activeSectionId}
+              arxivId={activePaper?.arxivId}
+              sourceUrl={activePaper?.sourceUrl}
+              on:selectSection={handleSelectSection}
+              on:selectFigure={handleSelectFigure}
+              on:selectEquation={handleSelectEquation}
+            />
+          {/if}
 
-      </div>
+          <!-- Column 2: Bilingual Paper Reader (Scaled by zoomLevel) -->
+          <div class="h-full overflow-hidden" style="zoom: {zoomLevel}%">
+            <BilingualReader
+              bind:this={readerRef}
+              paper={activePaper}
+              {activeSectionId}
+              {readingMode}
+              on:selectSection={handleSelectSection}
+              on:readerAction={handleReaderAction}
+            />
+          </div>
+
+          <!-- Column 3: AI Cognitive Companion (hidden in Zen mode) -->
+          {#if readingMode !== 'zen'}
+            <CognitiveCompanion
+              bind:this={companionRef}
+              {activeContextText}
+              companionData={activePaper?.companionData[activeSectionId]}
+              on:askQuestion={handleAskQuestion}
+              on:quickAction={handleQuickCompanionAction}
+              on:openSettings={() => isByokOpen = true}
+            />
+          {/if}
+
+        </div>
+      {/if}
     </main>
   </div>
 
@@ -308,3 +353,4 @@
     on:close={() => isByokOpen = false}
   />
 </div>
+

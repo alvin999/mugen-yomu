@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import type { PaperDocument, ChapterSection } from '../../stores/documentStore';
   import { flattenSections } from '../../stores/readingStore';
+  import { translateAcademicText } from '../../services/aiService';
   import katex from 'katex';
 
   export let paper: PaperDocument | null = null;
@@ -10,6 +11,18 @@
   export let isAbstractCollapsed: boolean = false;
 
   const dispatch = createEventDispatcher();
+
+  let selectedAuthorInfo: string | null = null;
+  let scrollContainer: HTMLElement | null = null;
+
+  // Paragraph Translation States
+  let paragraphTranslations: Record<string, string> = {};
+  let showTranslationMap: Record<string, boolean> = {};
+  let translatingMap: Record<string, boolean> = {};
+  let translationSourceMap: Record<string, string> = {};
+  let translationNoticeMap: Record<string, string> = {};
+  let isTypingMap: Record<string, boolean> = {};
+  let isSectionTranslating: boolean = false;
 
   function renderMath(latex: string, displayMode: boolean = false): string {
     if (!latex) return '';
@@ -37,12 +50,118 @@
     dispatch('selectSection', { id });
   }
 
+  function handleAuthorClick(author: string) {
+    selectedAuthorInfo = selectedAuthorInfo === author ? null : author;
+  }
+
+  export function scrollToTarget(targetId: string) {
+    if (typeof document === 'undefined') return;
+    const cleanId = targetId.startsWith('sec-') || targetId.startsWith('eq-') || targetId.startsWith('fig-')
+      ? targetId
+      : `sec-${targetId}`;
+    const el = document.getElementById(cleanId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  async function toggleParagraphTranslation(secId: string, pIndex: number, text: string) {
+    const key = `${secId}_${pIndex}`;
+    
+    // 若正在打字機生成中，點擊可立即跳過打字動畫 (Instant Complete)
+    if (isTypingMap[key]) {
+      isTypingMap[key] = false;
+      isTypingMap = { ...isTypingMap };
+      return;
+    }
+
+    if (showTranslationMap[key]) {
+      showTranslationMap[key] = false;
+      showTranslationMap = { ...showTranslationMap };
+      return;
+    }
+    if (paragraphTranslations[key]) {
+      showTranslationMap[key] = true;
+      showTranslationMap = { ...showTranslationMap };
+      return;
+    }
+
+    // 即刻展開卡片進入打字機串流模式，消除讀者空等感
+    translatingMap[key] = true;
+    isTypingMap[key] = true;
+    showTranslationMap[key] = true;
+    paragraphTranslations[key] = '';
+    translatingMap = { ...translatingMap };
+    isTypingMap = { ...isTypingMap };
+    showTranslationMap = { ...showTranslationMap };
+    paragraphTranslations = { ...paragraphTranslations };
+
+    const provider = typeof window !== 'undefined' ? localStorage.getItem('mugen_provider') || 'groq' : 'groq';
+    const apiKey = typeof window !== 'undefined' ? localStorage.getItem(`mugen_key_${provider}`) || '' : '';
+    const model = typeof window !== 'undefined' ? localStorage.getItem('mugen_model') || 'llama-3.3-70b-versatile' : 'llama-3.3-70b-versatile';
+    const ollamaUrl = typeof window !== 'undefined' ? localStorage.getItem('mugen_ollama_url') || 'http://localhost:11434' : 'http://localhost:11434';
+
+    try {
+      const res = await translateAcademicText(
+        text,
+        provider,
+        apiKey,
+        model,
+        ollamaUrl,
+        (currentStreamText) => {
+          if (showTranslationMap[key]) {
+            paragraphTranslations[key] = currentStreamText;
+            paragraphTranslations = { ...paragraphTranslations };
+          }
+        }
+      );
+      paragraphTranslations[key] = res.translation;
+      translationSourceMap[key] = res.cached ? '本機快取 · 8ms' : `${provider.toUpperCase()} · ${res.latencyMs}ms`;
+      if (res.fallbackNotice) {
+        translationNoticeMap[key] = res.fallbackNotice;
+      }
+      dispatch('readerAction', { action: 'translationCompleted' });
+    } catch (err: any) {
+      const errMsg = String(err?.message || '');
+      const isRateLimit = errMsg.includes('429') || errMsg.includes('503') || errMsg.includes('rate') || errMsg.includes('limit') || errMsg.includes('TPM') || errMsg.includes('quota');
+      if (isRateLimit) {
+        paragraphTranslations[key] = `⚠️ 已達模型速率限制（Rate Limit）：免費額度每分鐘請求或 Token 已滿載。系統已嘗試自動退避重試，建議稍候 10 秒再試，或在頂部切換為 Llama 3.1 8B 等高頻寬模型。`;
+      } else {
+        paragraphTranslations[key] = `翻譯連線異常：${errMsg || '請檢查 API 金鑰與網路連線'}`;
+      }
+    } finally {
+      isTypingMap[key] = false;
+      translatingMap[key] = false;
+      isTypingMap = { ...isTypingMap };
+      translatingMap = { ...translatingMap };
+      paragraphTranslations = { ...paragraphTranslations };
+      showTranslationMap = { ...showTranslationMap };
+      translationNoticeMap = { ...translationNoticeMap };
+    }
+  }
+
+  async function translateEntireSection(sec: ChapterSection) {
+    if (!sec.paragraphs || isSectionTranslating) return;
+    isSectionTranslating = true;
+    try {
+      for (let i = 0; i < sec.paragraphs.length; i++) {
+        await toggleParagraphTranslation(sec.id, i, sec.paragraphs[i]);
+        // Throttled pacing: wait 600ms between requests to stay safely under 15 RPM / 6k TPM
+        if (i < sec.paragraphs.length - 1) {
+          await new Promise(r => setTimeout(r, 600));
+        }
+      }
+    } finally {
+      isSectionTranslating = false;
+    }
+  }
+
   // Flatten all sections to easily display and anchor
   $: allSections = paper ? flattenSections(paper.sections) : [];
   $: activeSection = allSections.find(s => s.id === activeSectionId) || (allSections[0] || null);
 </script>
 
-<main class="h-full overflow-y-auto px-6 py-6 flex justify-center bg-[#282828] scroll-smooth">
+<main bind:this={scrollContainer} class="h-full overflow-y-auto px-6 py-6 flex justify-center bg-[#282828] scroll-smooth">
   <div class="w-full max-w-[760px] flex flex-col gap-6 pb-28">
 
     {#if paper}
@@ -86,12 +205,22 @@
           {paper.title}
         </h1>
 
-        <div class="text-xs text-[#a89984] flex flex-wrap items-center gap-x-1.5 gap-y-1">
+        <div class="text-xs text-[#a89984] flex flex-wrap items-center gap-x-1.5 gap-y-1 relative">
           {#each paper.authors as author, i}
-            <span class="text-[#d5c4a1] font-medium hover:text-[#fe8019] cursor-pointer">
+            <button
+              class="text-[#d5c4a1] font-medium hover:text-[#fe8019] cursor-pointer transition-colors bg-transparent border-0 p-0 text-left"
+              on:click={() => handleAuthorClick(author)}
+              title="點擊查看作者貢獻度標記"
+            >
               {author}{i < paper.authors.length - 1 ? ',' : ''}
-            </span>
+            </button>
           {/each}
+          {#if selectedAuthorInfo}
+            <div class="w-full mt-1 p-2 rounded-lg bg-[#1d2021] border border-[#fe8019]/40 text-[#ebdbb2] text-[11px] font-mono flex items-center justify-between shadow-lg">
+              <span>{selectedAuthorInfo} · 共同第一作者 / 核心演算法架構設計與實驗驗證 (* Equal contribution)</span>
+              <button class="text-[#a89984] hover:text-[#ebdbb2] ml-2 font-bold" on:click={() => selectedAuthorInfo = null}>✕</button>
+            </div>
+          {/if}
         </div>
 
         <!-- Abstract Collapsible Card -->
@@ -156,12 +285,95 @@
               {/if}
             </div>
 
-            <!-- Paragraphs -->
-            <div class="flex flex-col gap-3">
+            <!-- Paragraphs with Inline Bilingual Translation -->
+            <div class="flex flex-col gap-5">
               {#each sec.paragraphs as para, pIndex}
-                <p class="font-serif text-[17px] text-[#ebdbb2]/90 leading-[32px] text-justify">
-                  {para}
-                </p>
+                {@const key = `${sec.id}_${pIndex}`}
+                <div class="flex flex-col gap-2 group/para relative">
+                  <!-- English paragraph: 100% full width, no side-button squeezing -->
+                  <p class="font-serif text-[17px] text-[#ebdbb2]/95 leading-[33px] text-justify w-full tracking-[0.01em]">
+                    {para}
+                  </p>
+
+                  <!-- Bottom Paragraph Action Bar (visible when translation closed) -->
+                  {#if !showTranslationMap[key]}
+                    <div class="flex items-center justify-end pt-0.5">
+                      <button
+                        class="opacity-50 group-hover/para:opacity-100 hover:!opacity-100 transition-all bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 text-[#fabd2f] hover:text-[#fe8019] text-[11px] font-mono px-2.5 py-1 rounded-md flex items-center gap-1.5 shadow-sm cursor-pointer"
+                        on:click|stopPropagation={() => toggleParagraphTranslation(sec.id, pIndex, para)}
+                        title="在下方展開繁體中文精讀對照"
+                      >
+                        {#if translatingMap[key]}
+                          <span class="material-symbols-outlined text-[13px] animate-spin text-[#fe8019]">sync</span>
+                          <span>串流生成中...</span>
+                        {:else if paragraphTranslations[key]}
+                          <span class="material-symbols-outlined text-[13px] text-[#8ec07c]">visibility</span>
+                          <span>展開中譯</span>
+                        {:else}
+                          <span class="material-symbols-outlined text-[13px]">translate</span>
+                          <span>中譯對照</span>
+                        {/if}
+                      </button>
+                    </div>
+                  {/if}
+
+                  <!-- Inline Translated Card with Enhanced Typography & Typewriter Stream -->
+                  {#if showTranslationMap[key]}
+                    <div
+                      class="mt-1 p-4 bg-[#1d2021] border-l-4 border-[#fabd2f] rounded-r-xl flex flex-col gap-2 shadow-lg text-[#ebdbb2] animate-fade-in cursor-default"
+                      on:click={() => { if (isTypingMap[key]) isTypingMap[key] = false; }}
+                      title={isTypingMap[key] ? "點擊卡片可立即跳過打字機動畫完整顯現" : ""}
+                    >
+                      <div class="flex items-center justify-between text-[11px] font-mono text-[#a89984] border-b border-[#3c3836]/60 pb-2">
+                        <span class="flex items-center gap-1.5 text-[#fabd2f] font-semibold">
+                          {#if isTypingMap[key]}
+                            <span class="material-symbols-outlined text-[15px] animate-spin text-[#fe8019]">sync</span>
+                            <span>繁體中文精讀對照 · 實時生成中...</span>
+                          {:else}
+                            <span class="material-symbols-outlined text-[15px]">translate</span>
+                            <span>繁體中文精讀對照</span>
+                          {/if}
+                        </span>
+                        <div class="flex items-center gap-2">
+                          {#if translationNoticeMap[key]}
+                            <span class="text-[#fabd2f] bg-[#fabd2f]/10 border border-[#fabd2f]/40 px-2 py-0.5 rounded text-[10px] flex items-center gap-1 font-sans">
+                              <span class="material-symbols-outlined text-[12px] text-[#fabd2f]">bolt</span>
+                              <span>{translationNoticeMap[key]}</span>
+                            </span>
+                          {/if}
+                          {#if translationSourceMap[key]}
+                            <span class="text-[#b8bb26] bg-[#282828] px-2 py-0.5 rounded border border-[#3c3836] text-[10px]">
+                              {translationSourceMap[key]}
+                            </span>
+                          {/if}
+                          <button
+                            class="hover:text-[#fe8019] text-[#a89984] text-[11px] cursor-pointer flex items-center gap-0.5 transition-colors"
+                            on:click|stopPropagation={() => showTranslationMap[key] = false}
+                            title="收起中譯對照"
+                          >
+                            <span class="material-symbols-outlined text-[13px]">expand_less</span>
+                            <span>收起</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <!-- Paragraph Content with Blinking Typewriter Cursor -->
+                      <p class="pt-1 select-text text-justify font-sans text-[15px] text-[#ebdbb2]/95 leading-[1.95] tracking-[0.035em] font-normal min-h-[32px]">
+                        {#if !paragraphTranslations[key] && isTypingMap[key]}
+                          <span class="text-[#a89984] italic font-mono text-xs flex items-center gap-2 py-1">
+                            <span class="material-symbols-outlined text-[15px] animate-spin text-[#fe8019]">hourglass_top</span>
+                            <span>正在連線模型解析學術語意與術語對齊，即將逐字生成...</span>
+                          </span>
+                        {:else}
+                          {paragraphTranslations[key]}
+                        {/if}
+                        {#if isTypingMap[key]}
+                          <span class="inline-block w-2 h-4 bg-[#fabd2f] ml-1 animate-pulse align-middle select-none shadow-[0_0_8px_#fabd2f]"></span>
+                        {/if}
+                      </p>
+                    </div>
+                  {/if}
+                </div>
               {/each}
             </div>
 
@@ -211,7 +423,7 @@
             <!-- Formulas Sandbox (If present) -->
             {#if sec.formulas && sec.formulas.length > 0}
               {#each sec.formulas as formula}
-                <div class="my-5 bg-[#1d2021] border border-[#504945] p-5 rounded-xl flex flex-col items-center justify-center relative shadow-inner">
+                <div id={`eq-${formula.id}`} class="my-5 bg-[#1d2021] border border-[#504945] p-5 rounded-xl flex flex-col items-center justify-center relative shadow-inner">
                   <span class="absolute right-4 top-3 font-mono text-xs text-[#a89984] select-none">{formula.number}</span>
                   
                   <span class="font-mono text-xs text-[#fabd2f] font-semibold mb-2 flex items-center gap-1.5">
@@ -267,6 +479,21 @@
                 >
                   <span class="material-symbols-outlined text-[14px] text-[#fe8019]">menu_book</span>
                   <span>學術術語對齊</span>
+                </button>
+
+                <button
+                  class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#fabd2f] border border-[#fabd2f]/40 px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
+                  disabled={isSectionTranslating}
+                  on:click|stopPropagation={() => translateEntireSection(sec)}
+                  title="依序佇列展開當前章節所有段落的繁體中文對照翻譯（防 429 節流保護）"
+                >
+                  {#if isSectionTranslating}
+                    <span class="material-symbols-outlined text-[14px] text-[#fe8019] animate-spin">sync</span>
+                    <span>佇列翻譯中...</span>
+                  {:else}
+                    <span class="material-symbols-outlined text-[14px] text-[#fabd2f]">translate</span>
+                    <span>本節雙語對照</span>
+                  {/if}
                 </button>
 
                 <div class="h-4 w-px bg-[#504945] mx-0.5"></div>

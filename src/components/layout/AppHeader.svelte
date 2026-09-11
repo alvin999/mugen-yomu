@@ -1,12 +1,15 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import type { PaperDocument } from '../../stores/documentStore';
+  import type { CacheStats } from '../../services/cacheService';
 
   export let activePaper: PaperDocument | null = null;
   export let readingMode: 'bilingual' | 'zen' | 'figures' = 'bilingual';
   export let zoomLevel: number = 100;
   export let modelName: string = 'Claude 3.5 Sonnet (Local Key)';
   export let cachedInfo: string = '$0.14 / 2.4k cached (省 82%)';
+  export let isRailCollapsed: boolean = false;
+  export let cacheStats: CacheStats | null = null;
 
   const dispatch = createEventDispatcher();
 
@@ -37,7 +40,7 @@
   }
 </script>
 
-<header class="fixed top-0 left-64 right-0 h-16 bg-[#1d2021]/95 backdrop-blur-xl border-b border-[#3c3836] z-40 px-4 flex items-center justify-between shadow-md select-none gap-4">
+<header class="fixed top-0 {isRailCollapsed ? 'left-16' : 'left-60'} right-0 h-16 bg-[#1d2021]/95 backdrop-blur-xl border-b border-[#3c3836] z-40 px-4 flex items-center justify-between shadow-md select-none gap-4 transition-all duration-300 ease-in-out">
   <!-- Left Brand & Breadcrumb (Prioritized flexible width) -->
   <div class="flex items-center gap-2.5 min-w-0 flex-1">
     <!-- Brand -->
@@ -147,10 +150,12 @@
       <span class="h-2 w-2 rounded-full bg-[#fabd2f] animate-pulse"></span>
       <div class="flex flex-col">
         <span class="font-mono text-[10px] text-[#ebdbb2] font-medium leading-tight truncate max-w-[130px]">{modelName}</span>
-        <span class="font-mono text-[8px] text-[#a89984] leading-tight">本機快取活躍</span>
+        <span class="font-mono text-[8px] text-[#a89984] leading-tight">
+          {cacheStats && cacheStats.cachedCount > 0 ? `${cacheStats.cachedCount} 次快取命中 · 本機活躍` : '本機快取活躍'}
+        </span>
       </div>
       <span class="font-mono text-[9px] bg-[#fabd2f]/15 border border-[#d79921]/40 text-[#fabd2f] px-1 py-0.2 rounded font-semibold ml-1">
-        省 82%
+        省 {cacheStats ? cacheStats.savingsPercent : 82}%
       </span>
     </button>
 

@@ -51,6 +51,14 @@
   function selectEquation(eqId: string) {
     dispatch('selectEquation', { eqId });
   }
+
+  let collapsedSections: Record<string, boolean> = {};
+
+  function toggleSectionCollapse(id: string, e: MouseEvent) {
+    e.stopPropagation();
+    collapsedSections[id] = !collapsedSections[id];
+    collapsedSections = { ...collapsedSections };
+  }
 </script>
 
 <aside class="h-full flex flex-col bg-[#1d2021] border-r border-[#3c3836] overflow-hidden select-none">
@@ -112,11 +120,13 @@
       {#each filteredSections as section}
         <!-- Level 1 Section -->
         <div class="flex flex-col">
-          <button
+          <div
             class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-left transition-colors {activeSectionId === section.id ? 'bg-[#3c3836] text-[#fe8019] font-semibold border-l-2 border-[#fe8019]' : 'text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2]'}"
-            on:click={() => selectSection(section.id)}
           >
-            <div class="flex items-center gap-2 min-w-0">
+            <button
+              class="flex items-center gap-2 min-w-0 flex-1 text-left bg-transparent border-0 p-0 text-inherit cursor-pointer"
+              on:click={() => selectSection(section.id)}
+            >
               {#if section.isRead}
                 <span class="material-symbols-outlined text-[15px] text-[#b8bb26]">check_circle</span>
               {:else if activeSectionId === section.id}
@@ -125,30 +135,63 @@
                 <span class="material-symbols-outlined text-[15px] text-[#665c54]">radio_button_unchecked</span>
               {/if}
               <span class="text-xs truncate">{section.title}</span>
+            </button>
+
+            <div class="flex items-center gap-1 shrink-0">
+              {#if section.isRead}
+                <span class="font-mono text-[10px] text-[#b8bb26]">100%</span>
+              {:else if section.progress > 0}
+                <span class="font-mono text-[10px] text-[#fabd2f]">{section.progress}%</span>
+              {/if}
+
+              {#if section.children && section.children.length > 0}
+                <button
+                  class="w-5 h-5 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#504945]/40 transition-colors"
+                  on:click={(e) => toggleSectionCollapse(section.id, e)}
+                  title={collapsedSections[section.id] ? "展開子章節" : "收合子章節"}
+                >
+                  <span class="material-symbols-outlined text-[16px]">
+                    {collapsedSections[section.id] ? 'chevron_right' : 'expand_more'}
+                  </span>
+                </button>
+              {/if}
             </div>
-            {#if section.isRead}
-              <span class="font-mono text-[10px] text-[#b8bb26]">100%</span>
-            {:else if section.progress > 0}
-              <span class="font-mono text-[10px] text-[#fabd2f]">{section.progress}%</span>
-            {/if}
-          </button>
+          </div>
 
           <!-- Level 2 Children -->
-          {#if section.children && section.children.length > 0}
+          {#if section.children && section.children.length > 0 && !collapsedSections[section.id]}
             <div class="ml-2.5 pl-2.5 flex flex-col gap-0.5 mt-0.5 border-l border-[#504945]">
               {#each section.children as sub}
-                <button
+                <div
                   class="w-full flex items-center justify-between px-2 py-1 rounded text-left transition-colors {activeSectionId === sub.id ? 'bg-[#3c3836] text-[#fe8019] font-semibold' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]'}"
-                  on:click={() => selectSection(sub.id)}
                 >
-                  <span class="text-xs truncate">{sub.title}</span>
-                  {#if activeSectionId === sub.id}
-                    <span class="h-1.5 w-1.5 rounded-full bg-[#fe8019] animate-ping"></span>
-                  {/if}
-                </button>
+                  <button
+                    class="flex-1 text-left truncate text-xs bg-transparent border-0 p-0 text-inherit cursor-pointer"
+                    on:click={() => selectSection(sub.id)}
+                  >
+                    {sub.title}
+                  </button>
+
+                  <div class="flex items-center gap-1 shrink-0">
+                    {#if activeSectionId === sub.id}
+                      <span class="h-1.5 w-1.5 rounded-full bg-[#fe8019] animate-ping mr-1"></span>
+                    {/if}
+
+                    {#if sub.children && sub.children.length > 0}
+                      <button
+                        class="w-4 h-4 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2]"
+                        on:click={(e) => toggleSectionCollapse(sub.id, e)}
+                      >
+                        <span class="material-symbols-outlined text-[14px]">
+                          {collapsedSections[sub.id] ? 'chevron_right' : 'expand_more'}
+                        </span>
+                      </button>
+                    {/if}
+                  </div>
+                </div>
 
                 <!-- Level 3 Children -->
-                {#if sub.children && sub.children.length > 0}
+                {#if sub.children && sub.children.length > 0 && !collapsedSections[sub.id]}
                   <div class="ml-2 pl-2 border-l border-[#504945]/70 flex flex-col gap-0.5 py-0.5">
                     {#each sub.children as subsub}
                       <button
