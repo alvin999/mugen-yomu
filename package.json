@@ -12,9 +12,11 @@
   "dependencies": {
     "@astrojs/svelte": "^7.0.0",
     "astro": "^5.4.0",
+    "katex": "^0.18.7",
     "svelte": "^5.0.0"
   },
   "devDependencies": {
+    "@types/katex": "^0.16.8",
     "playwright": "^1.63.0"
   }
 }

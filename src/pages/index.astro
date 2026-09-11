@@ -1,6 +1,7 @@
 ---
 import MugenYomuApp from '../components/MugenYomuApp.svelte';
 import '../styles/gruvbox-theme.css';
+import 'katex/dist/katex.min.css';
 ---
 
 <!doctype html>
@@ -22,6 +23,9 @@ import '../styles/gruvbox-theme.css';
       href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
       rel="stylesheet"
     />
+
+    <!-- KaTeX Mathematical Typography Stylesheet -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
 
     <!-- Tailwind CDN for exact Cognitive Scholar Gruvbox Design System fidelity -->
     <script is:inline src="https://cdn.tailwindcss.com"></script>

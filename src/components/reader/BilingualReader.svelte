@@ -2,6 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import type { PaperDocument, ChapterSection } from '../../stores/documentStore';
   import { flattenSections } from '../../stores/readingStore';
+  import katex from 'katex';
 
   export let paper: PaperDocument | null = null;
   export let activeSectionId: string = '3.2.1';
@@ -9,6 +10,19 @@
   export let isAbstractCollapsed: boolean = false;
 
   const dispatch = createEventDispatcher();
+
+  function renderMath(latex: string, displayMode: boolean = false): string {
+    if (!latex) return '';
+    try {
+      return katex.renderToString(latex, {
+        displayMode,
+        throwOnError: false
+      });
+    } catch (err) {
+      console.warn('KaTeX rendering error:', err);
+      return `<span class="text-[#fb4934] font-mono">${latex}</span>`;
+    }
+  }
 
   function triggerAction(actionName: string, payload?: any) {
     dispatch('readerAction', { action: actionName, payload });
@@ -197,25 +211,29 @@
             <!-- Formulas Sandbox (If present) -->
             {#if sec.formulas && sec.formulas.length > 0}
               {#each sec.formulas as formula}
-                <div class="my-4 bg-[#1d2021] border border-[#504945] p-4 rounded-xl flex flex-col items-center justify-center relative shadow-inner">
+                <div class="my-5 bg-[#1d2021] border border-[#504945] p-5 rounded-xl flex flex-col items-center justify-center relative shadow-inner">
                   <span class="absolute right-4 top-3 font-mono text-xs text-[#a89984] select-none">{formula.number}</span>
                   
-                  <span class="font-mono text-[11px] text-[#fabd2f] font-medium mb-1">
+                  <span class="font-mono text-xs text-[#fabd2f] font-semibold mb-2 flex items-center gap-1.5">
+                    <span class="material-symbols-outlined text-[14px]">functions</span>
                     {formula.name}
                   </span>
 
-                  <!-- Formula Display -->
-                  <div class="font-serif text-[20px] tracking-wide text-[#ebdbb2] flex items-center justify-center gap-2 py-2 select-none flex-wrap">
-                    <span class="font-mono text-[#ebdbb2] bg-[#282828] border border-[#3c3836] px-3 py-1 rounded-lg">
-                      {formula.latexText}
-                    </span>
+                  <!-- Formula Display Rendered via KaTeX -->
+                  <div class="w-full flex items-center justify-center py-3 overflow-x-auto text-[#ebdbb2]">
+                    <div class="katex-display-container text-[20px] text-[#ebdbb2] px-2 select-none">
+                      {@html renderMath(formula.latexText, true)}
+                    </div>
                   </div>
 
-                  <!-- Variables Hover Explanations -->
-                  <div class="flex flex-wrap items-center justify-center gap-2 mt-2 pt-2 border-t border-[#3c3836] w-full">
+                  <!-- Variables Hover Explanations with KaTeX Symbols -->
+                  <div class="flex flex-wrap items-center justify-center gap-2 mt-3 pt-3 border-t border-[#3c3836] w-full">
                     {#each formula.variables as v}
-                      <span class="font-mono text-[10px] bg-[#282828] border border-[#3c3836] px-2 py-0.5 rounded flex items-center gap-1">
-                        <strong style="color: {v.color}">{v.symbol}</strong>:
+                      <span class="font-mono text-xs bg-[#282828] border border-[#3c3836] hover:border-[#504945] px-2.5 py-1 rounded-md flex items-center gap-1.5 shadow-sm transition-colors">
+                        <span class="inline-flex items-center text-sm" style="color: {v.color}">
+                          {@html renderMath(v.symbol, false)}
+                        </span>
+                        <span class="text-[#a89984]">:</span>
                         <span class="text-[#d5c4a1]">{v.meaning}</span>
                       </span>
                     {/each}

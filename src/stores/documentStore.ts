@@ -171,14 +171,14 @@ export const userManualDocument: PaperDocument = {
               id: 'eq_efficiency',
               number: '(1)',
               name: 'Cognitive Reading & Cache Efficiency Model',
-              latexText: '\\eta_{reading} = \\frac{C_{comprehension} \\cdot (1 + \\gamma_{cache})}{\\ln(\\tau_{latency} + 1) \\cdot \\sqrt{\\Omega_{svo}}}',
+              latexText: '\\eta_{\\text{reading}} = \\frac{C_{\\text{comp}} \\cdot (1 + \\gamma_{\\text{cache}})}{\\ln(\\tau_{\\text{lat}} + 1) \\cdot \\sqrt{\\Omega_{\\text{svo}}}}',
               page: 'p. 3',
               variables: [
-                { symbol: '\\eta_{reading}', meaning: '綜合精讀效能指標 (Cognitive Efficiency)', color: '#fe8019' },
-                { symbol: 'C_{comp}', meaning: '原文脈絡理解深度 (0~100%)', color: '#b8bb26' },
-                { symbol: '\\gamma_{cache}', meaning: '本機快取重複命中率 (預設 82%)', color: '#fabd2f' },
-                { symbol: '\\tau_{lat}', meaning: 'AI 推論延遲時間 (毫秒)', color: '#83a598' },
-                { symbol: '\\sqrt{\\Omega_{svo}}', meaning: '長難句語法複雜度阻抗係數', color: '#8ec07c' }
+                { symbol: '\\eta_{\\text{reading}}', meaning: '綜合精讀效能指標 (Cognitive Efficiency)', color: '#fe8019' },
+                { symbol: 'C_{\\text{comp}}', meaning: '原文脈絡理解深度 (0~100%)', color: '#b8bb26' },
+                { symbol: '\\gamma_{\\text{cache}}', meaning: '本機快取重複命中率 (預設 82%)', color: '#fabd2f' },
+                { symbol: '\\tau_{\\text{lat}}', meaning: 'AI 推論延遲時間 (毫秒)', color: '#83a598' },
+                { symbol: '\\sqrt{\\Omega_{\\text{svo}}}', meaning: '長難句語法複雜度阻抗係數', color: '#8ec07c' }
               ]
             }
           ]
@@ -434,13 +434,13 @@ export const attentionPaper: PaperDocument = {
                   id: 'eq1',
                   number: '(1)',
                   name: 'Scaled Dot-Product Attention',
-                  latexText: 'Attention(Q,K,V) = softmax(QK^T / \\sqrt{d_k}) V',
+                  latexText: '\\mathrm{Attention}(Q,K,V) = \\mathrm{softmax}\\left(\\frac{QK^T}{\\sqrt{d_k}}\\right) V',
                   page: 'p. 4',
                   variables: [
                     { symbol: 'Q', meaning: '查詢向量 (Query)', color: '#fe8019' },
                     { symbol: 'K', meaning: '鍵值 (Key)', color: '#fabd2f' },
                     { symbol: 'V', meaning: '實際權重內容 (Value)', color: '#b8bb26' },
-                    { symbol: '√d_k', meaning: '維度縮放除數，防止梯度飽和', color: '#8ec07c' }
+                    { symbol: '\\sqrt{d_k}', meaning: '維度縮放除數，防止梯度飽和', color: '#8ec07c' }
                   ]
                 }
               ]
@@ -460,11 +460,11 @@ export const attentionPaper: PaperDocument = {
                   id: 'eq2',
                   number: '(2)',
                   name: 'Multi-Head Attention',
-                  latexText: 'MultiHead(Q,K,V) = Concat(head_1, ..., head_h) W^O',
+                  latexText: '\\mathrm{MultiHead}(Q,K,V) = \\mathrm{Concat}(\\mathrm{head}_1, ..., \\mathrm{head}_h) W^O',
                   page: 'p. 5',
                   variables: [
                     { symbol: 'h', meaning: '多頭數量 (通常為 8)', color: '#fe8019' },
-                    { symbol: 'head_i', meaning: '第 i 個子空間注意力頭', color: '#8ec07c' },
+                    { symbol: '\\mathrm{head}_i', meaning: '第 i 個子空間注意力頭', color: '#8ec07c' },
                     { symbol: 'W^O', meaning: '最終線性投影輸出矩陣', color: '#fabd2f' }
                   ]
                 }
@@ -922,8 +922,8 @@ export async function fetchWebArticle(url: string): Promise<PaperDocument> {
 // -------------------------------------------------------------
 // 本地儲存與文獻庫管理函式 (LocalStorage / IndexedDB Ready)
 // -------------------------------------------------------------
-const STORAGE_KEY_PAPERS = 'mugen_paper_library_v2';
-const STORAGE_KEY_ACTIVE_ID = 'mugen_active_paper_id_v2';
+const STORAGE_KEY_PAPERS = 'mugen_paper_library_v3';
+const STORAGE_KEY_ACTIVE_ID = 'mugen_active_paper_id_v3';
 
 export function getInitialLibrary(): PaperDocument[] {
   const defaults = [userManualDocument, attentionPaper, resnetPaper, anthropicCircuitsWeb];
