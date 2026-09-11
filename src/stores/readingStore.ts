@@ -30,35 +30,23 @@ export interface ByokState {
 }
 
 export const initialSections: SectionItem[] = [
-  { id: '1', title: '1. Introduction', level: 1, progress: 100, isRead: true },
-  { id: '2', title: '2. Background', level: 1, progress: 100, isRead: true },
+  { id: '1', title: '1. Overview & Architectural Philosophy', level: 1, progress: 100, isRead: true },
+  { id: '2', title: '2. The Triad Reading Space Architecture', level: 1, progress: 100, isRead: true },
   {
     id: '3',
-    title: '3. Model Architecture',
+    title: '3. Cognitive Reading Mechanics & The Focus Lens',
     level: 1,
-    progress: 35,
+    progress: 60,
     isRead: false,
     children: [
-      { id: '3.1', title: '3.1 Encoder and Decoder Stacks', level: 2, progress: 100, isRead: true },
-      {
-        id: '3.2',
-        title: '3.2 Attention',
-        level: 2,
-        progress: 40,
-        isRead: false,
-        children: [
-          { id: '3.2.1', title: '3.2.1 Scaled Dot-Product', level: 3, progress: 80, isRead: false },
-          { id: '3.2.2', title: '3.2.2 Multi-Head Attention', level: 3, progress: 0, isRead: false },
-          { id: '3.2.3', title: '3.2.3 Applications of Attention', level: 3, progress: 0, isRead: false }
-        ]
-      },
-      { id: '3.3', title: '3.3 Position-wise FFN', level: 2, progress: 0, isRead: false },
-      { id: '3.4', title: '3.4 Embeddings & Softmax', level: 2, progress: 0, isRead: false }
+      { id: '3.1', title: '3.1 Reading Flow & Saccadic Tracking', level: 2, progress: 100, isRead: true },
+      { id: '3.2', title: '3.2 Complex Sentence Deconstruction (The SVO Engine)', level: 2, progress: 80, isRead: false },
+      { id: '3.3', title: '3.3 Interactive Formula Sandbox & Notation System', level: 2, progress: 0, isRead: false }
     ]
   },
-  { id: '4', title: '4. Why Self-Attention', level: 1, progress: 0, isRead: false },
-  { id: '5', title: '5. Training & Results', level: 1, progress: 0, isRead: false },
-  { id: '6', title: '6. Conclusion', level: 1, progress: 0, isRead: false }
+  { id: '4', title: '4. The Quad-Layer AI Companion', level: 1, progress: 0, isRead: false },
+  { id: '5', title: '5. Privacy-First BYOK & Local Caching Paradigm', level: 1, progress: 0, isRead: false },
+  { id: '6', title: '6. Workflow Mastery & Keyboard Shortcuts', level: 1, progress: 0, isRead: false }
 ];
 
 export function flattenSections(sections: any[]): any[] {

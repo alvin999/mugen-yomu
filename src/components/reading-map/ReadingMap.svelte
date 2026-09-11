@@ -192,24 +192,24 @@
           <span class="absolute bottom-0.5 right-0.5 font-mono text-[8px] bg-[#1d2021] border border-[#504945] px-0.5 rounded text-[#a89984]">Fig 1</span>
         </div>
         <div class="flex flex-col justify-center min-w-0">
-          <span class="text-xs text-[#ebdbb2] font-medium truncate">Architecture Blueprint</span>
-          <span class="font-mono text-[10px] text-[#a89984] truncate">點擊開啟架構與推導對比</span>
+          <span class="text-xs text-[#ebdbb2] font-medium truncate">The Triad Workspace</span>
+          <span class="font-mono text-[10px] text-[#a89984] truncate">三欄工作台架構與推導</span>
         </div>
       </div>
 
       <!-- Mini Equation Card -->
       <div
         class="bg-[#282828] border border-[#3c3836] border-l-4 border-l-[#fabd2f] p-2 rounded-lg hover:bg-[#32302f] transition-colors cursor-pointer flex flex-col gap-1"
-        on:click={() => selectEquation('eq1')}
+        on:click={() => selectEquation('eq_efficiency')}
         role="button"
         tabindex="0"
       >
         <div class="flex items-center justify-between text-[#a89984]">
           <span class="font-mono text-[10px] text-[#fabd2f] font-semibold">Eq. (1)</span>
-          <span class="font-mono text-[10px]">Core Matrix</span>
+          <span class="font-mono text-[10px]">Efficiency Model</span>
         </div>
         <div class="font-mono text-[#ebdbb2] bg-[#1d2021] border border-[#3c3836] px-1.5 py-1 rounded tracking-tight text-[10px] truncate">
-          Attention(Q,K,V) = softmax(QK^T / √d_k) V
+          η = (C · (1 + γ)) / (ln(τ + 1) · √Ω)
         </div>
       </div>
     </div>

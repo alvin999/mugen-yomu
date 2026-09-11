@@ -30,10 +30,10 @@
   let companionRef: any = null;
 
   let paperLibrary: PaperDocument[] = [];
-  let activePaperId: string = 'arxiv_1706_03762';
+  let activePaperId: string = 'mugen_yomu_user_manual';
   let activePaper: PaperDocument | null = null;
-  let activeSectionId: string = '3.2.1';
-  let activeContextText: string = '§ 3.2.1 Scaled Dot-Product';
+  let activeSectionId: string = '3.2';
+  let activeContextText: string = '§ 3.2 Complex Sentence Deconstruction';
 
   // Notes in memory
   let capturedNotes: Array<{ title: string; text: string; time: string }> = [];
@@ -52,15 +52,12 @@
     activePaperId = paper.id;
     setActivePaperId(paper.id);
 
-    // Pick first section or 3.2.1 if exists
+    // Pick section 3.2 or 3.2.1 if exists, else first section
     const allSecs = flattenSections(paper.sections);
-    const has321 = allSecs.find(s => s.id === '3.2.1');
-    if (has321) {
-      activeSectionId = '3.2.1';
-      activeContextText = '§ 3.2.1 Scaled Dot-Product';
-    } else if (allSecs.length > 0) {
-      activeSectionId = allSecs[0].id;
-      activeContextText = `§ ${allSecs[0].title}`;
+    const targetSec = allSecs.find(s => s.id === '3.2' || s.id === '3.2.1') || allSecs[0];
+    if (targetSec) {
+      activeSectionId = targetSec.id;
+      activeContextText = `§ ${targetSec.title}`;
     }
   }
 
@@ -86,8 +83,18 @@
   }
 
   function handleSelectEquation(event: CustomEvent<{ eqId: string }>) {
-    activeSectionId = '3.2.1';
-    activeContextText = '§ 3.2.1 Scaled Dot-Product Attention';
+    if (activePaper?.sections) {
+      const allSecs = flattenSections(activePaper.sections);
+      const formulaSec = allSecs.find(s => s.formulas && s.formulas.some((f: any) => f.id === event.detail.eqId)) ||
+        allSecs.find(s => s.id === '3.2' || s.id === '3.2.1');
+      if (formulaSec) {
+        activeSectionId = formulaSec.id;
+        activeContextText = `§ ${formulaSec.title}`;
+        return;
+      }
+    }
+    activeSectionId = '3.2';
+    activeContextText = '§ 3.2 Complex Sentence Deconstruction';
   }
 
   function handleReaderAction(event: CustomEvent<{ action: string; payload?: any }>) {

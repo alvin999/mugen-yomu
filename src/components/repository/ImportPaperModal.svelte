@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import {
+    userManualDocument,
     attentionPaper,
     resnetPaper,
     anthropicCircuitsWeb,
@@ -293,7 +294,35 @@
         <!-- ==================== TAB 2: PRESET LIBRARY ==================== -->
         {:else if activeTab === 'preset'}
           <div class="flex flex-col gap-3">
-            <span class="font-mono text-[11px] text-[#a89984]">點擊任一經典學術論文或前沿專文，立即進入深度伴讀工作台：</span>
+            <span class="font-mono text-[11px] text-[#a89984]">點擊任一使用手冊或經典學術論文，立即進入深度伴讀工作台：</span>
+
+            <!-- Preset 0: MUGEN YOMU Official Operating Manual -->
+            <div class="bg-[#1d2021] border border-[#fe8019]/60 hover:border-[#fe8019] p-3.5 rounded-xl flex flex-col gap-2 transition-all shadow-md">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="font-mono text-[10px] bg-[#fe8019]/20 border border-[#fe8019]/50 text-[#fe8019] px-2 py-0.5 rounded font-semibold flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[12px]">menu_book</span> {userManualDocument.venue}
+                  </span>
+                  <span class="font-mono text-[10px] text-[#fabd2f] font-semibold">★ 官方說明書</span>
+                </div>
+                <button
+                  class="px-3 py-1 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-bold rounded text-xs transition-colors flex items-center gap-1 shadow-sm"
+                  on:click={() => handleSelectPreset(userManualDocument)}
+                >
+                  <span class="material-symbols-outlined text-[13px]">arrow_forward</span> 載入研讀
+                </button>
+              </div>
+
+              <h4 class="text-sm font-bold text-[#ebdbb2] font-serif">
+                {userManualDocument.title}
+              </h4>
+              <p class="text-[#a89984] text-[11px]">
+                {userManualDocument.authors.join(', ')}
+              </p>
+              <p class="text-[#d5c4a1] text-xs leading-relaxed bg-[#282828] p-2 rounded border border-[#3c3836]">
+                {userManualDocument.abstract.chineseSummary}
+              </p>
+            </div>
 
             <!-- Preset 1: Attention Is All You Need -->
             <div class="bg-[#1d2021] border border-[#3c3836] hover:border-[#fe8019] p-3.5 rounded-xl flex flex-col gap-2 transition-all">
