@@ -1,0 +1,76 @@
+---
+import MugenYomuApp from '../components/MugenYomuApp.svelte';
+import '../styles/gruvbox-theme.css';
+---
+
+<!doctype html>
+<html lang="zh-TW" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MUGEN YOMU (無限閱讀) - AI 科學文獻閱讀工具</title>
+    <meta name="description" content="幫助使用者真正讀懂科學文獻與論文原文，而不只是翻譯原文。結合三欄認知空間、長難句語法拆解、變數互動推導與本機 BYOK 隱私架構。" />
+
+    <!-- Google Fonts & Material Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Tailwind CDN for exact Cognitive Scholar Gruvbox Design System fidelity -->
+    <script is:inline src="https://cdn.tailwindcss.com"></script>
+    <script is:inline id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              background: "#1d2021",
+              surface: "#282828",
+              "surface-dim": "#1d2021",
+              "surface-bright": "#3c3836",
+              "surface-container-lowest": "#141617",
+              "surface-container-low": "#282828",
+              "surface-container": "#32302f",
+              "surface-container-high": "#3c3836",
+              "surface-container-highest": "#504945",
+              outline: "#a89984",
+              "outline-variant": "#665c54",
+              "on-surface": "#ebdbb2",
+              "on-surface-variant": "#d5c4a1",
+              "on-background": "#ebdbb2",
+              primary: "#fe8019",
+              "primary-container": "#d65d0e",
+              "on-primary": "#1d2021",
+              "on-primary-container": "#ebdbb2",
+              secondary: "#fabd2f",
+              "secondary-container": "#d79921",
+              "on-secondary": "#282828",
+              tertiary: "#b8bb26",
+              "tertiary-container": "#98971a",
+              "on-tertiary": "#1d2021",
+              aqua: "#8ec07c",
+              blue: "#83a598",
+              purple: "#d3869b",
+              error: "#fb4934",
+            },
+            fontFamily: {
+              serif: ['"Source Serif 4"', "Georgia", "serif"],
+              mono: ['"JetBrains Mono"', "Consolas", "monospace"],
+              sans: ["Geist", "Inter", "sans-serif"],
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body class="bg-[#1d2021] text-[#ebdbb2] font-sans selection:bg-[#fe8019]/30 selection:text-[#fabd2f]">
+    <MugenYomuApp client:load />
+  </body>
+</html>

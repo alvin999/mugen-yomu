@@ -1,0 +1,101 @@
+:root {
+  /* Gruvbox Tonal Canvas */
+  --bg-deep: #141617;
+  --bg-gutter: #1d2021;
+  --bg-main: #282828;
+  --bg-surface: #32302f;
+  --bg-card: #3c3836;
+  --border-dim: #3c3836;
+  --border-rule: #504945;
+  --border-bright: #665c54;
+
+  /* Typography Colors */
+  --fg-primary: #ebdbb2;
+  --fg-secondary: #d5c4a1;
+  --fg-muted: #a89984;
+  --fg-dim: #7c6f64;
+
+  /* Scholarly Accent Tokens */
+  --color-orange: #fe8019;
+  --color-orange-dark: #d65d0e;
+  --color-yellow: #fabd2f;
+  --color-yellow-dark: #d79921;
+  --color-green: #b8bb26;
+  --color-green-dark: #98971a;
+  --color-aqua: #8ec07c;
+  --color-aqua-dark: #689d6a;
+  --color-blue: #83a598;
+  --color-blue-dark: #458588;
+  --color-purple: #d3869b;
+  --color-purple-dark: #b16286;
+  --color-red: #fb4934;
+
+  /* Typography */
+  --font-serif: "Source Serif 4", Georgia, serif;
+  --font-mono: "JetBrains Mono", Consolas, monospace;
+  --font-sans: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  /* Radii */
+  --radius-sm: 0.125rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-full: 9999px;
+}
+
+/* Global Reset & Base */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-main);
+  color: var(--fg-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  height: 100vh;
+}
+
+::selection {
+  background-color: rgba(254, 128, 25, 0.3);
+  color: var(--color-yellow);
+}
+
+/* Scrollbar Customization for Academic Calm */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-gutter);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-rule);
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-orange);
+}
+
+/* Focus Lens Indicator Pulse */
+@keyframes pulse-lens {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 12px rgba(254, 128, 25, 0.65);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 4px rgba(254, 128, 25, 0.35);
+  }
+}
+
+.focus-lens-bar {
+  animation: pulse-lens 3s infinite ease-in-out;
+}

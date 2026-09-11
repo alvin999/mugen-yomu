@@ -1,0 +1,27 @@
+# Build & Dependencies
+node_modules/
+dist/
+.astro/
+
+# Environment & Secret Keys
+.env
+.env.*
+!.env.example
+
+# AI Customizations & Agent Configs
+.agents/
+
+# Temporary Test Files & Screenshots
+test-browser.js
+test-e2e.mjs
+current_app_screen.png
+*.log
+
+# Design Zip Archives
+*.zip
+
+# Operating System & Editor Files
+.DS_Store
+Thumbs.db
+.idea/
+*.sublime-workspace

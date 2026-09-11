@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{"colors":{
+  "background":"#1d2021",
+  "surface":"#282828",
+  "surface-dim":"#1d2021",
+  "surface-bright":"#3c3836",
+  "surface-container-lowest":"#141617",
+  "surface-container-low":"#282828",
+  "surface-container":"#32302f",
+  "surface-container-high":"#3c3836",
+  "surface-container-highest":"#504945",
+  "outline":"#a89984",
+  "outline-variant":"#665c54",
+  "on-surface":"#ebdbb2",
+  "on-surface-variant":"#d5c4a1",
+  "on-background":"#ebdbb2",
+  "primary":"#fe8019",
+  "primary-container":"#d65d0e",
+  "on-primary":"#1d2021",
+  "on-primary-container":"#ebdbb2",
+  "secondary":"#fabd2f",
+  "secondary-container":"#d79921",
+  "on-secondary":"#282828",
+  "tertiary":"#b8bb26",
+  "tertiary-container":"#98971a",
+  "on-tertiary":"#1d2021",
+  "aqua":"#8ec07c",
+  "aqua-dark":"#689d6a",
+  "blue":"#83a598",
+  "purple":"#d3869b",
+  "gruv-bg0":"#282828",
+  "gruv-bg0-h":"#1d2021",
+  "gruv-bg1":"#3c3836",
+  "gruv-bg2":"#504945",
+  "gruv-bg3":"#665c54",
+  "gruv-fg":"#ebdbb2",
+  "gruv-fg1":"#d5c4a1",
+  "gruv-fg4":"#a89984",
+  "gruv-orange":"#fe8019",
+  "gruv-yellow":"#fabd2f",
+  "gruv-green":"#b8bb26",
+  "gruv-aqua":"#8ec07c",
+  "gruv-blue":"#83a598",
+  "gruv-purple":"#d3869b",
+  "error":"#fb4934",
+  "error-container":"#cc241d"
+},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{"space-xl":"2rem","space-sm":"0.5rem","space-xs":"0.25rem","margin-desktop":"2rem","gutter-desktop":"1.5rem","space-md":"0.75rem","gutter":"1rem","space-lg":"1.25rem","margin":"1rem"},"fontFamily":{"paper-body-lead":["\"Source Serif 4\""],"label-meta":["JetBrains Mono"],"body-sm":["Geist"],"body-md":["Geist"],"display-lg-mobile":["\"Source Serif 4\""],"headline-lg":["\"Source Serif 4\""],"headline-sm":["Geist"],"paper-body":["\"Source Serif 4\""],"headline-md":["\"Source Serif 4\""],"display-lg":["\"Source Serif 4\""],"label-code":["JetBrains Mono"]},"fontSize":{"paper-body-lead":["19px",{"lineHeight":"34px","letterSpacing":"0em","fontWeight":"400"}],"label-meta":["11px",{"lineHeight":"14px","letterSpacing":"0.02em","fontWeight":"400"}],"body-sm":["12px",{"lineHeight":"17px","letterSpacing":"0.005em","fontWeight":"400"}],"body-md":["14px",{"lineHeight":"22px","letterSpacing":"0em","fontWeight":"400"}],"display-lg-mobile":["30px",{"lineHeight":"38px","letterSpacing":"-0.015em","fontWeight":"600"}],"headline-lg":["28px",{"lineHeight":"36px","letterSpacing":"-0.015em","fontWeight":"600"}],"headline-sm":["16px",{"lineHeight":"24px","letterSpacing":"-0.005em","fontWeight":"600"}],"paper-body":["17px",{"lineHeight":"32px","letterSpacing":"0.01em","fontWeight":"400"}],"headline-md":["22px",{"lineHeight":"30px","letterSpacing":"-0.01em","fontWeight":"600"}],"display-lg":["40px",{"lineHeight":"48px","letterSpacing":"-0.02em","fontWeight":"600"}],"label-code":["12px",{"lineHeight":"16px","letterSpacing":"-0.01em","fontWeight":"500"}]}}}}</script></head><body class="bg-[#1d2021] font-body-md text-[#ebdbb2] selection:bg-[#fe8019]/30 selection:text-[#fabd2f]"><aside class="fixed left-0 top-0 h-full w-64 bg-[#141617] border-r border-[#3c3836] z-50 flex flex-col justify-between py-space-md"><div class="flex flex-col gap-space-md"><div class="px-space-md flex items-center justify-between"><span class="font-label-meta text-label-meta uppercase tracking-wider text-[#a89984]">Cognitive Navigation</span><span class="font-label-code text-label-code text-[#fabd2f] bg-[#282828] border border-[#504945] px-space-xs py-0.5 rounded font-medium">v2.4</span></div><nav class="flex flex-col gap-space-xs px-space-sm" data-active-classes="bg-[#3c3836] text-[#fe8019] font-semibold border-l-2 border-[#fe8019]"><a aria-current="page" class="flex items-center gap-space-sm px-space-sm py-space-sm rounded-r-lg transition-colors bg-[#3c3836] text-[#fe8019] font-semibold border-l-2 border-[#fe8019]" data-path="reading-workspace" href="#"><span class="material-symbols-outlined text-[18px]">menu_book</span><span class="font-body-sm text-body-sm">Reading Workspace</span></a><a class="flex items-center gap-space-sm px-space-sm py-space-sm rounded-lg text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2] transition-colors" data-path="paper-repository" href="#"><span class="material-symbols-outlined text-[18px]">library_books</span><span class="font-body-sm text-body-sm">Paper Repository</span></a><a class="flex items-center gap-space-sm px-space-sm py-space-sm rounded-lg text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2] transition-colors" data-path="citation-graph" href="#"><span class="material-symbols-outlined text-[18px]">hub</span><span class="font-body-sm text-body-sm">Citation Graph</span></a><a class="flex items-center gap-space-sm px-space-sm py-space-sm rounded-lg text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2] transition-colors" data-path="cognitive-notes" href="#"><span class="material-symbols-outlined text-[18px]">draw</span><span class="font-body-sm text-body-sm">Cognitive Notes</span></a><a class="flex items-center gap-space-sm px-space-sm py-space-sm rounded-lg text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2] transition-colors" data-path="prompt-formula-lab" href="#"><span class="material-symbols-outlined text-[18px]">functions</span><span class="font-body-sm text-body-sm">Formula Lab</span></a></nav></div><div class="px-space-md flex flex-col gap-space-sm"><div class="bg-[#282828] border border-[#3c3836] p-space-sm rounded-lg flex flex-col gap-space-xs"><div class="flex items-center justify-between text-[#a89984]"><span class="font-label-meta text-label-meta">Local Memory Bank</span><span class="font-label-meta text-label-meta text-[#fabd2f] font-medium">64.2 MB</span></div><div class="w-full bg-[#1d2021] h-1.5 rounded-full overflow-hidden"><div class="bg-[#fabd2f] h-full w-[42%]"></div></div></div><div class="flex items-center justify-between text-[#a89984] text-label-meta font-label-meta pt-space-xs"><span class="hover:text-[#ebdbb2] cursor-pointer">Sync Engine · Idle</span><span class="material-symbols-outlined text-[14px] text-[#b8bb26]">cloud_done</span></div></div></aside><div class="pl-64"><header class="fixed top-0 left-64 right-0 h-16 bg-[#1d2021]/95 backdrop-blur-xl border-b border-[#3c3836] z-40 px-space-md flex items-center justify-between shadow-md"><div class="flex items-center gap-space-md min-w-0 flex-1"><div class="flex items-center gap-space-sm shrink-0"><img alt="MUGEN YOMU Brand Icon" class="h-8 w-auto object-contain rounded" src="https://lh3.googleusercontent.com/aida/AEtjO1X8pgO6TsZd2tbHLeK0HPXVFG8zu3eec-dCxT2weS1pIzBzgEU9Rw2AAolbFcqNshnTaJ2xIc-Au8VaIblqHrnOJ3r8Irt1iQjIvd_uF9KorlvoDOkCJUuj5iZOZAkygFgvZCP8rnE4s36WaU3JOwrhkJoiHaIfY74CjNyF7dZsFFOEbVOfDGHPpGMI2-eF3Tkt8Y94WjmKaNq4cYThW57NOFtBqaJTSveQ1aTzNQaoDLE4XPn-23nsPgA"/><div class="flex flex-col"><span class="font-headline-sm text-headline-sm tracking-tight text-[#fe8019] leading-none font-bold">MUGEN YOMU</span><span class="font-label-meta text-label-meta text-[#a89984] leading-tight mt-0.5">無限閱讀 · 認知伴讀工作台</span></div></div><div class="h-6 w-px bg-[#504945] shrink-0"></div><div class="flex items-center gap-space-xs min-w-0 overflow-hidden"><a class="font-body-sm text-body-sm text-[#a89984] hover:text-[#ebdbb2] shrink-0 transition-colors" data-path="paper-repository" href="#">Library</a><span class="text-[#665c54] text-[14px] shrink-0">/</span><span class="font-body-sm text-body-sm text-[#ebdbb2] font-medium truncate">Attention Is All You Need (Vaswani et al.) [NeurIPS 2017]</span><span class="font-label-meta text-label-meta bg-[#32302f] border border-[#504945] text-[#fabd2f] px-space-xs py-0.5 rounded shrink-0">arXiv:1706.03762v7</span></div></div><div class="flex items-center justify-center shrink-0 px-space-md"><nav class="flex items-center bg-[#282828] border border-[#3c3836] p-1 rounded-xl gap-1" data-active-classes="bg-[#fe8019] text-[#1d2021] font-semibold rounded-lg shadow-sm"><a aria-current="page" class="px-space-sm py-1.5 transition-colors whitespace-nowrap bg-[#fe8019] text-[#1d2021] font-semibold rounded-lg shadow-sm" data-path="reading-workspace" href="#">雙語伴讀 (Cognitive Bilingual)</a><a class="font-body-sm text-body-sm px-space-sm py-1.5 rounded-lg text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f] transition-colors whitespace-nowrap" data-path="zen-reading" href="#">純沉浸閱讀 (Zen Reading)</a><a class="font-body-sm text-body-sm px-space-sm py-1.5 rounded-lg text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f] transition-colors whitespace-nowrap" data-path="derivations-figures" href="#">圖表與推導對比 (Derivations &amp; Figures)</a></nav></div><div class="flex items-center gap-space-md shrink-0"><div class="flex items-center gap-space-sm bg-[#282828] border border-[#3c3836] px-space-sm py-1 rounded-lg"><span class="h-2 w-2 rounded-full bg-[#fabd2f] animate-pulse"></span><div class="flex flex-col"><span class="font-label-meta text-label-meta text-[#ebdbb2] font-medium">Claude 3.5 Sonnet (Local Key)</span><span class="font-label-meta text-label-meta text-[#a89984]">本機快取活躍</span></div><span class="font-label-code text-label-code bg-[#fabd2f]/15 border border-[#d79921]/40 text-[#fabd2f] px-space-xs py-0.5 rounded ml-space-xs font-semibold">$0.14 / 2.4k cached (省 82%)</span></div><div class="flex items-center bg-[#282828] border border-[#3c3836] rounded-lg p-0.5 text-[#d5c4a1]"><button class="w-7 h-7 flex items-center justify-center hover:bg-[#3c3836] hover:text-[#ebdbb2] rounded transition-colors"><span class="material-symbols-outlined text-[16px]">remove</span></button><span class="font-label-code text-label-code px-space-xs text-[#ebdbb2] select-none font-medium">100%</span><button class="w-7 h-7 flex items-center justify-center hover:bg-[#3c3836] hover:text-[#ebdbb2] rounded transition-colors"><span class="material-symbols-outlined text-[16px]">add</span></button></div><div class="flex items-center gap-space-xs"><button class="w-8 h-8 rounded-lg flex items-center justify-center text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2] transition-colors" title="Theme Toggle (Academic Gruvbox Dark / Warm Parchment)"><span class="material-symbols-outlined text-[18px]">contrast</span></button><button class="w-8 h-8 rounded-lg flex items-center justify-center text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2] transition-colors" title="Export Annotations"><span class="material-symbols-outlined text-[18px]">ios_share</span></button><a class="w-8 h-8 rounded-lg flex items-center justify-center text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2] transition-colors" data-path="settings" href="#" title="Settings"><span class="material-symbols-outlined text-[18px]">settings</span></a></div><div class="w-8 h-8 rounded-full bg-[#fe8019] text-[#1d2021] font-bold flex items-center justify-center shrink-0 shadow-sm"><span class="material-symbols-outlined text-[18px]">person</span></div></div></header><main class="w-full pt-16 bg-[#282828]"><div class="flex flex-col w-full h-[calc(100vh-4rem)] overflow-hidden select-text">
+<!-- Top Academic Context Ribbon (Density Bar) -->
+<div class="h-8 bg-[#1d2021] border-b border-[#3c3836] px-space-md flex items-center justify-between shrink-0 shadow-sm">
+<div class="flex items-center gap-space-sm">
+<span class="inline-flex items-center gap-1 text-[#fabd2f] font-label-meta text-label-meta uppercase tracking-wider bg-[#32302f] border border-[#504945] px-space-xs py-0.5 rounded font-medium">
+<span class="material-symbols-outlined text-[12px] animate-pulse text-[#fe8019]">radar</span> Saccadic Focus Track
+      </span>
+<span class="text-[#a89984] font-label-meta text-label-meta">§ 3.2 Attention Mechanism · Depth Level: Formal Derivation</span>
+</div>
+<div class="flex items-center gap-space-md">
+<div class="flex items-center gap-1.5 font-label-meta text-label-meta text-[#a89984]">
+<span class="material-symbols-outlined text-[13px] text-[#b8bb26]">speed</span>
+<span>閱讀心流速率: <strong class="text-[#ebdbb2] font-semibold">265 wpm</strong></span>
+</div>
+<div class="h-3 w-px bg-[#504945]"></div>
+<div class="flex items-center gap-1 font-label-meta text-label-meta text-[#fabd2f]">
+<span class="material-symbols-outlined text-[13px] text-[#fe8019]">bolt</span>
+<span>Local Embeddings: Active (384-dim)</span>
+</div>
+</div>
+</div>
+<!-- Main 3-Column Studio Grid -->
+<div class="flex-1 grid grid-cols-[270px_minmax(0,1fr)_390px] overflow-hidden bg-[#282828]">
+<!-- ==================== LEFT COLUMN: Outline & Paper Nav ==================== -->
+<aside class="h-full flex flex-col bg-[#1d2021] border-r border-[#3c3836] overflow-hidden select-none">
+<!-- Section Quick Filter -->
+<div class="p-space-sm bg-[#1d2021] shrink-0 border-b border-[#3c3836]">
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-2.5 text-[15px] text-[#a89984]">search</span>
+<input class="w-full bg-[#282828] border border-[#3c3836] text-[#ebdbb2] placeholder:text-[#a89984]/70 font-body-sm text-body-sm pl-8 pr-3 py-1.5 rounded-lg focus:outline-none focus:border-[#fe8019] focus:bg-[#32302f] transition-colors" placeholder="搜尋段落、定理、公式或名詞..." type="text"/>
+</div>
+</div>
+<!-- Scrollable Outline & Figures -->
+<div class="flex-1 overflow-y-auto px-space-sm py-space-xs flex flex-col gap-space-md">
+<!-- Progress Heatmap Badge -->
+<div class="bg-[#282828] border border-[#3c3836] p-space-sm rounded-lg flex flex-col gap-1.5">
+<div class="flex items-center justify-between text-[#a89984]">
+<span class="font-label-meta text-label-meta uppercase tracking-wider">精讀覆蓋率</span>
+<span class="font-label-code text-label-code text-[#fabd2f] font-semibold">42% (2,410 / 5,740 字)</span>
+</div>
+<div class="w-full h-1.5 bg-[#1d2021] rounded-full overflow-hidden flex border border-[#3c3836]/60">
+<div class="bg-[#b8bb26] h-full w-[42%]"></div>
+<div class="bg-[#fabd2f]/40 h-full w-[18%]"></div>
+</div>
+<span class="font-label-meta text-label-meta text-[#a89984] leading-tight">
+            視線停留於 <strong class="text-[#fe8019]">§3.2.1</strong> · <span class="text-[#b8bb26]">8 處術語嚴謹對齊</span>
+</span>
+</div>
+<!-- Outline Tree -->
+<div class="flex flex-col gap-0.5">
+<span class="font-label-meta text-label-meta uppercase tracking-wider text-[#a89984] px-2 mb-1">目錄樹 (Structure)</span>
+<!-- Item 1 -->
+<div class="flex items-center justify-between px-2 py-1.5 rounded-lg text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2] cursor-pointer group transition-colors">
+<div class="flex items-center gap-2 min-w-0">
+<span class="material-symbols-outlined text-[15px] text-[#b8bb26]">check_circle</span>
+<span class="font-body-sm text-body-sm truncate">1. Introduction</span>
+</div>
+<span class="font-label-meta text-label-meta text-[#b8bb26]">100%</span>
+</div>
+<!-- Item 2 -->
+<div class="flex items-center justify-between px-2 py-1.5 rounded-lg text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2] cursor-pointer group transition-colors">
+<div class="flex items-center gap-2 min-w-0">
+<span class="material-symbols-outlined text-[15px] text-[#b8bb26]">check_circle</span>
+<span class="font-body-sm text-body-sm truncate">2. Background</span>
+</div>
+<span class="font-label-meta text-label-meta text-[#b8bb26]">100%</span>
+</div>
+<!-- Item 3 (Active Parent) -->
+<div class="flex flex-col bg-[#282828] border border-[#504945] rounded-lg p-1 mt-0.5 shadow-sm">
+<div class="flex items-center justify-between px-2 py-1.5 rounded text-[#ebdbb2] font-semibold">
+<div class="flex items-center gap-2 min-w-0">
+<span class="material-symbols-outlined text-[16px] text-[#fe8019]">account_tree</span>
+<span class="font-body-sm text-body-sm truncate text-[#fe8019] font-medium">3. Model Architecture</span>
+</div>
+<span class="font-label-code text-label-code text-[#1d2021] bg-[#fe8019] font-semibold px-1 rounded">Focus</span>
+</div>
+<!-- Subtree with vertical guide rule -->
+<div class="ml-3 pl-3 flex flex-col gap-0.5 mt-1 border-l-2 border-[#fe8019]/40">
+<div class="px-2 py-1 rounded text-[#a89984] hover:text-[#ebdbb2] cursor-pointer font-body-sm text-body-sm truncate">
+                3.1 Encoder and Decoder Stacks
+              </div>
+<!-- ACTIVE SUBSECTION -->
+<div class="px-2 py-1.5 rounded bg-[#3c3836] border border-[#fe8019]/50 text-[#fe8019] font-semibold flex items-center justify-between shadow-sm cursor-pointer">
+<span class="font-body-sm text-body-sm truncate text-[#fe8019]">3.2 Attention</span>
+<span class="h-2 w-2 rounded-full bg-[#fe8019] animate-ping"></span>
+</div>
+<!-- Sub-sub level deep view -->
+<div class="ml-2 pl-2 border-l border-[#504945] flex flex-col gap-0.5 py-0.5">
+<div class="px-1.5 py-0.5 text-[#fabd2f] font-label-meta text-label-meta font-medium flex items-center gap-1">
+<span class="material-symbols-outlined text-[11px] text-[#fe8019]">arrow_right</span>
+                  3.2.1 Scaled Dot-Product
+                </div>
+<div class="px-1.5 py-0.5 text-[#a89984] hover:text-[#ebdbb2] cursor-pointer font-label-meta text-label-meta">
+                  3.2.2 Multi-Head Attention
+                </div>
+<div class="px-1.5 py-0.5 text-[#a89984] hover:text-[#ebdbb2] cursor-pointer font-label-meta text-label-meta">
+                  3.2.3 Applications of Attention
+                </div>
+</div>
+<div class="px-2 py-1 rounded text-[#a89984] hover:text-[#ebdbb2] cursor-pointer font-body-sm text-body-sm truncate">
+                3.3 Position-wise FFN
+              </div>
+<div class="px-2 py-1 rounded text-[#a89984] hover:text-[#ebdbb2] cursor-pointer font-body-sm text-body-sm truncate">
+                3.4 Embeddings &amp; Softmax
+              </div>
+</div>
+</div>
+<!-- Item 4 -->
+<div class="flex items-center justify-between px-2 py-1.5 rounded-lg text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2] cursor-pointer group transition-colors">
+<span class="font-body-sm text-body-sm truncate">4. Why Self-Attention</span>
+<span class="font-label-meta text-label-meta opacity-50">未讀</span>
+</div>
+<!-- Item 5 -->
+<div class="flex items-center justify-between px-2 py-1.5 rounded-lg text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2] cursor-pointer group transition-colors">
+<span class="font-body-sm text-body-sm truncate">5. Training &amp; Results</span>
+<span class="font-label-meta text-label-meta opacity-50">未讀</span>
+</div>
+</div>
+<!-- Figures & Equations Quick-Deck -->
+<div class="flex flex-col gap-2 pt-2">
+<div class="flex items-center justify-between px-1">
+<span class="font-label-meta text-label-meta uppercase tracking-wider text-[#a89984]">關鍵圖表與推導索引</span>
+<span class="font-label-code text-label-code text-[#fabd2f] hover:underline cursor-pointer">All (9)</span>
+</div>
+<!-- Mini Figure Card -->
+<div class="bg-[#282828] border border-[#3c3836] p-2 rounded-lg hover:bg-[#32302f] hover:border-[#504945] transition-colors cursor-pointer flex gap-2 group">
+<div class="w-12 h-14 bg-[#1d2021] border border-[#3c3836] rounded shrink-0 overflow-hidden relative flex items-center justify-center p-1">
+<!-- SVG schematic of Figure 1 -->
+<svg class="w-full h-full text-[#fabd2f] opacity-80 group-hover:opacity-100 transition-opacity" viewbox="0 0 40 50">
+<rect fill="currentColor" fill-opacity="0.2" height="8" rx="2" stroke="currentColor" stroke-width="1.2" width="30" x="5" y="4"></rect>
+<rect fill="currentColor" fill-opacity="0.4" height="12" rx="2" stroke="currentColor" stroke-width="1.2" width="30" x="5" y="16"></rect>
+<rect fill="currentColor" fill-opacity="0.2" height="14" rx="2" stroke="currentColor" stroke-width="1.2" width="30" x="5" y="32"></rect>
+<path d="M 20 12 L 20 16 M 20 28 L 20 32" stroke="currentColor" stroke-width="1.2"></path>
+</svg>
+<span class="absolute bottom-0.5 right-0.5 font-label-meta text-[9px] bg-[#1d2021] border border-[#504945] px-0.5 rounded text-[#a89984]">Fig 1</span>
+</div>
+<div class="flex flex-col justify-center min-w-0">
+<span class="font-body-sm text-body-sm text-[#ebdbb2] font-medium truncate">The Transformer Architecture</span>
+<span class="font-label-meta text-label-meta text-[#a89984] truncate">Encoder-Decoder Multi-Head Flow</span>
+</div>
+</div>
+<!-- Mini Equation Card -->
+<div class="bg-[#282828] border border-[#3c3836] border-l-4 border-l-[#fabd2f] p-2 rounded-lg hover:bg-[#32302f] transition-colors cursor-pointer flex flex-col gap-1">
+<div class="flex items-center justify-between text-[#a89984]">
+<span class="font-label-code text-label-code text-[#fabd2f] font-semibold">Eq. (1)</span>
+<span class="font-label-meta text-label-meta">p. 4</span>
+</div>
+<div class="font-label-code text-label-code text-[#ebdbb2] bg-[#1d2021] border border-[#3c3836] px-1.5 py-1 rounded tracking-tight text-[11px] truncate">
+              $\mathrm{Attn}(Q,K,V) = \mathrm{softmax}(\frac{QK^T}{\sqrt{d_k}})V$
+            </div>
+</div>
+</div>
+</div>
+<!-- Left Bottom Compact System Pill -->
+<div class="p-space-sm bg-[#141617] border-t border-[#3c3836] shrink-0">
+<div class="flex items-center justify-between text-[#a89984] text-label-meta font-label-meta">
+<span class="flex items-center gap-1.5">
+<span class="h-1.5 w-1.5 rounded-full bg-[#b8bb26]"></span>
+            ARXIV:1706.03762
+          </span>
+<span class="font-label-code text-label-code text-[#d5c4a1]">PDF · 15pp</span>
+</div>
+</div>
+</aside>
+<!-- ==================== CENTER COLUMN: Academic Paper Canvas ==================== -->
+<main class="h-full overflow-y-auto px-8 py-8 flex justify-center bg-[#282828] scroll-smooth">
+<div class="w-full max-w-[740px] flex flex-col gap-8 pb-32">
+<!-- Paper Academic Header -->
+<header class="flex flex-col gap-3.5 pb-6 bg-[#32302f] border border-[#3c3836] p-6 rounded-xl relative overflow-hidden shadow-md">
+<div class="flex flex-wrap items-center gap-2">
+<span class="font-label-meta text-label-meta bg-[#fe8019]/15 border border-[#fe8019]/40 text-[#fe8019] px-2.5 py-0.5 rounded font-semibold">NeurIPS 2017 Oral</span>
+<span class="font-label-meta text-label-meta text-[#a89984]">Section 3.2 · Page 3–4</span>
+<span class="font-label-meta text-label-meta bg-[#282828] border border-[#504945] text-[#fabd2f] px-2.5 py-0.5 rounded font-medium">Citations: 142,800+</span>
+</div>
+<h1 class="font-headline-lg text-[32px] text-[#ebdbb2] tracking-tight font-display-lg leading-tight font-bold">
+            Attention Is All You Need
+          </h1>
+<div class="font-body-sm text-body-sm text-[#a89984] flex flex-wrap items-center gap-x-2 gap-y-1">
+<span class="text-[#d5c4a1] font-medium hover:text-[#fe8019] cursor-pointer">Ashish Vaswani*</span>,
+            <span class="text-[#d5c4a1] font-medium hover:text-[#fe8019] cursor-pointer">Noam Shazeer*</span>,
+            <span class="text-[#d5c4a1] font-medium hover:text-[#fe8019] cursor-pointer">Niki Parmar*</span>,
+            <span class="text-[#d5c4a1] font-medium hover:text-[#fe8019] cursor-pointer">Jakob Uszkoreit*</span>,
+            <span class="text-[#d5c4a1] font-medium hover:text-[#fe8019] cursor-pointer">Llion Jones*</span>,
+            <span class="text-[#d5c4a1] font-medium hover:text-[#fe8019] cursor-pointer">Aidan N. Gomez*</span>,
+            <span class="text-[#d5c4a1] font-medium hover:text-[#fe8019] cursor-pointer">Łukasz Kaiser*</span>,
+            <span class="text-[#d5c4a1] font-medium hover:text-[#fe8019] cursor-pointer">Illia Polosukhin*</span>
+</div>
+<p class="font-label-meta text-label-meta text-[#a89984]">
+            Google Brain · Google Research · University of Toronto
+          </p>
+<!-- Abstract Collapsible Card -->
+<div class="mt-2 bg-[#282828] border border-[#3c3836] p-4 rounded-lg flex flex-col gap-2 shadow-inner">
+<div class="flex items-center justify-between">
+<span class="font-label-meta text-label-meta text-[#fabd2f] font-semibold uppercase tracking-wider flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[15px] text-[#fe8019]">auto_stories</span> 白話科學摘要 (Bilingual Abstract Core)
+              </span>
+<button class="font-label-meta text-label-meta text-[#a89984] hover:text-[#ebdbb2] flex items-center gap-0.5 transition-colors">
+<span>收起</span>
+<span class="material-symbols-outlined text-[13px]">expand_less</span>
+</button>
+</div>
+<p class="font-body-sm text-body-sm text-[#d5c4a1] leading-[22px] text-justify">
+              本文徹底摒棄了傳統 NLP 領域依賴循環（RNN/LSTM）或卷積神經網路（CNN）的序列建模範式，提出了全新的 <strong class="text-[#fe8019]">Transformer</strong> 架構。該架構完全依靠「自注意力機制（Self-Attention）」計算序列中字詞間的全局依賴關係，大幅提升了訓練的並行度，並在 WMT 2014 英德/英法翻譯任務上創下了新的 SOTA 成果。
+            </p>
+</div>
+</header>
+<!-- Section 3: Model Architecture -->
+<section class="flex flex-col gap-6">
+<div class="flex items-baseline gap-3">
+<span class="font-label-code text-label-code text-[#fe8019] font-bold text-[16px]">3.2</span>
+<h2 class="font-headline-md text-headline-md text-[#ebdbb2] tracking-tight font-bold">Attention</h2>
+</div>
+<p class="font-paper-body text-paper-body text-[#ebdbb2]/90 leading-[32px] text-justify">
+            An attention function can be described as mapping a query and a set of key-value pairs to an output, where the query, keys, values, and output are all vectors. The output is computed as a weighted sum of the values, where the weight assigned to each value is computed by a compatibility function of the query with the corresponding key.
+          </p>
+<!-- ==================== SUBSECTION 3.2.1 (ACTIVE FOCUS LENS - GRUVBOX AMBER GLOW) ==================== -->
+<div class="relative bg-[#32302f] border border-[#504945] rounded-xl p-6 shadow-[0_4px_24px_rgba(0,0,0,0.35)] transition-all">
+<!-- Left Margin Focus Indicator Bar -->
+<div class="absolute -left-3 top-5 bottom-5 w-1.5 bg-[#fe8019] rounded-full shadow-[0_0_12px_rgba(254,128,25,0.7)]"></div>
+<!-- Focus Lens Badge Floating Marker -->
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-2">
+<span class="font-label-code text-label-code text-[#fe8019] font-bold">3.2.1</span>
+<h3 class="font-headline-sm text-headline-sm text-[#ebdbb2] font-semibold">Scaled Dot-Product Attention</h3>
+</div>
+<div class="flex items-center gap-1.5 bg-[#fe8019]/15 border border-[#fe8019]/50 px-2.5 py-0.5 rounded-full text-[#fe8019]">
+<span class="material-symbols-outlined text-[13px]">center_focus_strong</span>
+<span class="font-label-meta text-label-meta font-semibold uppercase">Focus Lens Active</span>
+</div>
+</div>
+<!-- Authentic Paper Paragraph with Interactive Inline Tokens -->
+<p class="font-paper-body text-paper-body text-[#ebdbb2] leading-[34px] text-justify relative">
+              We call our particular attention <span class="bg-[#fabd2f]/20 text-[#fabd2f] border-b border-[#fabd2f]/60 px-1 py-0.5 rounded font-semibold cursor-help" title="核心創新點：縮放點積注意力">"Scaled Dot-Product Attention"</span> (Figure 2). The input consists of queries and keys of dimension 
+              <span class="font-label-code text-label-code bg-[#282828] border border-[#504945] px-1.5 py-0.5 rounded text-[#83a598] font-semibold">d_k</span>, and values of dimension 
+              <span class="font-label-code text-label-code bg-[#282828] border border-[#504945] px-1.5 py-0.5 rounded text-[#8ec07c] font-semibold">d_v</span>. We compute the dot products of the query with all keys, 
+              
+              <!-- Highlighted Long/Complex Sentence with Floating SVO Pill -->
+<span class="relative inline-block bg-[#fe8019]/10 border-b-2 border-[#fe8019] text-[#ebdbb2] rounded px-1 -mx-0.5 transition-colors">
+<span class="absolute -top-5 left-2 bg-[#8ec07c] text-[#1d2021] font-label-meta text-[10px] px-1.5 py-0.2 rounded shadow font-bold tracking-wider uppercase pointer-events-none flex items-center gap-0.5">
+<span class="material-symbols-outlined text-[10px]">account_tree</span> 長難句拆解 (SVO)
+                </span>
+                divide each by <span class="font-label-code text-label-code font-bold text-[#fabd2f] underline decoration-[#fabd2f] decoration-2 underline-offset-4">\sqrt{d_k}</span>, and apply a softmax function to obtain the weights on the values.
+              </span>
+</p>
+<!-- Inline Semantic Floating Action Toolbar -->
+<div class="mt-4 flex flex-wrap items-center gap-2 bg-[#282828] border border-[#3c3836] p-1.5 rounded-lg shadow-sm">
+<button class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#fabd2f] border border-[#fabd2f]/30 px-2.5 py-1 rounded font-body-sm text-body-sm font-medium transition-colors">
+<span class="material-symbols-outlined text-[15px] text-[#fabd2f]">lightbulb</span>
+<span>白話科學直覺</span>
+</button>
+<button class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#8ec07c] border border-[#8ec07c]/30 px-2.5 py-1 rounded font-body-sm text-body-sm font-medium transition-colors">
+<span class="material-symbols-outlined text-[15px] text-[#8ec07c]">account_tree</span>
+<span>句構拆解</span>
+</button>
+<button class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#ebdbb2] border border-[#504945] px-2.5 py-1 rounded font-body-sm text-body-sm font-medium transition-colors">
+<span class="material-symbols-outlined text-[15px] text-[#fe8019]">menu_book</span>
+<span>術語: d_k 縮放因子</span>
+</button>
+<div class="h-4 w-px bg-[#504945] mx-0.5"></div>
+<button class="flex items-center gap-1.5 hover:bg-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] px-2 py-1 rounded font-body-sm text-body-sm transition-colors">
+<span class="material-symbols-outlined text-[15px]">push_pin</span>
+<span>標註筆記</span>
+</button>
+</div>
+<!-- Centered LaTeX-grade Mathematical Formula Block (Warm Gruvbox Styling) -->
+<div class="my-6 bg-[#1d2021] border border-[#504945] p-5 rounded-xl flex flex-col items-center justify-center relative group shadow-inner">
+<!-- Equation Number Anchor -->
+<span class="absolute right-4 top-1/2 -translate-y-1/2 font-label-code text-label-code text-[#a89984] select-none">(1)</span>
+<!-- Math formula rendered with typography -->
+<div class="font-paper-body text-[22px] tracking-wide text-[#ebdbb2] flex items-center justify-center gap-2 py-2 select-none">
+<span class="font-serif italic font-semibold text-[#fe8019]">Attention</span>
+<span>(</span>
+<span class="group/q relative cursor-pointer underline decoration-dotted decoration-[#fe8019] underline-offset-4 text-[#fe8019] font-medium">
+                  Q
+                  <!-- Hover tooltip -->
+<span class="absolute -top-7 left-1/2 -translate-x-1/2 bg-[#3c3836] border border-[#504945] text-[#fe8019] text-[10px] font-label-meta px-1.5 py-0.5 rounded shadow pointer-events-none opacity-0 group-hover/q:opacity-100 transition-opacity whitespace-nowrap">
+                    查詢向量 (Query)
+                  </span>
+</span>
+<span>,</span>
+<span class="group/k relative cursor-pointer underline decoration-dotted decoration-[#fabd2f] underline-offset-4 text-[#fabd2f] font-medium">
+                  K
+                  <!-- Hover tooltip -->
+<span class="absolute -top-7 left-1/2 -translate-x-1/2 bg-[#3c3836] border border-[#504945] text-[#fabd2f] text-[10px] font-label-meta px-1.5 py-0.5 rounded shadow pointer-events-none opacity-0 group-hover/k:opacity-100 transition-opacity whitespace-nowrap">
+                    鍵值 (Key)
+                  </span>
+</span>
+<span>,</span>
+<span class="group/v relative cursor-pointer underline decoration-dotted decoration-[#b8bb26] underline-offset-4 text-[#b8bb26] font-medium">
+                  V
+                  <!-- Hover tooltip -->
+<span class="absolute -top-7 left-1/2 -translate-x-1/2 bg-[#3c3836] border border-[#504945] text-[#b8bb26] text-[10px] font-label-meta px-1.5 py-0.5 rounded shadow pointer-events-none opacity-0 group-hover/v:opacity-100 transition-opacity whitespace-nowrap">
+                    實際權重內容 (Value)
+                  </span>
+</span>
+<span>) =</span>
+<span class="font-serif italic text-[#83a598]">softmax</span>
+<span class="text-2xl font-light scale-y-125 text-[#a89984]">(</span>
+<div class="inline-flex flex-col items-center mx-1">
+<span class="border-b border-[#a89984] px-2 pb-0.5 font-sans font-medium text-sm text-[#fabd2f]">
+                    Q K<sup class="text-[10px]">T</sup>
+</span>
+<span class="pt-0.5 font-sans text-sm text-[#8ec07c] font-medium">
+                    √<span class="overline">d<sub>k</sub></span>
+</span>
+</div>
+<span class="text-2xl font-light scale-y-125 text-[#a89984]">)</span>
+<span class="font-serif italic font-semibold text-[#b8bb26]">V</span>
+</div>
+<span class="font-label-meta text-label-meta text-[#a89984] mt-1">互動式推導矩陣 · 游標懸停變數查看語義標註</span>
+</div>
+<!-- Follow-up sentence inside 3.2.1 -->
+<p class="font-paper-body text-paper-body text-[#ebdbb2]/90 leading-[32px] text-justify">
+              In practice, we compute the attention function on a set of queries simultaneously, packed together into a matrix <span class="italic text-[#fe8019] font-medium">Q</span>. The keys and values are also packed together into matrices <span class="italic text-[#fabd2f] font-medium">K</span> and <span class="italic text-[#b8bb26] font-medium">V</span>. 
+            </p>
+</div>
+<!-- Subsection 3.2.2 Preview (Faded state for smooth progression) -->
+<div class="opacity-60 hover:opacity-100 transition-opacity flex flex-col gap-3 pt-2">
+<div class="flex items-center gap-2">
+<span class="font-label-code text-label-code text-[#a89984] font-bold">3.2.2</span>
+<h3 class="font-headline-sm text-headline-sm text-[#a89984] hover:text-[#ebdbb2] cursor-pointer font-semibold">Multi-Head Attention</h3>
+</div>
+<p class="font-paper-body text-paper-body text-[#a89984] leading-[30px]">
+              Instead of performing a single attention function with d_model-dimensional keys, values and queries, we found it beneficial to linearly project the queries, keys and values h times with different, learned linear projections to d_k, d_k and d_v dimensions, respectively...
+            </p>
+</div>
+</section>
+</div>
+</main>
+<!-- ==================== RIGHT COLUMN: AI Cognitive Companion ==================== -->
+<aside class="h-full flex flex-col bg-[#1d2021] border-l border-[#3c3836] shadow-sm overflow-hidden select-none">
+<!-- Companion Header & Sync State -->
+<div class="p-space-sm bg-[#1d2021] border-b border-[#3c3836] flex items-center justify-between shrink-0">
+<div class="flex items-center gap-2">
+<div class="w-2.5 h-2.5 rounded-full bg-[#fe8019] animate-pulse"></div>
+<span class="font-headline-sm text-body-md font-bold text-[#ebdbb2] flex items-center gap-1">
+            伴讀認知助理 <span class="font-label-code text-[11px] text-[#fabd2f] font-normal">Active</span>
+</span>
+</div>
+<div class="flex items-center gap-1 text-[#a89984]">
+<button class="w-6 h-6 rounded flex items-center justify-center hover:bg-[#282828] hover:text-[#ebdbb2] transition-colors" title="切換精簡/詳盡模式">
+<span class="material-symbols-outlined text-[15px]">density_medium</span>
+</button>
+<button class="w-6 h-6 rounded flex items-center justify-center hover:bg-[#282828] hover:text-[#ebdbb2] transition-colors" title="固定側邊欄">
+<span class="material-symbols-outlined text-[15px]">dock_to_left</span>
+</button>
+</div>
+</div>
+<!-- Realtime Content Cards Container -->
+<div class="flex-1 overflow-y-auto px-space-sm py-space-xs flex flex-col gap-space-md">
+<!-- Active Context Awareness Badge -->
+<div class="flex items-center gap-1.5 px-1 font-label-meta text-label-meta text-[#fe8019]">
+<span class="material-symbols-outlined text-[14px]">my_location</span>
+<span class="truncate">當前伴讀感應區：§ 3.2.1 Scaled Dot-Product</span>
+</div>
+<!-- 1. Scientific Intuition Card -->
+<div class="bg-[#282828] border border-[#3c3836] rounded-xl p-3.5 flex flex-col gap-2.5 shadow-sm">
+<div class="flex items-center justify-between">
+<span class="font-label-meta text-label-meta text-[#fabd2f] font-bold uppercase tracking-wider flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px] text-[#fabd2f]">psychology</span>
+              白話科研直覺 (Intuition)
+            </span>
+<span class="font-label-code text-label-code bg-[#fabd2f]/15 border border-[#fabd2f]/30 text-[#fabd2f] px-1.5 py-0.2 rounded font-medium">Core Eq. 1</span>
+</div>
+<h4 class="font-headline-sm text-[13px] font-semibold text-[#ebdbb2]">
+            為什麼注意力點積必須除以 √d_k？
+          </h4>
+<div class="font-body-sm text-body-sm text-[#d5c4a1] leading-relaxed bg-[#1d2021] border border-[#3c3836] p-2.5 rounded-lg text-justify flex flex-col gap-1.5">
+<p>
+              當維度 <code class="text-[#fabd2f] font-label-code text-label-code font-bold">d_k</code> 很大時，兩個隨機獨立向量的點積方差會等比擴大到 <code class="text-[#fabd2f] font-label-code text-label-code">d_k</code>，導致點積數值膨脹得極其巨大。
+            </p>
+<p class="text-[#fe8019] font-medium">
+              這會把 Softmax 函數推入極其平緩的飽和區，造成<strong class="text-[#ebdbb2]">梯度極度微弱甚至消失 (Vanishing Gradients)</strong>。除以 √d_k 能將方差穩定拉回 1，使反向傳播的學習信號平穩傳遞。
+            </p>
+</div>
+</div>
+<!-- 2. Long Sentence Structural Breakdown -->
+<div class="bg-[#282828] border border-[#3c3836] rounded-xl p-3.5 flex flex-col gap-2.5 shadow-sm">
+<div class="flex items-center justify-between">
+<span class="font-label-meta text-label-meta text-[#8ec07c] font-bold uppercase tracking-wider flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px] text-[#8ec07c]">account_tree</span>
+              長難句語法拆解 (Syntax Tree)
+            </span>
+<span class="font-label-code text-label-code text-[#a89984]">Line 142</span>
+</div>
+<!-- Original snippet -->
+<div class="font-label-code text-[11px] text-[#a89984] bg-[#1d2021] border border-[#3c3836] p-2 rounded leading-snug">
+            "We compute the dot products of the query with all keys, divide each by √d_k, and apply a softmax..."
+          </div>
+<!-- Syntax Hierarchy -->
+<div class="flex flex-col gap-1.5 text-[12px] font-body-sm">
+<div class="flex items-start gap-2 bg-[#32302f] border border-[#3c3836] p-2 rounded">
+<span class="font-label-code text-[11px] text-[#fe8019] font-bold shrink-0">[主幹 S-V-O]</span>
+<div class="flex flex-col">
+<span class="text-[#ebdbb2] font-medium">We compute ... dot products</span>
+<span class="text-[#a89984] text-[11px]">我們計算 Query 與所有 Key 的內積矩陣</span>
+</div>
+</div>
+<div class="flex items-start gap-2 bg-[#32302f] border border-[#3c3836] p-2 rounded">
+<span class="font-label-code text-[11px] text-[#fabd2f] font-bold shrink-0">[平行修飾 1]</span>
+<div class="flex flex-col">
+<span class="text-[#ebdbb2] font-medium">divide each by √d_k</span>
+<span class="text-[#a89984] text-[11px]">將每個維度縮放除以根號 d_k（阻斷數值膨脹）</span>
+</div>
+</div>
+<div class="flex items-start gap-2 bg-[#32302f] border border-[#3c3836] p-2 rounded">
+<span class="font-label-code text-[11px] text-[#8ec07c] font-bold shrink-0">[目的與結果]</span>
+<div class="flex flex-col">
+<span class="text-[#ebdbb2] font-medium">to obtain the weights on the values</span>
+<span class="text-[#a89984] text-[11px]">經 Softmax 正規化後獲得分配給 Value 的注意力權重</span>
+</div>
+</div>
+</div>
+</div>
+<!-- 3. Precise Academic Term Alignment -->
+<div class="bg-[#282828] border border-[#3c3836] rounded-xl p-3.5 flex flex-col gap-2 shadow-sm">
+<span class="font-label-meta text-label-meta text-[#a89984] uppercase tracking-wider flex items-center gap-1 font-bold">
+<span class="material-symbols-outlined text-[15px] text-[#83a598]">translate</span>
+            學術術語精準對齊 (Terminology)
+          </span>
+<div class="flex flex-col gap-1.5">
+<div class="flex items-center justify-between bg-[#1d2021] border border-[#3c3836] px-2.5 py-1.5 rounded">
+<span class="font-body-sm text-body-sm text-[#ebdbb2] font-medium">Scaled Dot-Product</span>
+<span class="font-body-sm text-body-sm text-[#fabd2f] font-medium">縮放點積注意力</span>
+</div>
+<div class="flex items-center justify-between bg-[#1d2021] border border-[#3c3836] px-2.5 py-1.5 rounded">
+<span class="font-body-sm text-body-sm text-[#ebdbb2] font-medium">Large in magnitude</span>
+<span class="font-body-sm text-body-sm text-[#8ec07c] font-medium">向量幅值過大 (非尺寸大)</span>
+</div>
+</div>
+</div>
+<!-- 4. Proactive Socratic Inquiries -->
+<div class="flex flex-col gap-2">
+<span class="font-label-meta text-label-meta text-[#d3869b] uppercase tracking-wider px-1 font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-[15px]">tips_and_updates</span> 主動引導探索 (Socratic Inquiries)
+          </span>
+<button class="w-full text-left bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#504945] p-2.5 rounded-lg text-[#d5c4a1] hover:text-[#ebdbb2] transition-all flex items-start gap-2 group">
+<span class="material-symbols-outlined text-[15px] text-[#fabd2f] mt-0.5 shrink-0 group-hover:scale-110 transition-transform">help_outline</span>
+<span class="font-body-sm text-body-sm leading-snug">
+              傳統 Dot-Product Attention 與 Additive Attention 的理論運算複雜度差異在哪？
+            </span>
+</button>
+<button class="w-full text-left bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#504945] p-2.5 rounded-lg text-[#d5c4a1] hover:text-[#ebdbb2] transition-all flex items-start gap-2 group">
+<span class="material-symbols-outlined text-[15px] text-[#8ec07c] mt-0.5 shrink-0 group-hover:scale-110 transition-transform">functions</span>
+<span class="font-body-sm text-body-sm leading-snug">
+              這裡提到的 √d_k 數學證明為何能證明變異數回到 1？能否展開推導？
+            </span>
+</button>
+<button class="w-full text-left bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#504945] p-2.5 rounded-lg text-[#d5c4a1] hover:text-[#ebdbb2] transition-all flex items-start gap-2 group">
+<span class="material-symbols-outlined text-[15px] text-[#fe8019] mt-0.5 shrink-0 group-hover:scale-110 transition-transform">bolt</span>
+<span class="font-body-sm text-body-sm leading-snug">
+              如果把 Softmax 換成線性核函數（Linear Attention）會產生什麼表達力代價？
+            </span>
+</button>
+</div>
+</div>
+<!-- Copilot Bottom Action Input & Shortkeys -->
+<div class="p-space-sm bg-[#141617] border-t border-[#3c3836] shrink-0 flex flex-col gap-2">
+<div class="flex items-center gap-1.5">
+<button class="flex-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] px-2 py-1 rounded font-label-meta text-label-meta flex items-center justify-center gap-1 transition-colors">
+<span class="material-symbols-outlined text-[13px] text-[#fabd2f]">calculate</span> 追問推導細節
+          </button>
+<button class="flex-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] px-2 py-1 rounded font-label-meta text-label-meta flex items-center justify-center gap-1 transition-colors">
+<span class="material-symbols-outlined text-[13px] text-[#fe8019]">note_add</span> 輸出精讀筆記
+          </button>
+</div>
+<div class="relative flex items-center">
+<input class="w-full bg-[#282828] border border-[#3c3836] text-[#ebdbb2] placeholder:text-[#a89984]/70 font-body-sm text-body-sm pl-3 pr-8 py-2 rounded-lg focus:outline-none focus:border-[#fe8019] focus:bg-[#32302f] transition-colors" placeholder="對當前段落或推導深入提問... (Enter 發送)" type="text"/>
+<button class="absolute right-1.5 w-6 h-6 rounded bg-[#fe8019] text-[#1d2021] flex items-center justify-center hover:opacity-90 transition-opacity font-bold">
+<span class="material-symbols-outlined text-[14px]">arrow_upward</span>
+</button>
+</div>
+<div class="flex items-center justify-between text-[#a89984] font-label-meta text-[10px] px-0.5">
+<span>本機快取命中 · 延遲 18ms</span>
+<span class="text-[#b8bb26] font-medium">智慧上下文感知中</span>
+</div>
+</div>
+</aside>
+</div>
+</div></main></div></body></html>
