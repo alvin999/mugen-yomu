@@ -128,7 +128,7 @@
       <div class="flex items-center justify-between font-mono text-[10px] text-[#a89984] leading-tight">
         <span>視線停留於 <strong class="text-[#fe8019]">§{activeSectionId}</strong></span>
         <span class="text-[#b8bb26] flex items-center gap-0.5">
-          <span class="h-1.5 w-1.5 rounded-full bg-[#b8bb26] inline-block animate-pulse"></span>
+          <span class="h-1.5 w-1.5 rounded-full bg-[#b8bb26] inline-block"></span>
           即時動態追蹤
         </span>
       </div>
@@ -150,10 +150,15 @@
       {/if}
 
       {#each filteredSections as section}
+        {@const isAct = activeSectionId === section.id}
         <!-- Level 1 Section -->
         <div class="flex flex-col">
           <div
-            class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-left transition-colors {activeSectionId === section.id ? 'bg-[#3c3836] text-[#fe8019] font-semibold border-l-2 border-[#fe8019]' : 'text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2]'}"
+            class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-left transition-colors {
+              isAct
+                ? 'bg-[#3c3836] text-[#fe8019] font-semibold border-l-2 border-[#fe8019]'
+                : 'text-[#ebdbb2] hover:bg-[#282828] hover:text-[#fabd2f]'
+            }"
           >
             <!-- Toggle Checkmark / Icon -->
             <button
@@ -165,16 +170,16 @@
                 on:click={(e) => toggleSectionRead(section.id, e)}
                 title={section.isRead ? "點擊標記為未讀" : "點擊標記為已讀"}
               >
-                {#if section.isRead}
-                  <span class="material-symbols-outlined text-[16px] text-[#b8bb26]">check_circle</span>
+                {#if isAct}
+                  <span class="material-symbols-outlined text-[16px] text-[#fe8019]" title="正在閱讀中">center_focus_strong</span>
+                {:else if section.isRead}
+                  <span class="material-symbols-outlined text-[16px] text-[#b8bb26]" title="已精讀">check_circle</span>
                 {:else if section.progress >= 70}
                   <span class="material-symbols-outlined text-[16px] text-[#fabd2f]">timelapse</span>
-                {:else if activeSectionId === section.id}
-                  <span class="material-symbols-outlined text-[16px] text-[#fe8019] animate-pulse">center_focus_strong</span>
                 {:else if section.progress > 0}
-                  <span class="material-symbols-outlined text-[16px] text-[#fabd2f]/70">radio_button_checked</span>
+                  <span class="material-symbols-outlined text-[16px] text-[#fabd2f]/80">radio_button_checked</span>
                 {:else}
-                  <span class="material-symbols-outlined text-[16px] text-[#665c54] group-hover/check:text-[#a89984]">radio_button_unchecked</span>
+                  <span class="material-symbols-outlined text-[16px] text-[#a89984] group-hover/check:text-[#ebdbb2]">radio_button_unchecked</span>
                 {/if}
               </span>
               <span class="text-xs truncate">{section.title}</span>
@@ -205,8 +210,13 @@
           {#if section.children && section.children.length > 0 && !collapsedSections[section.id]}
             <div class="ml-2.5 pl-2.5 flex flex-col gap-0.5 mt-0.5 border-l border-[#504945]">
               {#each section.children as sub}
+                {@const isSubAct = activeSectionId === sub.id}
                 <div
-                  class="w-full flex items-center justify-between px-2 py-1 rounded text-left transition-colors {activeSectionId === sub.id ? 'bg-[#3c3836] text-[#fe8019] font-semibold' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]'}"
+                  class="w-full flex items-center justify-between px-2 py-1 rounded text-left transition-colors {
+                    isSubAct
+                      ? 'bg-[#3c3836] text-[#fe8019] font-semibold'
+                      : 'text-[#d5c4a1] hover:text-[#ebdbb2] hover:bg-[#282828]'
+                  }"
                 >
                   <button
                     class="flex-1 text-left truncate text-xs bg-transparent border-0 p-0 text-inherit cursor-pointer flex items-center gap-1.5"
@@ -217,22 +227,20 @@
                       on:click={(e) => toggleSectionRead(sub.id, e)}
                       title={sub.isRead ? "點擊標記為未讀" : "點擊標記為已讀"}
                     >
-                      {#if sub.isRead}
+                      {#if isSubAct}
+                        <span class="material-symbols-outlined text-[14px] text-[#fe8019]">center_focus_strong</span>
+                      {:else if sub.isRead}
                         <span class="material-symbols-outlined text-[13px] text-[#b8bb26]">check_circle</span>
                       {:else if sub.progress > 0}
                         <span class="material-symbols-outlined text-[13px] text-[#fabd2f]">timelapse</span>
                       {:else}
-                        <span class="material-symbols-outlined text-[13px] text-[#665c54]">radio_button_unchecked</span>
+                        <span class="material-symbols-outlined text-[13px] text-[#a89984]">radio_button_unchecked</span>
                       {/if}
                     </span>
                     <span class="truncate">{sub.title}</span>
                   </button>
 
                   <div class="flex items-center gap-1 shrink-0">
-                    {#if activeSectionId === sub.id}
-                      <span class="h-1.5 w-1.5 rounded-full bg-[#fe8019] animate-ping mr-1"></span>
-                    {/if}
-
                     {#if sub.children && sub.children.length > 0}
                       <button
                         class="w-4 h-4 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2]"
@@ -250,11 +258,16 @@
                 {#if sub.children && sub.children.length > 0 && !collapsedSections[sub.id]}
                   <div class="ml-2 pl-2 border-l border-[#504945]/70 flex flex-col gap-0.5 py-0.5">
                     {#each sub.children as subsub}
+                      {@const isSubSubAct = activeSectionId === subsub.id}
                       <button
-                        class="w-full text-left px-1.5 py-0.5 font-mono text-[10px] rounded transition-colors flex items-center gap-1 {activeSectionId === subsub.id ? 'bg-[#32302f] text-[#fabd2f] font-semibold' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
+                        class="w-full text-left px-1.5 py-0.5 font-mono text-[10px] rounded transition-colors flex items-center gap-1 {
+                          isSubSubAct
+                            ? 'bg-[#32302f] text-[#fe8019] font-semibold'
+                            : 'text-[#d5c4a1] hover:text-[#ebdbb2] hover:bg-[#32302f]'
+                        }"
                         on:click={() => selectSection(subsub.id)}
                       >
-                        <span class="material-symbols-outlined text-[11px] {activeSectionId === subsub.id ? 'text-[#fe8019]' : 'text-[#665c54]'}">arrow_right</span>
+                        <span class="material-symbols-outlined text-[11px] {isSubSubAct ? 'text-[#fe8019]' : 'text-[#a89984]'}">arrow_right</span>
                         <span class="truncate">{subsub.title}</span>
                       </button>
                     {/each}

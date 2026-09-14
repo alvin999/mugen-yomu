@@ -378,16 +378,23 @@
       <div class="flex flex-col gap-6">
         {#each allSections as sec (sec.id)}
           {@const isFocused = sec.id === activeSectionId}
+          {@const hasRead = sec.isRead || (sec.progress && sec.progress > 0)}
 
-          <!-- SECTION WRAPPER (Fixed padding to ensure Zero CLS / Anti-Jitter) -->
+          <!-- SECTION WRAPPER (Visual Hierarchy: Reading = Focus Lens Pulse, Read = Secondary Dim, Unread = Darkest) -->
           <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
           <section
             id={`sec-${sec.id}`}
-            class="flex flex-col gap-3 transition-[background-color,border-color,box-shadow] duration-200 rounded-xl p-4 sm:p-5 relative {isFocused ? 'bg-[#32302f] border border-[#504945] shadow-[0_4px_24px_rgba(0,0,0,0.35)]' : 'bg-[#282828]/60 hover:bg-[#282828] border border-[#3c3836]/40'}"
+            class="flex flex-col gap-3 transition-[background-color,border-color,box-shadow,opacity] duration-300 rounded-xl p-4 sm:p-5 relative {
+              isFocused
+                ? 'bg-[#32302f] border border-[#fe8019]/60 shadow-[0_4px_24px_rgba(0,0,0,0.4)] opacity-100'
+                : hasRead
+                  ? 'bg-[#282828]/45 hover:bg-[#282828] border border-[#3c3836]/40 opacity-75 hover:opacity-95'
+                  : 'bg-[#1d2021]/30 hover:bg-[#282828]/30 border border-[#3c3836]/20 opacity-35 hover:opacity-65'
+            }"
             on:click={() => handleSectionClick(sec.id)}
           >
-            <!-- Focus Lens Indicator Bar (Opacity transition instead of DOM mounting) -->
-            <div class="absolute -left-1 top-4 bottom-4 w-1.5 bg-[#fe8019] rounded-full focus-lens-bar transition-opacity duration-200 {isFocused ? 'opacity-100' : 'opacity-0 pointer-events-none'}"></div>
+            <!-- Focus Lens Indicator Bar (Only pulses when actively reading; completely hidden and no pulse when not focused) -->
+            <div class="absolute -left-1 top-4 bottom-4 w-1.5 bg-[#fe8019] rounded-full transition-opacity duration-300 {isFocused ? 'focus-lens-bar opacity-100' : 'opacity-0 pointer-events-none'}"></div>
 
             <div class="flex items-center justify-between gap-2">
               <div class="flex items-baseline gap-2.5 min-w-0">
