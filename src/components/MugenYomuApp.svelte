@@ -16,9 +16,16 @@
     getInitialLibrary,
     getActivePaperId,
     setActivePaperId,
-    type PaperDocument
+    type PaperDocument,
+    type ChapterSection
   } from '../stores/documentStore';
-  import { flattenSections } from '../stores/readingStore';
+  import {
+    flattenSections,
+    loadPaperReadingState,
+    savePaperReadingState,
+    clearPaperReadingState,
+    applyProgressToSections
+  } from '../stores/readingStore';
   import { getCacheStats, type CacheStats } from '../services/cacheService';
   import { formatModelDisplayName } from '../services/aiService';
 
@@ -81,13 +88,118 @@
     activePaperId = paper.id;
     setActivePaperId(paper.id);
 
+    // 載入該論文在 LocalStorage 的閱讀進度
+    const savedState = loadPaperReadingState(paper.id);
+    if (savedState && activePaper.sections) {
+      activePaper.sections = applyProgressToSections(activePaper.sections, savedState);
+    }
+
     // Pick section 3.2 or 3.2.1 if exists, else first section
-    const allSecs = flattenSections(paper.sections);
+    const allSecs = flattenSections(activePaper.sections);
     const targetSec = allSecs.find(s => s.id === '3.2' || s.id === '3.2.1') || allSecs[0];
     if (targetSec) {
       activeSectionId = targetSec.id;
       activeContextText = `§ ${targetSec.title}`;
     }
+  }
+
+  // 記錄並持久化章節狀態
+  function updateSectionState(sectionId: string, updates: Partial<{ isRead: boolean; progress: number; dwellSeconds: number }>) {
+    if (!activePaper || !activePaper.sections) return;
+
+    function updateRecursive(secs: ChapterSection[]): ChapterSection[] {
+      return secs.map(s => {
+        if (s.id === sectionId) {
+          const newIsRead = updates.isRead !== undefined ? updates.isRead : s.isRead;
+          const newProgress = updates.progress !== undefined ? updates.progress : (newIsRead ? 100 : s.progress);
+          return {
+            ...s,
+            isRead: newIsRead,
+            progress: newProgress
+          };
+        }
+        if (s.children && s.children.length > 0) {
+          return { ...s, children: updateRecursive(s.children) };
+        }
+        return s;
+      });
+    }
+
+    activePaper.sections = updateRecursive(activePaper.sections);
+    activePaper = { ...activePaper };
+
+    // 同步儲存至 LocalStorage
+    const flattened = flattenSections(activePaper.sections);
+    const stateMap: Record<string, any> = {};
+    for (const item of flattened) {
+      stateMap[item.id] = {
+        isRead: item.isRead,
+        progress: item.progress,
+        lastUpdated: Date.now()
+      };
+    }
+    savePaperReadingState(activePaper.id, stateMap);
+  }
+
+  // 1. 視線停留累積精讀
+  function handleSectionDwell(e: CustomEvent<{ id: string; dwellSeconds: number }>) {
+    const { id, dwellSeconds } = e.detail;
+    if (!activePaper) return;
+    const allSecs = flattenSections(activePaper.sections);
+    const target = allSecs.find(s => s.id === id);
+    if (!target) return;
+
+    if (!target.isRead) {
+      const currentProgress = target.progress || 0;
+      const addedProgress = Math.min(100, Math.max(currentProgress, Math.round((dwellSeconds / 7) * 100)));
+      const isNowRead = addedProgress >= 100;
+      updateSectionState(id, { progress: addedProgress, isRead: isNowRead, dwellSeconds });
+    }
+  }
+
+  // 2. 視線路過掃讀
+  function handleSectionSkimmed(e: CustomEvent<{ id: string }>) {
+    const { id } = e.detail;
+    if (!activePaper) return;
+    const allSecs = flattenSections(activePaper.sections);
+    const target = allSecs.find(s => s.id === id);
+    if (target && !target.isRead && (!target.progress || target.progress < 30)) {
+      updateSectionState(id, { progress: 30 });
+    }
+  }
+
+  // 3. 深度互動（展開翻譯、查看直覺、標註筆記）直接判定 100% 精讀
+  function handleSectionInteracted(e: CustomEvent<{ id: string; action: string }>) {
+    const { id } = e.detail;
+    updateSectionState(id, { isRead: true, progress: 100 });
+  }
+
+  // 4. 使用者在目錄樹手動切換已讀/未讀
+  function handleToggleSectionRead(e: CustomEvent<{ id: string }>) {
+    const { id } = e.detail;
+    if (!activePaper) return;
+    const allSecs = flattenSections(activePaper.sections);
+    const target = allSecs.find(s => s.id === id);
+    if (target) {
+      const nextRead = !target.isRead;
+      updateSectionState(id, { isRead: nextRead, progress: nextRead ? 100 : 0 });
+    }
+  }
+
+  // 5. 重設本篇閱讀進度
+  function handleResetProgress() {
+    if (!activePaper) return;
+    clearPaperReadingState(activePaper.id);
+    function resetSecs(secs: ChapterSection[]): ChapterSection[] {
+      return secs.map(s => ({
+        ...s,
+        isRead: false,
+        progress: 0,
+        children: s.children ? resetSecs(s.children) : undefined
+      }));
+    }
+    activePaper.sections = resetSecs(activePaper.sections);
+    activePaper = { ...activePaper };
   }
 
   function handleModeChange(event: CustomEvent<{ mode: 'bilingual' | 'split' | 'zen' | 'figures' }>) {
@@ -132,8 +244,9 @@
     zoomLevel = event.detail.zoomLevel;
   }
 
-  function handleSelectSection(event: CustomEvent<{ id: string }>) {
-    activeSectionId = event.detail.id;
+  function handleSelectSection(event: CustomEvent<{ id: string; source?: string; noScroll?: boolean }>) {
+    const { id, source, noScroll } = event.detail || {};
+    activeSectionId = id;
     if (activePaper) {
       const allSecs = flattenSections(activePaper.sections);
       const found = allSecs.find(s => s.id === activeSectionId);
@@ -142,11 +255,83 @@
     if (readingMode === 'figures') {
       readingMode = 'bilingual';
     }
-    setTimeout(() => {
-      if (readerRef && readerRef.scrollToTarget) {
-        readerRef.scrollToTarget('sec-' + activeSectionId);
+
+    // 關鍵修復：絕對不要在使用者滾動或點擊段落時反向呼叫 scrollToTarget！
+    // 只有當來源是目錄樹點擊 (outline)、導航 (nav)、PDF跳轉 (pdf) 時才主動跳轉！
+    const isNavigation = source === 'outline' || source === 'nav' || source === 'pdf';
+    if (isNavigation && !noScroll) {
+      setTimeout(() => {
+        if (readerRef && readerRef.scrollToTarget) {
+          readerRef.scrollToTarget('sec-' + activeSectionId);
+        }
+      }, 30);
+    }
+  }
+
+  // 當使用者滾動滑過前面的章節時，自動將已讀過的章節標記為已研讀
+  function handleSectionsPassed(e: CustomEvent<{ readSectionIds: string[]; currentSectionId: string }>) {
+    const { readSectionIds } = e.detail || {};
+    if (!activePaper || !readSectionIds || readSectionIds.length === 0) return;
+
+    let hasChange = false;
+    function updatePassed(secs: ChapterSection[]): ChapterSection[] {
+      return secs.map(s => {
+        let isRead = s.isRead;
+        let progress = s.progress;
+        if (readSectionIds.includes(s.id) && !s.isRead) {
+          isRead = true;
+          progress = 100;
+          hasChange = true;
+        }
+        return {
+          ...s,
+          isRead,
+          progress,
+          children: s.children ? updatePassed(s.children) : undefined
+        };
+      });
+    }
+
+    const updated = updatePassed(activePaper.sections);
+    if (hasChange) {
+      activePaper.sections = updated;
+      activePaper = { ...activePaper };
+
+      // 持久化儲存
+      const flattened = flattenSections(activePaper.sections);
+      const stateMap: Record<string, any> = {};
+      for (const item of flattened) {
+        stateMap[item.id] = { isRead: item.isRead, progress: item.progress, lastUpdated: Date.now() };
       }
-    }, 60);
+      savePaperReadingState(activePaper.id, stateMap);
+    }
+  }
+
+  // 當使用者自然滾動到達文末時，整篇論文自動完成 100% 精讀！
+  function handleReachedBottom() {
+    if (!activePaper || !activePaper.sections) return;
+    const allSecs = flattenSections(activePaper.sections);
+    const allAlreadyRead = allSecs.every(s => s.isRead);
+    if (allAlreadyRead) return;
+
+    function markAll(secs: ChapterSection[]): ChapterSection[] {
+      return secs.map(s => ({
+        ...s,
+        isRead: true,
+        progress: 100,
+        children: s.children ? markAll(s.children) : undefined
+      }));
+    }
+
+    activePaper.sections = markAll(activePaper.sections);
+    activePaper = { ...activePaper };
+
+    const flattened = flattenSections(activePaper.sections);
+    const stateMap: Record<string, any> = {};
+    for (const item of flattened) {
+      stateMap[item.id] = { isRead: true, progress: 100, lastUpdated: Date.now() };
+    }
+    savePaperReadingState(activePaper.id, stateMap);
   }
 
   function handleSelectFigure(event: CustomEvent<{ figId: string }>) {
@@ -358,8 +543,17 @@
           <div
             class="w-2.5 bg-[#1d2021] hover:bg-[#fe8019] transition-colors cursor-col-resize flex items-center justify-center z-20 group shrink-0"
             on:mousedown={handleSplitMouseDown}
-            title="拖曳以自訂左右分屏比例"
+            title="拖曳以自訂左右分屏比例（可使用鍵盤左右鍵微調）"
             role="separator"
+            tabindex="0"
+            aria-valuenow={splitRatio}
+            aria-valuemin="20"
+            aria-valuemax="80"
+            aria-label="左右分屏調整桿"
+            on:keydown={(e) => {
+              if (e.key === 'ArrowLeft') splitRatio = Math.max(20, splitRatio - 5);
+              if (e.key === 'ArrowRight') splitRatio = Math.min(80, splitRatio + 5);
+            }}
           >
             <div class="w-1 h-8 bg-[#504945] group-hover:bg-[#1d2021] rounded-full"></div>
           </div>
@@ -373,6 +567,11 @@
               {readingMode}
               on:selectSection={handleSelectSection}
               on:readerAction={handleReaderAction}
+              on:sectionDwell={handleSectionDwell}
+              on:sectionSkimmed={handleSectionSkimmed}
+              on:sectionInteracted={handleSectionInteracted}
+              on:sectionsPassed={handleSectionsPassed}
+              on:reachedBottom={handleReachedBottom}
             />
           </div>
         </div>
@@ -405,6 +604,8 @@
               on:selectSection={handleSelectSection}
               on:selectFigure={handleSelectFigure}
               on:selectEquation={handleSelectEquation}
+              on:toggleSectionRead={handleToggleSectionRead}
+              on:resetProgress={handleResetProgress}
             />
           {/if}
 
@@ -417,6 +618,11 @@
               {readingMode}
               on:selectSection={handleSelectSection}
               on:readerAction={handleReaderAction}
+              on:sectionDwell={handleSectionDwell}
+              on:sectionSkimmed={handleSectionSkimmed}
+              on:sectionInteracted={handleSectionInteracted}
+              on:sectionsPassed={handleSectionsPassed}
+              on:reachedBottom={handleReachedBottom}
             />
           </div>
 
@@ -466,8 +672,12 @@
   {#if isPdfDrawerOpen}
     <!-- Backdrop Overlay -->
     <div
-      class="fixed inset-0 top-16 bg-black/45 z-30 transition-opacity animate-fade-in"
+      class="fixed inset-0 top-16 bg-black/45 z-30 transition-opacity animate-fade-in cursor-pointer"
       on:click={() => isPdfDrawerOpen = false}
+      on:keydown={(e) => e.key === 'Escape' && (isPdfDrawerOpen = false)}
+      role="button"
+      tabindex="0"
+      aria-label="點擊關閉原檔抽屜"
     ></div>
 
     <!-- Right Drawer Panel -->

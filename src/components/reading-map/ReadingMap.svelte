@@ -13,8 +13,9 @@
   let searchQuery: string = '';
 
   $: readingStats = calculateReadingStats(sections);
-  $: coveragePercent = readingStats.coveragePercent;
-  $: readWords = readingStats.readWords;
+  $: deepCoveragePercent = readingStats.deepCoveragePercent;
+  $: skimCoveragePercent = readingStats.skimCoveragePercent;
+  $: deepWords = readingStats.deepWords;
   $: totalWords = readingStats.totalWords;
 
   // Filter sections recursively based on search query
@@ -41,7 +42,18 @@
 
   function selectSection(id: string) {
     activeSectionId = id;
-    dispatch('selectSection', { id });
+    dispatch('selectSection', { id, source: 'outline' });
+  }
+
+  function toggleSectionRead(id: string, e: MouseEvent) {
+    e.stopPropagation();
+    dispatch('toggleSectionRead', { id });
+  }
+
+  function resetProgress() {
+    if (confirm('確定要重設本篇論文的閱讀進度嗎？')) {
+      dispatch('resetProgress');
+    }
   }
 
   function selectFigure(figId: string) {
@@ -88,18 +100,38 @@
     <!-- Progress Heatmap Badge -->
     <div class="bg-[#282828] border border-[#3c3836] p-2.5 rounded-lg flex flex-col gap-1.5 shadow-sm">
       <div class="flex items-center justify-between text-[#a89984]">
-        <span class="font-mono text-[10px] uppercase tracking-wider">精讀覆蓋率</span>
-        <span class="font-mono text-[11px] text-[#fabd2f] font-semibold">
-          {coveragePercent}% ({readWords.toLocaleString()} / {totalWords.toLocaleString()} 字)
+        <div class="flex items-center gap-1.5">
+          <span class="font-mono text-[10px] uppercase tracking-wider text-[#ebdbb2] font-semibold">精讀覆蓋率</span>
+          <span class="text-[10px] font-mono text-[#b8bb26] font-bold" title="已精讀研讀比例">{deepCoveragePercent}%</span>
+          {#if skimCoveragePercent > 0}
+            <span class="text-[9px] font-mono text-[#fabd2f]/90" title="已瀏覽掃讀比例">(+{skimCoveragePercent}% 掃讀)</span>
+          {/if}
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="font-mono text-[11px] text-[#fabd2f] font-semibold">
+            {deepWords.toLocaleString()} / {totalWords.toLocaleString()} 字
+          </span>
+          <button
+            class="text-[#a89984] hover:text-[#fe8019] transition-colors p-0.5 rounded cursor-pointer"
+            on:click={resetProgress}
+            title="重設此篇閱讀進度"
+          >
+            <span class="material-symbols-outlined text-[13px]">restart_alt</span>
+          </button>
+        </div>
+      </div>
+      <!-- Dual-Track Real Progress Bar -->
+      <div class="w-full h-2 bg-[#141617] rounded-full overflow-hidden flex border border-[#3c3836]/80" title="綠色: 精讀掌握度 {deepCoveragePercent}% / 黃色: 瀏覽掃讀度 {skimCoveragePercent}%">
+        <div class="bg-[#b8bb26] h-full transition-all duration-300" style="width: {deepCoveragePercent}%"></div>
+        <div class="bg-[#fabd2f]/50 h-full transition-all duration-300" style="width: {skimCoveragePercent}%"></div>
+      </div>
+      <div class="flex items-center justify-between font-mono text-[10px] text-[#a89984] leading-tight">
+        <span>視線停留於 <strong class="text-[#fe8019]">§{activeSectionId}</strong></span>
+        <span class="text-[#b8bb26] flex items-center gap-0.5">
+          <span class="h-1.5 w-1.5 rounded-full bg-[#b8bb26] inline-block animate-pulse"></span>
+          即時動態追蹤
         </span>
       </div>
-      <div class="w-full h-1.5 bg-[#1d2021] rounded-full overflow-hidden flex border border-[#3c3836]/60">
-        <div class="bg-[#b8bb26] h-full transition-all duration-300" style="width: {coveragePercent}%"></div>
-        <div class="bg-[#fabd2f]/40 h-full w-[18%]"></div>
-      </div>
-      <span class="font-mono text-[10px] text-[#a89984] leading-tight">
-        視線停留於 <strong class="text-[#fe8019]">§{activeSectionId}</strong> · <span class="text-[#b8bb26]">結構化精讀中</span>
-      </span>
     </div>
 
     <!-- Outline Structure Tree -->
@@ -123,23 +155,34 @@
           <div
             class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-left transition-colors {activeSectionId === section.id ? 'bg-[#3c3836] text-[#fe8019] font-semibold border-l-2 border-[#fe8019]' : 'text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2]'}"
           >
+            <!-- Toggle Checkmark / Icon -->
             <button
-              class="flex items-center gap-2 min-w-0 flex-1 text-left bg-transparent border-0 p-0 text-inherit cursor-pointer"
+              class="flex items-center gap-2 min-w-0 flex-1 text-left bg-transparent border-0 p-0 text-inherit cursor-pointer group/check"
               on:click={() => selectSection(section.id)}
             >
-              {#if section.isRead}
-                <span class="material-symbols-outlined text-[15px] text-[#b8bb26]">check_circle</span>
-              {:else if activeSectionId === section.id}
-                <span class="material-symbols-outlined text-[15px] text-[#fe8019]">center_focus_strong</span>
-              {:else}
-                <span class="material-symbols-outlined text-[15px] text-[#665c54]">radio_button_unchecked</span>
-              {/if}
+              <span
+                class="hover:scale-125 transition-transform flex items-center shrink-0 cursor-pointer"
+                on:click={(e) => toggleSectionRead(section.id, e)}
+                title={section.isRead ? "點擊標記為未讀" : "點擊標記為已讀"}
+              >
+                {#if section.isRead}
+                  <span class="material-symbols-outlined text-[16px] text-[#b8bb26]">check_circle</span>
+                {:else if section.progress >= 70}
+                  <span class="material-symbols-outlined text-[16px] text-[#fabd2f]">timelapse</span>
+                {:else if activeSectionId === section.id}
+                  <span class="material-symbols-outlined text-[16px] text-[#fe8019] animate-pulse">center_focus_strong</span>
+                {:else if section.progress > 0}
+                  <span class="material-symbols-outlined text-[16px] text-[#fabd2f]/70">radio_button_checked</span>
+                {:else}
+                  <span class="material-symbols-outlined text-[16px] text-[#665c54] group-hover/check:text-[#a89984]">radio_button_unchecked</span>
+                {/if}
+              </span>
               <span class="text-xs truncate">{section.title}</span>
             </button>
 
             <div class="flex items-center gap-1 shrink-0">
               {#if section.isRead}
-                <span class="font-mono text-[10px] text-[#b8bb26]">100%</span>
+                <span class="font-mono text-[10px] text-[#b8bb26] font-semibold">100%</span>
               {:else if section.progress > 0}
                 <span class="font-mono text-[10px] text-[#fabd2f]">{section.progress}%</span>
               {/if}
@@ -166,10 +209,23 @@
                   class="w-full flex items-center justify-between px-2 py-1 rounded text-left transition-colors {activeSectionId === sub.id ? 'bg-[#3c3836] text-[#fe8019] font-semibold' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]'}"
                 >
                   <button
-                    class="flex-1 text-left truncate text-xs bg-transparent border-0 p-0 text-inherit cursor-pointer"
+                    class="flex-1 text-left truncate text-xs bg-transparent border-0 p-0 text-inherit cursor-pointer flex items-center gap-1.5"
                     on:click={() => selectSection(sub.id)}
                   >
-                    {sub.title}
+                    <span
+                      class="hover:scale-125 transition-transform flex items-center shrink-0 cursor-pointer"
+                      on:click={(e) => toggleSectionRead(sub.id, e)}
+                      title={sub.isRead ? "點擊標記為未讀" : "點擊標記為已讀"}
+                    >
+                      {#if sub.isRead}
+                        <span class="material-symbols-outlined text-[13px] text-[#b8bb26]">check_circle</span>
+                      {:else if sub.progress > 0}
+                        <span class="material-symbols-outlined text-[13px] text-[#fabd2f]">timelapse</span>
+                      {:else}
+                        <span class="material-symbols-outlined text-[13px] text-[#665c54]">radio_button_unchecked</span>
+                      {/if}
+                    </span>
+                    <span class="truncate">{sub.title}</span>
                   </button>
 
                   <div class="flex items-center gap-1 shrink-0">

@@ -7,7 +7,7 @@
 
   export let paper: PaperDocument | null = null;
   export let activeSectionId: string = '3.2.1';
-  export let readingMode: 'bilingual' | 'zen' | 'figures' = 'bilingual';
+  export let readingMode: 'bilingual' | 'split' | 'zen' | 'figures' = 'bilingual';
   export let isAbstractCollapsed: boolean = false;
 
   const dispatch = createEventDispatcher();
@@ -68,6 +68,9 @@
 
   function triggerAction(actionName: string, payload?: any) {
     dispatch('readerAction', { action: actionName, payload });
+    if (activeSectionId) {
+      dispatch('sectionInteracted', { id: activeSectionId, action: actionName });
+    }
   }
 
   function toggleAbstract() {
@@ -76,7 +79,7 @@
 
   function handleSectionClick(id: string) {
     activeSectionId = id;
-    dispatch('selectSection', { id });
+    dispatch('selectSection', { id, source: 'reader', noScroll: true });
   }
 
   function handleAuthorClick(author: string) {
@@ -86,6 +89,32 @@
   let isProgrammaticScrolling: boolean = false;
   let scrollTimeout: any = null;
   let lastScrollCheck: number = 0;
+
+  // 視線停留時間與精讀追蹤
+  let currentDwellSecs: number = 0;
+  let lastDwellSectionId: string = '';
+
+  onMount(() => {
+    const dwellInterval = setInterval(() => {
+      if (activeSectionId && !isProgrammaticScrolling) {
+        if (lastDwellSectionId === activeSectionId) {
+          currentDwellSecs += 1;
+          // 累積停留超過 3 秒，開始持續回傳停留精讀數據
+          if (currentDwellSecs >= 3) {
+            dispatch('sectionDwell', { id: activeSectionId, dwellSeconds: currentDwellSecs });
+          }
+        } else {
+          lastDwellSectionId = activeSectionId;
+          currentDwellSecs = 0;
+        }
+      }
+    }, 1000);
+
+    return () => {
+      clearInterval(dwellInterval);
+      if (scrollTimeout) clearTimeout(scrollTimeout);
+    };
+  });
 
   export function scrollToTarget(targetId: string) {
     if (typeof document === 'undefined') return;
@@ -98,34 +127,56 @@
       if (scrollTimeout) clearTimeout(scrollTimeout);
       scrollTimeout = setTimeout(() => {
         isProgrammaticScrolling = false;
-      }, 750);
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 500);
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }
 
   function handleContainerScroll() {
     if (isProgrammaticScrolling || !scrollContainer) return;
     const now = Date.now();
-    if (now - lastScrollCheck < 120) return;
+    if (now - lastScrollCheck < 60) return;
     lastScrollCheck = now;
 
     const containerRect = scrollContainer.getBoundingClientRect();
     const focalPointY = containerRect.top + 160;
 
+    // 1. 檢查是否滾動到達文章最底部（整篇閱讀完畢 100%！）
+    const isAtBottom = scrollContainer.scrollHeight - scrollContainer.scrollTop - scrollContainer.clientHeight < 60;
+    if (isAtBottom) {
+      dispatch('reachedBottom');
+    }
+
     const sectionElements = scrollContainer.querySelectorAll<HTMLElement>('section[id^="sec-"]');
     let candidateId: string | null = null;
+    const passedSectionIds: string[] = [];
 
     for (let i = 0; i < sectionElements.length; i++) {
       const el = sectionElements[i];
       const rect = el.getBoundingClientRect();
-      if (rect.top <= focalPointY && rect.bottom >= containerRect.top + 60) {
-        candidateId = el.id.replace(/^sec-/, '');
+      const secId = el.id.replace(/^sec-/, '');
+
+      // 若章節底部位於焦點線上方，代表使用者已閱讀並滑過該章節
+      if (rect.bottom < containerRect.top + 60) {
+        passedSectionIds.push(secId);
       }
+
+      // 增加 25px 滯後緩衝區判定當前焦點章節
+      if (rect.top <= focalPointY + 25 && rect.bottom >= containerRect.top + 50) {
+        candidateId = secId;
+      }
+    }
+
+    // 2. 派發滑過章節事件（自動將上方滑過的章節升級為已研讀）
+    if (passedSectionIds.length > 0) {
+      dispatch('sectionsPassed', { readSectionIds: passedSectionIds, currentSectionId: candidateId });
     }
 
     if (candidateId && candidateId !== activeSectionId) {
       activeSectionId = candidateId;
-      dispatch('selectSection', { id: candidateId });
+      // 關鍵防抖：明確傳入 source: 'scroll' 與 noScroll: true，絕不反向自我發動滾動
+      dispatch('selectSection', { id: candidateId, source: 'scroll', noScroll: true });
+      dispatch('sectionSkimmed', { id: candidateId });
     }
   }
 
@@ -147,10 +198,12 @@
     if (paragraphTranslations[key]) {
       showTranslationMap[key] = true;
       showTranslationMap = { ...showTranslationMap };
+      dispatch('sectionInteracted', { id: secId, action: 'translate' });
       return;
     }
 
     // 即刻展開卡片進入打字機串流模式，消除讀者空等感
+    dispatch('sectionInteracted', { id: secId, action: 'translate' });
     translatingMap[key] = true;
     isTypingMap[key] = true;
     showTranslationMap[key] = true;
@@ -230,7 +283,7 @@
 <main
   bind:this={scrollContainer}
   on:scroll={handleContainerScroll}
-  class="h-full overflow-y-auto px-6 py-6 flex justify-center bg-[#282828] scroll-smooth"
+  class="h-full overflow-y-auto px-6 py-6 flex justify-center bg-[#282828]"
 >
   <div class="w-full max-w-[760px] flex flex-col gap-6 pb-28">
 
@@ -323,19 +376,18 @@
 
       <!-- Sections Stream -->
       <div class="flex flex-col gap-6">
-        {#each allSections as sec}
+        {#each allSections as sec (sec.id)}
           {@const isFocused = sec.id === activeSectionId}
 
-          <!-- SECTION WRAPPER -->
+          <!-- SECTION WRAPPER (Fixed padding to ensure Zero CLS / Anti-Jitter) -->
+          <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
           <section
             id={`sec-${sec.id}`}
-            class="flex flex-col gap-3 transition-all duration-300 rounded-xl {isFocused ? 'relative bg-[#32302f] border border-[#504945] p-5 shadow-[0_4px_24px_rgba(0,0,0,0.35)]' : 'opacity-85 hover:opacity-100 p-2'}"
+            class="flex flex-col gap-3 transition-[background-color,border-color,box-shadow] duration-200 rounded-xl p-4 sm:p-5 relative {isFocused ? 'bg-[#32302f] border border-[#504945] shadow-[0_4px_24px_rgba(0,0,0,0.35)]' : 'bg-[#282828]/60 hover:bg-[#282828] border border-[#3c3836]/40'}"
             on:click={() => handleSectionClick(sec.id)}
           >
-            <!-- Focus Lens Indicator Bar & Badge -->
-            {#if isFocused}
-              <div class="absolute -left-2 top-4 bottom-4 w-1.5 bg-[#fe8019] rounded-full focus-lens-bar"></div>
-            {/if}
+            <!-- Focus Lens Indicator Bar (Opacity transition instead of DOM mounting) -->
+            <div class="absolute -left-1 top-4 bottom-4 w-1.5 bg-[#fe8019] rounded-full focus-lens-bar transition-opacity duration-200 {isFocused ? 'opacity-100' : 'opacity-0 pointer-events-none'}"></div>
 
             <div class="flex items-center justify-between gap-2">
               <div class="flex items-baseline gap-2.5 min-w-0">
@@ -404,6 +456,7 @@
                       </div>
                     </div>
 
+                    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
                     <div
                       class="w-full flex items-center justify-center p-2 rounded bg-[#141617] border border-[#3c3836] overflow-hidden cursor-zoom-in"
                       on:click|stopPropagation={() => openLightbox(imgInfo.url, imgInfo.alt)}
@@ -432,6 +485,7 @@
 
                   <!-- Inline Translated Card with Enhanced Typography & Typewriter Stream -->
                   {#if showTranslationMap[key]}
+                    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
                     <div
                       class="mt-1 p-4 bg-[#1d2021] border-l-4 border-[#fabd2f] rounded-r-xl flex flex-col gap-2 shadow-lg text-[#ebdbb2] animate-fade-in cursor-default"
                       on:click={() => { if (isTypingMap[key]) isTypingMap[key] = false; }}
@@ -491,9 +545,9 @@
             {/each}
             </div>
 
-            <!-- SVO Sentence Highlight (If present) -->
-            {#if sec.svoSentence && isFocused}
-              <div class="my-2 p-3 bg-[#282828] border-l-4 border-[#8ec07c] rounded-r-lg flex flex-col gap-2">
+            <!-- SVO Sentence Highlight (Always rendered when present to guarantee Zero CLS) -->
+            {#if sec.svoSentence}
+              <div class="my-2 p-3 bg-[#282828] border-l-4 {isFocused ? 'border-[#8ec07c] shadow-sm' : 'border-[#8ec07c]/60'} rounded-r-lg flex flex-col gap-2 transition-colors">
                 <div class="flex items-center justify-between">
                   <span class="font-mono text-[10px] bg-[#8ec07c] text-[#1d2021] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1">
                     <span class="material-symbols-outlined text-[11px]">account_tree</span>
@@ -568,6 +622,7 @@
                     </div>
 
                     {#if fig.imageUrl}
+                      <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
                       <div
                         class="w-full flex items-center justify-center p-2 rounded bg-[#141617] border border-[#3c3836] overflow-hidden cursor-zoom-in"
                         on:click|stopPropagation={() => openLightbox(fig.imageUrl || '', fig.caption || fig.name)}
@@ -625,59 +680,57 @@
               {/each}
             {/if}
 
-            <!-- Inline Semantic Floating Action Toolbar (Only on Active Focus) -->
-            {#if isFocused}
-              <div class="mt-2 flex flex-wrap items-center gap-2 bg-[#282828] border border-[#3c3836] p-1.5 rounded-lg shadow-sm">
-                <button
-                  class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#fabd2f] border border-[#fabd2f]/30 px-2.5 py-1 rounded text-xs font-medium transition-colors"
-                  on:click|stopPropagation={() => triggerAction('showIntuition')}
-                >
-                  <span class="material-symbols-outlined text-[14px] text-[#fabd2f]">lightbulb</span>
-                  <span>白話科學直覺</span>
-                </button>
+            <!-- Inline Semantic Action Toolbar (Always rendered with stable height, highlighted on focus/hover to prevent CLS) -->
+            <div class="mt-2 flex flex-wrap items-center gap-2 rounded-lg p-1.5 transition-all duration-200 {isFocused ? 'bg-[#282828] border border-[#3c3836] shadow-sm opacity-100' : 'bg-[#1d2021]/50 border border-[#3c3836]/30 opacity-60 hover:opacity-100'}">
+              <button
+                class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#fabd2f] border border-[#fabd2f]/30 px-2.5 py-1 rounded text-xs font-medium transition-colors"
+                on:click|stopPropagation={() => triggerAction('showIntuition')}
+              >
+                <span class="material-symbols-outlined text-[14px] text-[#fabd2f]">lightbulb</span>
+                <span>白話科學直覺</span>
+              </button>
 
-                <button
-                  class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#8ec07c] border border-[#8ec07c]/30 px-2.5 py-1 rounded text-xs font-medium transition-colors"
-                  on:click|stopPropagation={() => triggerAction('showSyntax')}
-                >
-                  <span class="material-symbols-outlined text-[14px] text-[#8ec07c]">account_tree</span>
-                  <span>句構拆解</span>
-                </button>
+              <button
+                class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#8ec07c] border border-[#8ec07c]/30 px-2.5 py-1 rounded text-xs font-medium transition-colors"
+                on:click|stopPropagation={() => triggerAction('showSyntax')}
+              >
+                <span class="material-symbols-outlined text-[14px] text-[#8ec07c]">account_tree</span>
+                <span>句構拆解</span>
+              </button>
 
-                <button
-                  class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#ebdbb2] border border-[#504945] px-2.5 py-1 rounded text-xs font-medium transition-colors"
-                  on:click|stopPropagation={() => triggerAction('showTerminology')}
-                >
-                  <span class="material-symbols-outlined text-[14px] text-[#fe8019]">menu_book</span>
-                  <span>學術術語對齊</span>
-                </button>
+              <button
+                class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#ebdbb2] border border-[#504945] px-2.5 py-1 rounded text-xs font-medium transition-colors"
+                on:click|stopPropagation={() => triggerAction('showTerminology')}
+              >
+                <span class="material-symbols-outlined text-[14px] text-[#fe8019]">menu_book</span>
+                <span>學術術語對齊</span>
+              </button>
 
-                <button
-                  class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#fabd2f] border border-[#fabd2f]/40 px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
-                  disabled={isSectionTranslating}
-                  on:click|stopPropagation={() => translateEntireSection(sec)}
-                  title="依序佇列展開當前章節所有段落的繁體中文對照翻譯（防 429 節流保護）"
-                >
-                  {#if isSectionTranslating}
-                    <span class="material-symbols-outlined text-[14px] text-[#fe8019] animate-spin">sync</span>
-                    <span>佇列翻譯中...</span>
-                  {:else}
-                    <span class="material-symbols-outlined text-[14px] text-[#fabd2f]">translate</span>
-                    <span>本節雙語對照</span>
-                  {/if}
-                </button>
+              <button
+                class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#fabd2f] border border-[#fabd2f]/40 px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
+                disabled={isSectionTranslating}
+                on:click|stopPropagation={() => translateEntireSection(sec)}
+                title="依序佇列展開當前章節所有段落的繁體中文對照翻譯（防 429 節流保護）"
+              >
+                {#if isSectionTranslating}
+                  <span class="material-symbols-outlined text-[14px] text-[#fe8019] animate-spin">sync</span>
+                  <span>佇列翻譯中...</span>
+                {:else}
+                  <span class="material-symbols-outlined text-[14px] text-[#fabd2f]">translate</span>
+                  <span>本節雙語對照</span>
+                {/if}
+              </button>
 
-                <div class="h-4 w-px bg-[#504945] mx-0.5"></div>
+              <div class="h-4 w-px bg-[#504945] mx-0.5"></div>
 
-                <button
-                  class="flex items-center gap-1.5 hover:bg-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] px-2 py-1 rounded text-xs transition-colors"
-                  on:click|stopPropagation={() => triggerAction('addNote', sec.title)}
-                >
-                  <span class="material-symbols-outlined text-[14px]">push_pin</span>
-                  <span>標註精讀筆記</span>
-                </button>
-              </div>
-            {/if}
+              <button
+                class="flex items-center gap-1.5 hover:bg-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] px-2 py-1 rounded text-xs transition-colors"
+                on:click|stopPropagation={() => triggerAction('addNote', sec.title)}
+              >
+                <span class="material-symbols-outlined text-[14px]">push_pin</span>
+                <span>標註精讀筆記</span>
+              </button>
+            </div>
 
           </section>
         {/each}
@@ -689,6 +742,7 @@
 
 <!-- High-Resolution Image Lightbox Modal -->
 {#if activeLightboxImg}
+  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions a11y_no_noninteractive_element_interactions -->
   <div
     class="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex flex-col items-center justify-between p-4 select-none animate-fade-in"
     on:click={closeLightbox}
