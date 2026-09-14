@@ -24,6 +24,35 @@
   let isTypingMap: Record<string, boolean> = {};
   let isSectionTranslating: boolean = false;
 
+  // Image Lightbox State
+  let activeLightboxImg: string | null = null;
+  let activeLightboxCaption: string = '';
+  let lightboxZoom: number = 1;
+
+  function openLightbox(imgUrl: string, caption?: string) {
+    if (!imgUrl) return;
+    activeLightboxImg = imgUrl;
+    activeLightboxCaption = caption || '學術圖表預覽';
+    lightboxZoom = 1;
+  }
+
+  function closeLightbox() {
+    activeLightboxImg = null;
+  }
+
+  function extractImageInfo(text: string): { url: string; alt: string } | null {
+    if (!text) return null;
+    const match = text.trim().match(/^!\[(.*?)\]\((https?:\/\/.*?)\)$/);
+    if (match) {
+      return { alt: match[1] || '學術圖表', url: match[2] };
+    }
+    const urlMatch = text.trim().match(/^(https?:\/\/.*\.(?:png|jpg|jpeg|svg|webp)(?:\?.*)?)$/i);
+    if (urlMatch) {
+      return { alt: '學術圖表', url: urlMatch[1] };
+    }
+    return null;
+  }
+
   function renderMath(latex: string, displayMode: boolean = false): string {
     if (!latex) return '';
     try {
@@ -54,6 +83,10 @@
     selectedAuthorInfo = selectedAuthorInfo === author ? null : author;
   }
 
+  let isProgrammaticScrolling: boolean = false;
+  let scrollTimeout: any = null;
+  let lastScrollCheck: number = 0;
+
   export function scrollToTarget(targetId: string) {
     if (typeof document === 'undefined') return;
     const cleanId = targetId.startsWith('sec-') || targetId.startsWith('eq-') || targetId.startsWith('fig-')
@@ -61,7 +94,38 @@
       : `sec-${targetId}`;
     const el = document.getElementById(cleanId);
     if (el) {
+      isProgrammaticScrolling = true;
+      if (scrollTimeout) clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        isProgrammaticScrolling = false;
+      }, 750);
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  function handleContainerScroll() {
+    if (isProgrammaticScrolling || !scrollContainer) return;
+    const now = Date.now();
+    if (now - lastScrollCheck < 120) return;
+    lastScrollCheck = now;
+
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const focalPointY = containerRect.top + 160;
+
+    const sectionElements = scrollContainer.querySelectorAll<HTMLElement>('section[id^="sec-"]');
+    let candidateId: string | null = null;
+
+    for (let i = 0; i < sectionElements.length; i++) {
+      const el = sectionElements[i];
+      const rect = el.getBoundingClientRect();
+      if (rect.top <= focalPointY && rect.bottom >= containerRect.top + 60) {
+        candidateId = el.id.replace(/^sec-/, '');
+      }
+    }
+
+    if (candidateId && candidateId !== activeSectionId) {
+      activeSectionId = candidateId;
+      dispatch('selectSection', { id: candidateId });
     }
   }
 
@@ -161,7 +225,13 @@
   $: activeSection = allSections.find(s => s.id === activeSectionId) || (allSections[0] || null);
 </script>
 
-<main bind:this={scrollContainer} class="h-full overflow-y-auto px-6 py-6 flex justify-center bg-[#282828] scroll-smooth">
+<svelte:window on:keydown={(e) => { if (e.key === 'Escape' && activeLightboxImg) closeLightbox(); }} />
+
+<main
+  bind:this={scrollContainer}
+  on:scroll={handleContainerScroll}
+  class="h-full overflow-y-auto px-6 py-6 flex justify-center bg-[#282828] scroll-smooth"
+>
   <div class="w-full max-w-[760px] flex flex-col gap-6 pb-28">
 
     {#if paper}
@@ -267,55 +337,98 @@
               <div class="absolute -left-2 top-4 bottom-4 w-1.5 bg-[#fe8019] rounded-full focus-lens-bar"></div>
             {/if}
 
-            <div class="flex items-center justify-between">
-              <div class="flex items-baseline gap-2.5">
-                <span class="font-mono text-[#fe8019] font-bold {sec.level === 1 ? 'text-lg' : 'text-sm'}">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-baseline gap-2.5 min-w-0">
+                <span class="font-mono text-[#fe8019] font-bold {sec.level === 1 ? 'text-lg' : 'text-sm'} shrink-0">
                   {sec.title.split(' ')[0] || sec.id}
                 </span>
-                <h2 class="{sec.level === 1 ? 'text-xl' : 'text-base'} text-[#ebdbb2] tracking-tight font-bold {sec.level === 1 ? 'font-serif' : 'font-sans'}">
+                <h2 class="{sec.level === 1 ? 'text-xl' : 'text-base'} text-[#ebdbb2] tracking-tight font-bold {sec.level === 1 ? 'font-serif' : 'font-sans'} truncate">
                   {sec.title.replace(/^[0-9.]+\s*/, '')}
                 </h2>
               </div>
 
-              {#if isFocused}
-                <div class="flex items-center gap-1 bg-[#fe8019]/15 border border-[#fe8019]/50 px-2 py-0.5 rounded-full text-[#fe8019]">
-                  <span class="material-symbols-outlined text-[13px]">center_focus_strong</span>
-                  <span class="font-mono text-[9px] font-semibold uppercase">Focus Lens Active</span>
-                </div>
-              {/if}
+              <div class="flex items-center gap-2 shrink-0">
+                <!-- Direct jump to original PDF page button -->
+                {#if sec.page || paper?.pdfUrl || paper?.arxivId}
+                  <button
+                    class="flex items-center gap-1 bg-[#282828] hover:bg-[#3c3836] border border-[#504945] hover:border-[#fe8019] px-2 py-0.5 rounded text-[11px] font-mono text-[#fabd2f] transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
+                    on:click|stopPropagation={() => triggerAction('openOriginalToPage', { page: sec.page || 1, sectionId: sec.id })}
+                    title="在原檔 PDF 檢視器跳至第 {sec.page || 1} 頁對照"
+                  >
+                    <span class="material-symbols-outlined text-[13px] text-[#fe8019]">find_in_page</span>
+                    <span>PDF p.{sec.page || 1} ➜</span>
+                  </button>
+                {/if}
+
+                {#if isFocused}
+                  <div class="flex items-center gap-1 bg-[#fe8019]/15 border border-[#fe8019]/50 px-2 py-0.5 rounded-full text-[#fe8019]">
+                    <span class="material-symbols-outlined text-[13px]">center_focus_strong</span>
+                    <span class="font-mono text-[9px] font-semibold uppercase hidden sm:inline">Focus Lens Active</span>
+                  </div>
+                {/if}
+              </div>
             </div>
 
-            <!-- Paragraphs with Inline Bilingual Translation -->
+            <!-- Paragraphs with Inline Bilingual Translation & Figures -->
             <div class="flex flex-col gap-5">
               {#each sec.paragraphs as para, pIndex}
                 {@const key = `${sec.id}_${pIndex}`}
-                <div class="flex flex-col gap-2 group/para relative">
-                  <!-- English paragraph: 100% full width, no side-button squeezing -->
-                  <p class="font-serif text-[17px] text-[#ebdbb2]/95 leading-[33px] text-justify w-full tracking-[0.01em]">
-                    {para}
-                  </p>
+                {@const imgInfo = extractImageInfo(para)}
 
-                  <!-- Bottom Paragraph Action Bar (visible when translation closed) -->
-                  {#if !showTranslationMap[key]}
-                    <div class="flex items-center justify-end pt-0.5">
-                      <button
-                        class="opacity-50 group-hover/para:opacity-100 hover:!opacity-100 transition-all bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 text-[#fabd2f] hover:text-[#fe8019] text-[11px] font-mono px-2.5 py-1 rounded-md flex items-center gap-1.5 shadow-sm cursor-pointer"
-                        on:click|stopPropagation={() => toggleParagraphTranslation(sec.id, pIndex, para)}
-                        title="在下方展開繁體中文精讀對照"
-                      >
-                        {#if translatingMap[key]}
-                          <span class="material-symbols-outlined text-[13px] animate-spin text-[#fe8019]">sync</span>
-                          <span>串流生成中...</span>
-                        {:else if paragraphTranslations[key]}
-                          <span class="material-symbols-outlined text-[13px] text-[#8ec07c]">visibility</span>
-                          <span>展開中譯</span>
-                        {:else}
-                          <span class="material-symbols-outlined text-[13px]">translate</span>
-                          <span>中譯對照</span>
-                        {/if}
-                      </button>
+                {#if imgInfo}
+                  <!-- Inline Markdown Image Figure Card -->
+                  <figure class="my-2 p-4 bg-[#1d2021] border border-[#504945] rounded-xl flex flex-col items-center gap-3 shadow-md group/img">
+                    <div class="w-full flex items-center justify-between text-xs font-mono text-[#fabd2f] border-b border-[#3c3836] pb-2">
+                      <span class="flex items-center gap-1.5 font-bold">
+                        <span class="material-symbols-outlined text-[15px] text-[#fe8019]">image</span>
+                        {imgInfo.alt || '論文架構與實驗分析圖表'}
+                      </span>
+                      <div class="flex items-center gap-2 text-[#a89984]">
+                        <button
+                          class="hover:text-[#fe8019] flex items-center gap-1 text-[11px] cursor-pointer"
+                          on:click|stopPropagation={() => openLightbox(imgInfo.url, imgInfo.alt)}
+                          title="全螢幕放大檢視"
+                        >
+                          <span class="material-symbols-outlined text-[13px]">fullscreen</span>
+                          <span>放大燈箱</span>
+                        </button>
+                        <a
+                          href={imgInfo.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="hover:text-[#ebdbb2] flex items-center gap-0.5 text-[11px]"
+                          title="在新分頁開啟"
+                        >
+                          <span class="material-symbols-outlined text-[13px]">open_in_new</span>
+                        </a>
+                      </div>
                     </div>
-                  {/if}
+
+                    <div
+                      class="w-full flex items-center justify-center p-2 rounded bg-[#141617] border border-[#3c3836] overflow-hidden cursor-zoom-in"
+                      on:click|stopPropagation={() => openLightbox(imgInfo.url, imgInfo.alt)}
+                    >
+                      <img
+                        src={imgInfo.url}
+                        alt={imgInfo.alt}
+                        class="max-h-[380px] max-w-full object-contain rounded transition-transform group-hover/img:scale-[1.01]"
+                        loading="lazy"
+                      />
+                    </div>
+
+                    {#if imgInfo.alt}
+                      <figcaption class="text-xs text-[#a89984] font-serif italic text-center max-w-[90%] leading-relaxed">
+                        {imgInfo.alt}
+                      </figcaption>
+                    {/if}
+                  </figure>
+                {:else}
+                  <div class="flex flex-col gap-2 group/para relative">
+                    <!-- English paragraph: 100% full width, no side-button squeezing -->
+                    <p class="font-serif text-[17px] text-[#ebdbb2]/95 leading-[33px] text-justify w-full tracking-[0.01em]">
+                      {para}
+                    </p>
+
 
                   <!-- Inline Translated Card with Enhanced Typography & Typewriter Stream -->
                   {#if showTranslationMap[key]}
@@ -349,7 +462,7 @@
                           <button
                             class="hover:text-[#fe8019] text-[#a89984] text-[11px] cursor-pointer flex items-center gap-0.5 transition-colors"
                             on:click|stopPropagation={() => showTranslationMap[key] = false}
-                            title="收起中譯對照"
+                            title="收起雙語對照"
                           >
                             <span class="material-symbols-outlined text-[13px]">expand_less</span>
                             <span>收起</span>
@@ -374,7 +487,8 @@
                     </div>
                   {/if}
                 </div>
-              {/each}
+              {/if}
+            {/each}
             </div>
 
             <!-- SVO Sentence Highlight (If present) -->
@@ -417,6 +531,63 @@
                     </div>
                   </div>
                 </div>
+              </div>
+            {/if}
+
+            <!-- Figures Sandbox (If present on section) -->
+            {#if sec.figures && sec.figures.length > 0}
+              <div class="flex flex-col gap-4 my-2">
+                {#each sec.figures as fig}
+                  <figure class="bg-[#1d2021] border border-[#504945] rounded-xl p-4 flex flex-col items-center gap-3 shadow-md group/fig">
+                    <div class="w-full flex items-center justify-between text-xs font-mono text-[#fabd2f] border-b border-[#3c3836] pb-2">
+                      <span class="flex items-center gap-1.5 font-bold">
+                        <span class="material-symbols-outlined text-[15px] text-[#fe8019]">schema</span>
+                        {fig.figureNumber ? `${fig.figureNumber}: ` : ''}{fig.name}
+                      </span>
+                      <div class="flex items-center gap-2 text-[#a89984]">
+                        <button
+                          class="hover:text-[#fe8019] flex items-center gap-1 text-[11px] cursor-pointer"
+                          on:click|stopPropagation={() => openLightbox(fig.imageUrl || '', fig.caption || fig.name)}
+                          title="全螢幕放大檢視"
+                        >
+                          <span class="material-symbols-outlined text-[13px]">fullscreen</span>
+                          <span>放大燈箱</span>
+                        </button>
+                        {#if fig.imageUrl}
+                          <a
+                            href={fig.imageUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="hover:text-[#ebdbb2] flex items-center gap-0.5 text-[11px]"
+                            title="在新分頁開啟"
+                          >
+                            <span class="material-symbols-outlined text-[13px]">open_in_new</span>
+                          </a>
+                        {/if}
+                      </div>
+                    </div>
+
+                    {#if fig.imageUrl}
+                      <div
+                        class="w-full flex items-center justify-center p-2 rounded bg-[#141617] border border-[#3c3836] overflow-hidden cursor-zoom-in"
+                        on:click|stopPropagation={() => openLightbox(fig.imageUrl || '', fig.caption || fig.name)}
+                      >
+                        <img
+                          src={fig.imageUrl}
+                          alt={fig.name}
+                          class="max-h-[380px] max-w-full object-contain rounded transition-transform group-hover/fig:scale-[1.01]"
+                          loading="lazy"
+                        />
+                      </div>
+                    {/if}
+
+                    {#if fig.caption}
+                      <figcaption class="text-xs text-[#a89984] font-serif italic text-center max-w-[90%] leading-relaxed">
+                        {fig.caption}
+                      </figcaption>
+                    {/if}
+                  </figure>
+                {/each}
               </div>
             {/if}
 
@@ -515,3 +686,75 @@
 
   </div>
 </main>
+
+<!-- High-Resolution Image Lightbox Modal -->
+{#if activeLightboxImg}
+  <div
+    class="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex flex-col items-center justify-between p-4 select-none animate-fade-in"
+    on:click={closeLightbox}
+  >
+    <!-- Top Lightbox Toolbar -->
+    <div
+      class="w-full max-w-5xl flex items-center justify-between bg-[#1d2021]/90 border border-[#504945] px-4 py-2.5 rounded-xl text-xs font-mono text-[#ebdbb2] shadow-2xl"
+      on:click|stopPropagation
+    >
+      <span class="text-[#fabd2f] font-semibold truncate max-w-[400px] flex items-center gap-1.5">
+        <span class="material-symbols-outlined text-[16px] text-[#fe8019]">zoom_in</span>
+        {activeLightboxCaption}
+      </span>
+      <div class="flex items-center gap-2">
+        <button
+          class="w-7 h-7 bg-[#282828] hover:bg-[#3c3836] border border-[#504945] rounded flex items-center justify-center font-bold"
+          on:click={() => lightboxZoom = Math.max(0.5, lightboxZoom - 0.25)}
+          title="縮小"
+        >-</button>
+        <span class="w-12 text-center text-[#fabd2f] font-semibold">{Math.round(lightboxZoom * 100)}%</span>
+        <button
+          class="w-7 h-7 bg-[#282828] hover:bg-[#3c3836] border border-[#504945] rounded flex items-center justify-center font-bold"
+          on:click={() => lightboxZoom = Math.min(4, lightboxZoom + 0.25)}
+          title="放大"
+        >+</button>
+        <button
+          class="px-2 py-1 bg-[#282828] hover:bg-[#3c3836] border border-[#504945] rounded text-xs"
+          on:click={() => lightboxZoom = 1}
+          title="重設縮放"
+        >100%</button>
+        <div class="h-4 w-px bg-[#504945] mx-1"></div>
+        <a
+          href={activeLightboxImg}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="px-2.5 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#504945] text-[#8ec07c] hover:text-[#b8bb26] rounded flex items-center gap-1"
+        >
+          <span class="material-symbols-outlined text-[13px]">open_in_new</span>
+          <span>在新分頁開啟</span>
+        </a>
+        <button
+          class="px-3 py-1 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-bold rounded flex items-center gap-1 shadow-sm transition-colors cursor-pointer"
+          on:click={closeLightbox}
+        >
+          ✕ 關閉
+        </button>
+      </div>
+    </div>
+
+    <!-- Image Viewport with Dynamic Scale -->
+    <div
+      class="flex-1 w-full flex items-center justify-center overflow-auto p-4 cursor-zoom-out"
+      on:click={closeLightbox}
+    >
+      <img
+        src={activeLightboxImg}
+        alt={activeLightboxCaption}
+        class="transition-transform duration-150 max-h-[82vh] max-w-[88vw] object-contain shadow-2xl rounded-lg border border-[#3c3836]"
+        style="transform: scale({lightboxZoom});"
+        on:click|stopPropagation
+      />
+    </div>
+
+    <!-- Bottom Lightbox Prompt -->
+    <div class="text-[#a89984] font-mono text-[11px] pb-1 bg-[#1d2021]/80 px-3 py-1 rounded-full border border-[#3c3836]">
+      點擊背景或按 Esc 即可退出全螢幕燈箱
+    </div>
+  </div>
+{/if}

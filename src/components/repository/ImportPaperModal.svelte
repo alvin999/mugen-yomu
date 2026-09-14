@@ -6,6 +6,7 @@
     resnetPaper,
     anthropicCircuitsWeb,
     fetchWebArticle,
+    fetchArxivDocument,
     parseMarkdownToDocument,
     saveLibraryToStorage,
     setActivePaperId,
@@ -17,7 +18,13 @@
 
   const dispatch = createEventDispatcher();
 
-  let activeTab: 'web' | 'preset' | 'paste' | 'upload' = 'web';
+  let activeTab: 'arxiv' | 'web' | 'preset' | 'paste' | 'upload' = 'arxiv';
+
+  // Tab 0: arXiv ID Import State
+  let arxivInput: string = '1706.03762';
+  let isFetchingArxiv: boolean = false;
+  let arxivError: string = '';
+  let previewArxivPaper: PaperDocument | null = null;
 
   // Tab 1: Web URL State
   let webUrl: string = 'https://transformer-circuits.pub/2021/framework/index.html';
@@ -38,6 +45,36 @@
   function close() {
     isOpen = false;
     dispatch('close');
+  }
+
+  // --- Tab 0: arXiv Fetch Logic ---
+  async function handleFetchArxiv() {
+    if (!arxivInput.trim()) {
+      arxivError = '請輸入有效的 arXiv ID 或論文網址';
+      return;
+    }
+    arxivError = '';
+    isFetchingArxiv = true;
+    previewArxivPaper = null;
+
+    try {
+      const doc = await fetchArxivDocument(arxivInput);
+      previewArxivPaper = doc;
+    } catch (err: any) {
+      arxivError = `抓取 arXiv 失敗：${err.message || '無法解析該論文'}`;
+    } finally {
+      isFetchingArxiv = false;
+    }
+  }
+
+  function handleImportArxivPaper() {
+    if (!previewArxivPaper) return;
+    importAndActivatePaper(previewArxivPaper);
+  }
+
+  function setDemoArxiv(id: string) {
+    arxivInput = id;
+    handleFetchArxiv();
   }
 
   // --- Tab 1: Web Fetch Logic ---
@@ -160,6 +197,15 @@
       <!-- Tab Switcher -->
       <div class="px-5 pt-3 bg-[#1d2021]/80 border-b border-[#3c3836] flex items-center gap-1.5 overflow-x-auto">
         <button
+          class="px-3.5 py-2 font-mono text-xs rounded-t-lg transition-colors flex items-center gap-1.5 {activeTab === 'arxiv' ? 'bg-[#282828] text-[#fe8019] border-t-2 border-[#fe8019] font-semibold' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]/50'}"
+          on:click={() => activeTab = 'arxiv'}
+        >
+          <span class="material-symbols-outlined text-[15px] text-[#fabd2f]">auto_stories</span>
+          <span>arXiv 一鍵匯入 (原圖)</span>
+          <span class="bg-[#fe8019]/20 text-[#fe8019] text-[9px] px-1 py-0.2 rounded font-bold">推薦</span>
+        </button>
+
+        <button
           class="px-3.5 py-2 font-mono text-xs rounded-t-lg transition-colors flex items-center gap-1.5 {activeTab === 'web' ? 'bg-[#282828] text-[#fe8019] border-t-2 border-[#fe8019] font-semibold' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]/50'}"
           on:click={() => activeTab = 'web'}
         >
@@ -194,9 +240,131 @@
 
       <!-- Tab Content Area -->
       <div class="p-5 flex-1 overflow-y-auto flex flex-col gap-4 text-xs">
-        
+
+        <!-- ==================== TAB 0: ARXIV ID IMPORT ==================== -->
+        {#if activeTab === 'arxiv'}
+          <div class="flex flex-col gap-3.5">
+            <div class="bg-[#32302f] border border-[#3c3836] p-3 rounded-lg flex items-start gap-2.5 shadow-inner">
+              <span class="material-symbols-outlined text-[20px] text-[#fe8019] shrink-0 mt-0.5">auto_stories</span>
+              <div class="flex flex-col gap-0.5">
+                <span class="font-semibold text-[#ebdbb2] flex items-center gap-1.5">
+                  ar5iv 官方原生學術圖表無損抓取
+                  <span class="font-mono text-[10px] text-[#fabd2f] bg-[#282828] px-1.5 py-0.2 rounded border border-[#504945]">SVG / WebP 原圖</span>
+                </span>
+                <span class="text-[#a89984] leading-relaxed">
+                  輸入任何 arXiv 論文 ID 或網址，系統自動透過 ar5iv HTML5 服務擷取官方高解析度模型架構圖、Figure 圖說與章節目錄，並自動綁定官方 PDF 供雙軌對照。
+                </span>
+              </div>
+            </div>
+
+            <!-- arXiv ID Input -->
+            <div class="flex flex-col gap-1.5">
+              <label class="font-mono text-[11px] text-[#d5c4a1] flex items-center justify-between">
+                <span>arXiv 論文編號或網址</span>
+                <span class="text-[#a89984]">支援格式如 1706.03762 或 https://arxiv.org/abs/...</span>
+              </label>
+              <div class="flex items-center gap-2">
+                <input
+                  class="flex-1 bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] px-3 py-2 rounded-lg focus:outline-none focus:border-[#fe8019] font-mono text-xs placeholder:text-[#a89984]/50"
+                  type="text"
+                  placeholder="例如: 1706.03762"
+                  bind:value={arxivInput}
+                  on:keydown={(e) => e.key === 'Enter' && handleFetchArxiv()}
+                />
+                <button
+                  class="px-4 py-2 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-bold rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shrink-0"
+                  disabled={isFetchingArxiv}
+                  on:click={handleFetchArxiv}
+                >
+                  {#if isFetchingArxiv}
+                    <span class="material-symbols-outlined text-[15px] animate-spin">sync</span>
+                    <span>抓取圖文中...</span>
+                  {:else}
+                    <span class="material-symbols-outlined text-[15px]">download</span>
+                    <span>抓取論文</span>
+                  {/if}
+                </button>
+              </div>
+
+              {#if arxivError}
+                <div class="p-2.5 rounded bg-[#fb4934]/15 border border-[#fb4934]/40 text-[#fb4934] font-mono text-[11px] flex items-center gap-1.5">
+                  <span class="material-symbols-outlined text-[14px]">error</span>
+                  <span>{arxivError}</span>
+                </div>
+              {/if}
+            </div>
+
+            <!-- Demo Quick Chips -->
+            <div class="flex flex-col gap-1.5">
+              <span class="font-mono text-[10px] text-[#a89984] uppercase tracking-wider">熱門經典論文推薦</span>
+              <div class="flex flex-wrap gap-1.5">
+                <button
+                  class="px-2 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 text-[#fabd2f] hover:text-[#fe8019] rounded font-mono text-[10px] flex items-center gap-1 transition-colors cursor-pointer"
+                  on:click={() => setDemoArxiv('1706.03762')}
+                >
+                  <span class="material-symbols-outlined text-[11px]">bolt</span>
+                  1706.03762 (Attention Is All You Need)
+                </button>
+                <button
+                  class="px-2 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 text-[#fabd2f] hover:text-[#fe8019] rounded font-mono text-[10px] flex items-center gap-1 transition-colors cursor-pointer"
+                  on:click={() => setDemoArxiv('1512.03385')}
+                >
+                  <span class="material-symbols-outlined text-[11px]">bolt</span>
+                  1512.03385 (ResNet 深度殘差)
+                </button>
+                <button
+                  class="px-2 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 text-[#fabd2f] hover:text-[#fe8019] rounded font-mono text-[10px] flex items-center gap-1 transition-colors cursor-pointer"
+                  on:click={() => setDemoArxiv('2005.14165')}
+                >
+                  <span class="material-symbols-outlined text-[11px]">bolt</span>
+                  2005.14165 (GPT-3 語言模型)
+                </button>
+              </div>
+            </div>
+
+            <!-- Preview Card for arXiv -->
+            {#if previewArxivPaper}
+              <div class="mt-1 p-3.5 bg-[#1d2021] border border-[#fabd2f] rounded-xl flex flex-col gap-2.5 shadow-lg animate-fade-in">
+                <div class="flex items-center justify-between text-[11px] font-mono">
+                  <span class="text-[#b8bb26] font-semibold flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[14px]">check_circle</span>
+                    已成功解析 arXiv 圖文結構
+                  </span>
+                  <span class="text-[#fabd2f] bg-[#fabd2f]/10 border border-[#fabd2f]/40 px-1.5 py-0.2 rounded">
+                    {previewArxivPaper.arxivId || 'arXiv'}
+                  </span>
+                </div>
+
+                <div class="flex flex-col gap-1">
+                  <h4 class="text-sm font-serif font-bold text-[#ebdbb2] leading-snug">
+                    {previewArxivPaper.title}
+                  </h4>
+                  <span class="text-[11px] text-[#a89984]">
+                    {previewArxivPaper.authors.slice(0, 4).join(', ')} {previewArxivPaper.authors.length > 4 ? '等' : ''}
+                  </span>
+                </div>
+
+                <div class="flex items-center gap-3 font-mono text-[10px] text-[#d5c4a1] pt-1 border-t border-[#3c3836]">
+                  <span>{previewArxivPaper.sections.length} 個主要章節</span>
+                  <span class="text-[#fe8019] flex items-center gap-0.5">
+                    <span class="material-symbols-outlined text-[12px]">picture_as_pdf</span>
+                    已關聯官方 PDF
+                  </span>
+                </div>
+
+                <button
+                  class="mt-1 w-full py-2 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
+                  on:click={handleImportArxivPaper}
+                >
+                  <span class="material-symbols-outlined text-[16px]">library_add</span>
+                  匯入至文獻庫並開啟研讀
+                </button>
+              </div>
+            {/if}
+          </div>
+
         <!-- ==================== TAB 1: WEB URL IMPORT ==================== -->
-        {#if activeTab === 'web'}
+        {:else if activeTab === 'web'}
           <div class="flex flex-col gap-3.5">
             <div class="bg-[#32302f] border border-[#3c3836] p-3 rounded-lg flex items-start gap-2.5">
               <span class="material-symbols-outlined text-[18px] text-[#8ec07c] shrink-0 mt-0.5">smart_toy</span>

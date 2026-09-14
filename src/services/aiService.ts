@@ -39,6 +39,52 @@ export const FALLBACK_MODELS: Record<string, ProviderModelItem[]> = {
   ]
 };
 
+/**
+ * 格式化模型名稱為簡潔之顯示標籤 (適用於頂部狀態橫條)
+ */
+export function formatModelDisplayName(provider: string, model: string): string {
+  if (!provider && !model) return 'Groq (Llama 3.3 70B)';
+  const p = (provider || 'groq').toLowerCase();
+  const m = model || 'llama-3.3-70b-versatile';
+
+  // 1. 優先比對 FALLBACK_MODELS 清單之友好標籤
+  const found = FALLBACK_MODELS[p]?.find(item => item.id === m);
+  if (found) {
+    const cleanName = found.name.replace(/\s*\([^)]*\)$/, '').trim();
+    if (p === 'groq') return cleanName.startsWith('Groq') ? cleanName : `Groq (${cleanName})`;
+    if (p === 'openai') return cleanName.startsWith('OpenAI') ? cleanName : `OpenAI (${cleanName})`;
+    if (p === 'anthropic') return cleanName.startsWith('Claude') ? cleanName : `Claude (${cleanName})`;
+    if (p === 'google') return cleanName.startsWith('Gemini') ? cleanName : `Gemini (${cleanName})`;
+    if (p === 'deepseek') return cleanName.startsWith('DeepSeek') ? cleanName : `DeepSeek (${cleanName})`;
+    if (p === 'ollama') return cleanName.startsWith('Ollama') ? cleanName : `Ollama (${cleanName})`;
+    return cleanName;
+  }
+
+  // 2. 動態拉取或自訂模型之退避精簡格式化
+  if (p === 'groq') {
+    return `Groq (${m.replace(/^llama-?/i, 'Llama-').slice(0, 16)})`;
+  }
+  if (p === 'google') {
+    const clean = m.replace(/^models\//, '').replace(/^gemini-?/i, 'Gemini ');
+    return clean.length > 18 ? clean.slice(0, 18) : clean;
+  }
+  if (p === 'anthropic') {
+    if (m.includes('sonnet')) return 'Claude 3.5 Sonnet';
+    if (m.includes('haiku')) return 'Claude 3.5 Haiku';
+    return `Claude (${m.slice(0, 14)})`;
+  }
+  if (p === 'openai') {
+    return `OpenAI (${m.slice(0, 14)})`;
+  }
+  if (p === 'deepseek') {
+    return `DeepSeek (${m.slice(0, 14)})`;
+  }
+  if (p === 'ollama') {
+    return `Ollama (${m.split(':')[0].slice(0, 14)})`;
+  }
+  return `${p.toUpperCase()} (${m.slice(0, 12)})`;
+}
+
 // -------------------------------------------------------------
 // 1. 自動讀取模型函式 (Auto Fetch Models)
 // -------------------------------------------------------------

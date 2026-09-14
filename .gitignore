@@ -18,6 +18,9 @@ test-groq-flow.mjs
 current_app_screen.png
 *.log
 
+# Local Development Checklists & Private Notes
+CHECKLIST.md
+
 # Design Zip Archives
 *.zip
 

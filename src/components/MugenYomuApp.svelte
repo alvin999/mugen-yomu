@@ -10,6 +10,7 @@
   import ByokModal from './byok/ByokModal.svelte';
   import ImportPaperModal from './repository/ImportPaperModal.svelte';
   import PaperRepositoryPanel from './repository/PaperRepositoryPanel.svelte';
+  import OriginalDocumentViewer from './reader/OriginalDocumentViewer.svelte';
 
   import {
     getInitialLibrary,
@@ -19,9 +20,13 @@
   } from '../stores/documentStore';
   import { flattenSections } from '../stores/readingStore';
   import { getCacheStats, type CacheStats } from '../services/cacheService';
+  import { formatModelDisplayName } from '../services/aiService';
 
   // State Management
-  let readingMode: 'bilingual' | 'zen' | 'figures' = 'bilingual';
+  let readingMode: 'bilingual' | 'split' | 'zen' | 'figures' = 'bilingual';
+  let isPdfDrawerOpen: boolean = false;
+  let splitRatio: number = 50;
+  let isDraggingSplit: boolean = false;
   let zoomLevel: number = 100;
   let isByokOpen: boolean = false;
   let isImportOpen: boolean = false;
@@ -43,6 +48,12 @@
   // Notes in memory
   let capturedNotes: Array<{ title: string; text: string; time: string }> = [];
 
+  // 依據本機快取即時數據動態計算節省成本與 Token
+  $: if (cacheStats) {
+    const tokensK = (cacheStats.totalTokensSaved / 1000).toFixed(1);
+    cachedInfo = `$${cacheStats.costSavedUsd.toFixed(2)} / ${tokensK}k cached (省 ${cacheStats.savingsPercent}%)`;
+  }
+
   onMount(() => {
     paperLibrary = getInitialLibrary();
     activePaperId = getActivePaperId();
@@ -50,8 +61,16 @@
     if (current) {
       setPaper(current);
     }
+    loadActiveModel();
     refreshCacheStats();
   });
+
+  function loadActiveModel() {
+    if (typeof window === 'undefined') return;
+    const p = localStorage.getItem('mugen_provider') || 'groq';
+    const m = localStorage.getItem('mugen_model') || 'llama-3.3-70b-versatile';
+    modelName = formatModelDisplayName(p, m);
+  }
 
   async function refreshCacheStats() {
     cacheStats = await getCacheStats();
@@ -71,8 +90,42 @@
     }
   }
 
-  function handleModeChange(event: CustomEvent<{ mode: 'bilingual' | 'zen' | 'figures' }>) {
+  function handleModeChange(event: CustomEvent<{ mode: 'bilingual' | 'split' | 'zen' | 'figures' }>) {
     readingMode = event.detail.mode;
+    if (readingMode === 'split') {
+      isPdfDrawerOpen = false;
+    }
+  }
+
+  function handleSplitMouseDown(e: MouseEvent) {
+    isDraggingSplit = true;
+    window.addEventListener('mousemove', handleSplitMouseMove);
+    window.addEventListener('mouseup', handleSplitMouseUp);
+  }
+
+  function handleSplitMouseMove(e: MouseEvent) {
+    if (!isDraggingSplit) return;
+    const container = document.getElementById('split-container');
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const newRatio = Math.max(25, Math.min(75, Math.round((offsetX / rect.width) * 100)));
+    splitRatio = newRatio;
+  }
+
+  function handleSplitMouseUp() {
+    isDraggingSplit = false;
+    window.removeEventListener('mousemove', handleSplitMouseMove);
+    window.removeEventListener('mouseup', handleSplitMouseUp);
+  }
+
+  function handleGlobalKeydown(e: KeyboardEvent) {
+    if (e.altKey && (e.key === 'p' || e.key === 'P')) {
+      e.preventDefault();
+      isPdfDrawerOpen = !isPdfDrawerOpen;
+    } else if (e.key === 'Escape' && isPdfDrawerOpen) {
+      isPdfDrawerOpen = false;
+    }
   }
 
   function handleZoomChange(event: CustomEvent<{ zoomLevel: number }>) {
@@ -98,6 +151,13 @@
 
   function handleSelectFigure(event: CustomEvent<{ figId: string }>) {
     readingMode = 'figures';
+  }
+
+  function handleSectionsAligned(event: CustomEvent<{ sections: ChapterSection[] }>) {
+    if (activePaper && event.detail.sections) {
+      activePaper.sections = event.detail.sections;
+      activePaper = { ...activePaper };
+    }
   }
 
   function handleSelectEquation(event: CustomEvent<{ eqId: string }>) {
@@ -143,6 +203,19 @@
       alert(`已為「${noteTitle}」新增精讀筆記！`);
     } else if (action === 'translationCompleted') {
       refreshCacheStats();
+    } else if (action === 'openOriginalToPage') {
+      const { page, sectionId } = payload || {};
+      if (sectionId) {
+        activeSectionId = sectionId;
+        if (activePaper) {
+          const allSecs = flattenSections(activePaper.sections);
+          const found = allSecs.find(s => s.id === activeSectionId);
+          activeContextText = found ? `§ ${found.title}` : `§ ${activeSectionId}`;
+        }
+      }
+      if (readingMode !== 'split') {
+        isPdfDrawerOpen = true;
+      }
     }
   }
 
@@ -210,11 +283,7 @@
   function handleByokSave(event: CustomEvent<{ provider: string; model: string; apiKey: string }>) {
     const p = event.detail.provider;
     const m = event.detail.model;
-    if (p === 'groq') {
-      modelName = `Groq (${m.replace('llama-', 'Llama-').slice(0, 16)})`;
-    } else {
-      modelName = `${p.toUpperCase()} (${m.slice(0, 12)})`;
-    }
+    modelName = formatModelDisplayName(p, m);
     if (companionRef && companionRef.refreshKeyFromStorage) {
       companionRef.refreshKeyFromStorage();
     }
@@ -245,12 +314,14 @@
       {activePaper}
       bind:readingMode
       bind:zoomLevel
+      bind:isPdfDrawerOpen
       {modelName}
       {cachedInfo}
       {isRailCollapsed}
       {cacheStats}
       on:modeChange={handleModeChange}
       on:zoomChange={handleZoomChange}
+      on:togglePdfDrawer={() => isPdfDrawerOpen = !isPdfDrawerOpen}
       on:openSettings={() => isByokOpen = true}
       on:openRepository={() => isRepositoryOpen = true}
       on:openImport={() => isImportOpen = true}
@@ -267,7 +338,45 @@
       />
 
       <!-- Workspace Studio Layout -->
-      {#if readingMode === 'figures'}
+      {#if readingMode === 'split'}
+        <!-- 50/50 Synchronized Dual-Track Split Screen View -->
+        <div id="split-container" class="flex-1 overflow-hidden flex divide-x divide-[#3c3836] relative {isDraggingSplit ? 'select-none cursor-col-resize' : ''}">
+          <!-- Left Track: Original Document Viewer -->
+          <div class="h-full overflow-hidden flex flex-col" style="width: {splitRatio}%">
+            <OriginalDocumentViewer
+              paper={activePaper}
+              mode="split"
+              {activeSectionId}
+              sections={activePaper?.sections || []}
+              on:selectSection={handleSelectSection}
+              on:sectionsAligned={handleSectionsAligned}
+              on:switchToSplit={() => {}}
+            />
+          </div>
+
+          <!-- Central Draggable Splitter Handle -->
+          <div
+            class="w-2.5 bg-[#1d2021] hover:bg-[#fe8019] transition-colors cursor-col-resize flex items-center justify-center z-20 group shrink-0"
+            on:mousedown={handleSplitMouseDown}
+            title="拖曳以自訂左右分屏比例"
+            role="separator"
+          >
+            <div class="w-1 h-8 bg-[#504945] group-hover:bg-[#1d2021] rounded-full"></div>
+          </div>
+
+          <!-- Right Track: Bilingual Academic Reader (Zoomable) -->
+          <div class="h-full overflow-hidden flex-1" style="zoom: {zoomLevel}%">
+            <BilingualReader
+              bind:this={readerRef}
+              paper={activePaper}
+              {activeSectionId}
+              {readingMode}
+              on:selectSection={handleSelectSection}
+              on:readerAction={handleReaderAction}
+            />
+          </div>
+        </div>
+      {:else if readingMode === 'figures'}
         <!-- Derivations & Figures Comparative Studio Canvas -->
         <div class="flex-1 overflow-hidden">
           <DerivationsFiguresView
@@ -352,5 +461,32 @@
     on:save={handleByokSave}
     on:close={() => isByokOpen = false}
   />
+
+  <!-- Slide-out Original Document Inspector Drawer (Alt+P) -->
+  {#if isPdfDrawerOpen}
+    <!-- Backdrop Overlay -->
+    <div
+      class="fixed inset-0 top-16 bg-black/45 z-30 transition-opacity animate-fade-in"
+      on:click={() => isPdfDrawerOpen = false}
+    ></div>
+
+    <!-- Right Drawer Panel -->
+    <div
+      class="fixed right-0 top-16 bottom-0 w-[48vw] min-w-[390px] max-w-[840px] bg-[#1d2021] border-l border-[#504945] z-40 shadow-2xl flex flex-col animate-slide-left"
+    >
+      <OriginalDocumentViewer
+        paper={activePaper}
+        mode="drawer"
+        {activeSectionId}
+        sections={activePaper?.sections || []}
+        on:selectSection={handleSelectSection}
+        on:sectionsAligned={handleSectionsAligned}
+        on:close={() => isPdfDrawerOpen = false}
+        on:switchToSplit={() => { isPdfDrawerOpen = false; readingMode = 'split'; }}
+      />
+    </div>
+  {/if}
 </div>
+
+<svelte:window on:keydown={handleGlobalKeydown} />
 

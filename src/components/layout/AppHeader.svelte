@@ -4,16 +4,17 @@
   import type { CacheStats } from '../../services/cacheService';
 
   export let activePaper: PaperDocument | null = null;
-  export let readingMode: 'bilingual' | 'zen' | 'figures' = 'bilingual';
+  export let readingMode: 'bilingual' | 'split' | 'zen' | 'figures' = 'bilingual';
+  export let isPdfDrawerOpen: boolean = false;
   export let zoomLevel: number = 100;
-  export let modelName: string = 'Claude 3.5 Sonnet (Local Key)';
+  export let modelName: string = 'Groq (Llama 3.3 70B)';
   export let cachedInfo: string = '$0.14 / 2.4k cached (省 82%)';
   export let isRailCollapsed: boolean = false;
   export let cacheStats: CacheStats | null = null;
 
   const dispatch = createEventDispatcher();
 
-  function setMode(mode: 'bilingual' | 'zen' | 'figures') {
+  function setMode(mode: 'bilingual' | 'split' | 'zen' | 'figures') {
     readingMode = mode;
     dispatch('modeChange', { mode });
   }
@@ -122,6 +123,15 @@
       </button>
 
       <button
+        class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 {readingMode === 'split' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
+        on:click={() => setMode('split')}
+        title="左右 50/50 雙軌並列：左側原始 PDF，右側雙語伴讀"
+      >
+        <span class="material-symbols-outlined text-[13px]">view_column</span>
+        <span>雙軌對照</span>
+      </button>
+
+      <button
         class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 {readingMode === 'zen' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
         on:click={() => setMode('zen')}
       >
@@ -140,12 +150,22 @@
   </div>
 
   <!-- Right BYOK & Utilities -->
-  <div class="flex items-center gap-2.5 shrink-0">
+  <div class="flex items-center gap-2 shrink-0">
+    <!-- Slide-out PDF Drawer Toggle Button -->
+    <button
+      class="px-2.5 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 text-[#fabd2f] hover:text-[#fe8019] rounded-lg text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm {isPdfDrawerOpen ? '!bg-[#fe8019] !text-[#1d2021] font-semibold' : ''}"
+      on:click={() => dispatch('togglePdfDrawer')}
+      title="開啟/收合原檔 PDF 側邊抽屜 (快捷鍵: Alt+P)"
+    >
+      <span class="material-symbols-outlined text-[14px]">picture_as_pdf</span>
+      <span class="hidden md:inline">原檔抽屜</span>
+      <span class="font-mono text-[9px] opacity-70">Alt+P</span>
+    </button>
     <!-- BYOK Status Pill -->
     <button
       class="flex items-center gap-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#504945] px-2 py-1 rounded-lg transition-colors text-left"
       on:click={openSettings}
-      title="點擊設定 BYOK API 金鑰與模型"
+      title="{modelName} · {cachedInfo} · 點擊設定 BYOK API 金鑰與模型"
     >
       <span class="h-2 w-2 rounded-full bg-[#fabd2f] animate-pulse"></span>
       <div class="flex flex-col">

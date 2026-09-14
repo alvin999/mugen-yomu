@@ -3,6 +3,7 @@ export interface SectionItem {
   id: string;
   title: string;
   level: number;
+  page?: number;
   progress: number;
   isRead: boolean;
   children?: SectionItem[];
