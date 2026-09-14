@@ -540,12 +540,14 @@
           </div>
 
           <!-- Central Draggable Splitter Handle -->
+          <!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions -->
           <div
             class="w-2.5 bg-[#1d2021] hover:bg-[#fe8019] transition-colors cursor-col-resize flex items-center justify-center z-20 group shrink-0"
             on:mousedown={handleSplitMouseDown}
             title="拖曳以自訂左右分屏比例（可使用鍵盤左右鍵微調）"
             role="separator"
             tabindex="0"
+            aria-orientation="vertical"
             aria-valuenow={splitRatio}
             aria-valuemin="20"
             aria-valuemax="80"

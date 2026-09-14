@@ -285,7 +285,7 @@
   on:scroll={handleContainerScroll}
   class="h-full overflow-y-auto px-6 py-6 flex justify-center bg-[#282828]"
 >
-  <div class="w-full max-w-[760px] flex flex-col gap-6 pb-28">
+  <div class="w-full {readingMode === 'zen' ? 'max-w-[840px]' : 'max-w-[760px]'} flex flex-col gap-6 pb-28 transition-[max-width] duration-300">
 
     {#if paper}
       <!-- Paper Academic Header -->
