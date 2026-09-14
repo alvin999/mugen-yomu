@@ -53,6 +53,8 @@ export interface SectionCompanionData {
   socraticQuestions: { id: string; text: string; icon: string; color: string; answerSummary: string }[];
 }
 
+import type { CitationGraphData } from '../services/citationService';
+
 export interface PaperDocument {
   id: string;
   type: 'paper' | 'web';
@@ -73,6 +75,7 @@ export interface PaperDocument {
   sections: ChapterSection[];
   companionData: Record<string, SectionCompanionData>;
   figureList?: FigureItem[];
+  citationGraph?: CitationGraphData;
 }
 
 // -------------------------------------------------------------

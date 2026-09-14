@@ -11,6 +11,7 @@
   import ImportPaperModal from './repository/ImportPaperModal.svelte';
   import PaperRepositoryPanel from './repository/PaperRepositoryPanel.svelte';
   import OriginalDocumentViewer from './reader/OriginalDocumentViewer.svelte';
+  import CitationGraphView from './citation/CitationGraphView.svelte';
 
   import {
     getInitialLibrary,
@@ -30,6 +31,7 @@
   import { formatModelDisplayName } from '../services/aiService';
 
   // State Management
+  let currentMainView: 'workspace' | 'citation-graph' = 'workspace';
   let readingMode: 'bilingual' | 'split' | 'zen' | 'figures' = 'bilingual';
   let isPdfDrawerOpen: boolean = false;
   let splitRatio: number = 50;
@@ -204,8 +206,18 @@
 
   function handleModeChange(event: CustomEvent<{ mode: 'bilingual' | 'split' | 'zen' | 'figures' }>) {
     readingMode = event.detail.mode;
+    currentMainView = 'workspace';
     if (readingMode === 'split') {
       isPdfDrawerOpen = false;
+    }
+  }
+
+  function handleLoadPaperFromCitation(e: CustomEvent<{ paperId: string }>) {
+    const targetId = e.detail.paperId;
+    const found = paperLibrary.find(p => p.id === targetId || p.id.includes(targetId));
+    if (found) {
+      setPaper(found);
+      currentMainView = 'workspace';
     }
   }
 
@@ -479,6 +491,7 @@
 <div class="flex h-screen w-screen bg-[#282828] text-[#ebdbb2] overflow-hidden select-text">
   <!-- Left Navigation Rail (Collapsible: 64px / 240px) -->
   <NavigationRail
+    currentPath={currentMainView === 'citation-graph' ? 'citation-graph' : (readingMode === 'figures' ? 'prompt-formula-lab' : 'reading-workspace')}
     paperCount={paperLibrary.length}
     bind:isCollapsed={isRailCollapsed}
     on:openRepository={() => isRepositoryOpen = true}
@@ -487,7 +500,12 @@
       if (e.detail.path === 'cognitive-notes') {
         handleExportNotes();
       } else if (e.detail.path === 'prompt-formula-lab') {
+        currentMainView = 'workspace';
         readingMode = 'figures';
+      } else if (e.detail.path === 'citation-graph') {
+        currentMainView = 'citation-graph';
+      } else if (e.detail.path === 'reading-workspace') {
+        currentMainView = 'workspace';
       }
     }}
   />
@@ -515,12 +533,19 @@
 
     <!-- Main Workspace Frame (pushed down by 64px header) -->
     <main class="w-full pt-16 h-full flex flex-col bg-[#282828] overflow-hidden">
-      <!-- Density & Flow Ribbon -->
-      <DensityRibbon
-        focusTrack="{activeContextText} · Depth Level: {activePaper?.depthLevel || 'Academic Rigor'}"
-        flowWpm={activePaper?.readingSpeedWpm || 265}
-        embeddingDim={384}
-      />
+      {#if currentMainView === 'citation-graph'}
+        <CitationGraphView
+          paper={activePaper}
+          on:backToWorkspace={() => currentMainView = 'workspace'}
+          on:loadPaper={handleLoadPaperFromCitation}
+        />
+      {:else}
+        <!-- Density & Flow Ribbon -->
+        <DensityRibbon
+          focusTrack="{activeContextText} · Depth Level: {activePaper?.depthLevel || 'Academic Rigor'}"
+          flowWpm={activePaper?.readingSpeedWpm || 265}
+          embeddingDim={384}
+        />
 
       <!-- Workspace Studio Layout -->
       {#if readingMode === 'split'}
@@ -641,6 +666,7 @@
           {/if}
 
         </div>
+      {/if}
       {/if}
     </main>
   </div>
