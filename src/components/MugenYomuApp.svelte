@@ -12,6 +12,7 @@
   import PaperRepositoryPanel from './repository/PaperRepositoryPanel.svelte';
   import OriginalDocumentViewer from './reader/OriginalDocumentViewer.svelte';
   import CitationGraphView from './citation/CitationGraphView.svelte';
+  import CognitiveNotesModal from './notes/CognitiveNotesModal.svelte';
 
   import {
     getInitialLibrary,
@@ -34,6 +35,7 @@
   let currentMainView: 'workspace' | 'citation-graph' = 'workspace';
   let readingMode: 'bilingual' | 'split' | 'zen' | 'figures' = 'bilingual';
   let isPdfDrawerOpen: boolean = false;
+  let isNotesModalOpen: boolean = false;
   let splitRatio: number = 50;
   let isDraggingSplit: boolean = false;
   let zoomLevel: number = 100;
@@ -96,12 +98,33 @@
       activePaper.sections = applyProgressToSections(activePaper.sections, savedState);
     }
 
+    // 載入該論文在 LocalStorage 的精讀筆記
+    if (typeof window !== 'undefined') {
+      try {
+        const savedNotes = localStorage.getItem(`mugen_notes_${paper.id}`);
+        capturedNotes = savedNotes ? JSON.parse(savedNotes) : [];
+      } catch {
+        capturedNotes = [];
+      }
+    }
+
     // Pick section 3.2 or 3.2.1 if exists, else first section
     const allSecs = flattenSections(activePaper.sections);
     const targetSec = allSecs.find(s => s.id === '3.2' || s.id === '3.2.1') || allSecs[0];
     if (targetSec) {
       activeSectionId = targetSec.id;
       activeContextText = `§ ${targetSec.title}`;
+    }
+  }
+
+  function saveNotes(notes: Array<{ title: string; text: string; time: string }>) {
+    capturedNotes = notes;
+    if (typeof window !== 'undefined' && activePaperId) {
+      try {
+        localStorage.setItem(`mugen_notes_${activePaperId}`, JSON.stringify(capturedNotes));
+      } catch (e) {
+        console.warn('Failed to save notes to localStorage', e);
+      }
     }
   }
 
@@ -249,6 +272,8 @@
       isPdfDrawerOpen = !isPdfDrawerOpen;
     } else if (e.key === 'Escape' && isPdfDrawerOpen) {
       isPdfDrawerOpen = false;
+    } else if (e.key === 'Escape' && isNotesModalOpen) {
+      isNotesModalOpen = false;
     }
   }
 
@@ -389,15 +414,13 @@
       activeContextText = `${activeSectionId} · 關鍵術語對齊`;
     } else if (action === 'addNote') {
       const noteTitle = payload || activeContextText;
-      capturedNotes = [
-        ...capturedNotes,
-        {
-          title: noteTitle,
-          text: `於 ${activeContextText} 標註之重要論文觀點與筆記內容。`,
-          time: new Date().toLocaleTimeString()
-        }
-      ];
-      alert(`已為「${noteTitle}」新增精讀筆記！`);
+      const newNote = {
+        title: noteTitle,
+        text: `於 ${activeContextText} 標註之重要論文觀點與筆記內容。`,
+        time: new Date().toLocaleTimeString()
+      };
+      saveNotes([newNote, ...capturedNotes]);
+      alert(`已為「${noteTitle}」新增精讀筆記！可點選左側 Cognitive Notes 檢視與編輯。`);
     } else if (action === 'translationCompleted') {
       refreshCacheStats();
     } else if (action === 'openOriginalToPage') {
@@ -423,49 +446,19 @@
 
   function handleQuickCompanionAction(event: CustomEvent<{ action: string; payload?: any }>) {
     if (event.detail.action === 'saveSnippet' && event.detail.payload) {
-      capturedNotes = [
-        ...capturedNotes,
-        {
-          title: `伴讀精華 · ${activeContextText}`,
-          text: event.detail.payload,
-          time: new Date().toLocaleTimeString()
-        }
-      ];
+      const newNote = {
+        title: `伴讀精華 · ${activeContextText}`,
+        text: event.detail.payload,
+        time: new Date().toLocaleTimeString()
+      };
+      saveNotes([newNote, ...capturedNotes]);
     } else if (event.detail.action === 'exportNotes') {
       handleExportNotes();
     }
   }
 
   function handleExportNotes() {
-    if (capturedNotes.length === 0) {
-      capturedNotes = [
-        {
-          title: `精讀標註 · ${activePaper?.title || 'Attention Is All You Need'}`,
-          text: '自注意力機制消除了傳統循環模型中的順序依賴，點積矩陣除以 √d_k 阻斷了 Softmax 梯度消失。',
-          time: new Date().toLocaleTimeString()
-        }
-      ];
-    }
-
-    let md = `# MUGEN YOMU 精讀筆記匯出\n\n`;
-    md += `**文獻名稱**：${activePaper?.title}\n`;
-    md += `**出處**：${activePaper?.venue} (${activePaper?.arxivId || activePaper?.sourceUrl || ''})\n`;
-    md += `**匯出時間**：${new Date().toLocaleString()}\n\n---\n\n`;
-
-    capturedNotes.forEach((n, idx) => {
-      md += `### ${idx + 1}. ${n.title} (${n.time})\n\n`;
-      md += `${n.text}\n\n`;
-    });
-
-    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.href = url;
-    downloadAnchor.download = `MUGEN_YOMU_Notes_${activePaper?.id || 'paper'}.md`;
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-    URL.revokeObjectURL(url);
+    isNotesModalOpen = true;
   }
 
   function handlePaperLoaded(event: CustomEvent<{ paper: PaperDocument; library: PaperDocument[] }>) {
@@ -495,10 +488,11 @@
     paperCount={paperLibrary.length}
     bind:isCollapsed={isRailCollapsed}
     on:openRepository={() => isRepositoryOpen = true}
+    on:openNotes={() => isNotesModalOpen = true}
     on:toggleCollapse={(e) => isRailCollapsed = e.detail.isCollapsed}
     on:navigate={(e) => {
       if (e.detail.path === 'cognitive-notes') {
-        handleExportNotes();
+        isNotesModalOpen = true;
       } else if (e.detail.path === 'prompt-formula-lab') {
         currentMainView = 'workspace';
         readingMode = 'figures';
@@ -694,6 +688,15 @@
     bind:isOpen={isByokOpen}
     on:save={handleByokSave}
     on:close={() => isByokOpen = false}
+  />
+
+  <!-- Cognitive Notes Modal -->
+  <CognitiveNotesModal
+    bind:isOpen={isNotesModalOpen}
+    {activePaper}
+    notes={capturedNotes}
+    on:updateNotes={(e) => saveNotes(e.detail.notes)}
+    on:close={() => isNotesModalOpen = false}
   />
 
   <!-- Slide-out Original Document Inspector Drawer (Alt+P) -->

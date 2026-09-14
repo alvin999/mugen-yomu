@@ -22,10 +22,13 @@
   }
 
   function handleNavClick(id: string) {
-    currentPath = id;
     if (id === 'paper-repository') {
       dispatch('openRepository');
+    } else if (id === 'cognitive-notes') {
+      dispatch('openNotes');
+      dispatch('navigate', { path: id });
     } else {
+      currentPath = id;
       dispatch('navigate', { path: id });
     }
   }
