@@ -23,6 +23,13 @@ export interface CacheStats {
   savingsPercent: number;
 }
 
+export interface StorageEstimateResult {
+  usageMb: number;
+  quotaMb: number;
+  percent: number;
+  displayText: string;
+}
+
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (typeof window === 'undefined' || !window.indexedDB) {
@@ -148,4 +155,27 @@ export async function getCacheStats(): Promise<CacheStats> {
       savingsPercent: 82
     };
   }
+}
+
+export async function getStorageEstimate(): Promise<StorageEstimateResult> {
+  if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.estimate) {
+    try {
+      const estimate = await navigator.storage.estimate();
+      const usageBytes = estimate.usage || 0;
+      const quotaBytes = estimate.quota || (1024 * 1024 * 1024);
+      const usageMb = Number((usageBytes / (1024 * 1024)).toFixed(1));
+      const quotaMb = Number((quotaBytes / (1024 * 1024)).toFixed(0));
+      const percent = Math.min(100, Math.max(1, Math.round((usageBytes / quotaBytes) * 100)));
+      const quotaFormatted = quotaMb >= 1024 ? `${(quotaMb / 1024).toFixed(1)} GB` : `${quotaMb} MB`;
+      return {
+        usageMb,
+        quotaMb,
+        percent,
+        displayText: `${usageMb} MB / ${quotaFormatted}`
+      };
+    } catch (e) {
+      console.warn('Failed to get storage estimate:', e);
+    }
+  }
+  return { usageMb: 0.8, quotaMb: 1024, percent: 1, displayText: '0.8 MB / 1 GB' };
 }

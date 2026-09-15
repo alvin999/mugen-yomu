@@ -2,7 +2,9 @@
   import { createEventDispatcher } from 'svelte';
 
   export let currentPath: string = 'reading-workspace';
-  export let memoryUsageMb: number = 64.2;
+  export let memoryUsageMb: number = 0.8;
+  export let memoryPercent: number = 1;
+  export let memoryTooltip: string = '本機 IndexedDB 快取與文獻庫';
   export let paperCount: number = 3;
   export let isCollapsed: boolean = false;
 
@@ -102,13 +104,13 @@
   <!-- Bottom Memory Bank & Sync Engine -->
   <div class="{isCollapsed ? 'px-2' : 'px-3'} flex flex-col gap-2">
     {#if !isCollapsed}
-      <div class="bg-[#282828] border border-[#3c3836] p-2.5 rounded-lg flex flex-col gap-1.5 shadow-sm">
+      <div class="bg-[#282828] border border-[#3c3836] p-2.5 rounded-lg flex flex-col gap-1.5 shadow-sm" title={memoryTooltip}>
         <div class="flex items-center justify-between text-[#a89984]">
           <span class="font-mono text-[10px] truncate">Local Memory</span>
           <span class="font-mono text-[10px] text-[#fabd2f] font-medium">{memoryUsageMb} MB</span>
         </div>
         <div class="w-full bg-[#1d2021] h-1.5 rounded-full overflow-hidden">
-          <div class="bg-[#fabd2f] h-full w-[42%] transition-all"></div>
+          <div class="bg-[#fabd2f] h-full transition-all duration-500" style="width: {Math.max(2, Math.min(100, memoryPercent))}%"></div>
         </div>
       </div>
 
@@ -117,7 +119,7 @@
         <span class="material-symbols-outlined text-[13px] text-[#b8bb26]">cloud_done</span>
       </div>
     {:else}
-      <div class="flex flex-col items-center justify-center gap-1 p-2 rounded-lg bg-[#282828] border border-[#3c3836]" title="Memory: {memoryUsageMb} MB · Sync Idle">
+      <div class="flex flex-col items-center justify-center gap-1 p-2 rounded-lg bg-[#282828] border border-[#3c3836]" title={memoryTooltip}>
         <span class="material-symbols-outlined text-[16px] text-[#fabd2f]">database</span>
         <span class="font-mono text-[8px] text-[#a89984]">{memoryUsageMb}M</span>
       </div>

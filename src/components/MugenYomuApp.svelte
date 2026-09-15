@@ -28,7 +28,7 @@
     clearPaperReadingState,
     applyProgressToSections
   } from '../stores/readingStore';
-  import { getCacheStats, type CacheStats } from '../services/cacheService';
+  import { getCacheStats, getStorageEstimate, type CacheStats } from '../services/cacheService';
   import {
     formatModelDisplayName,
     generateScientificIntuition,
@@ -52,6 +52,9 @@
   let modelName: string = 'Groq (Llama 3.3 70B)';
   let cachedInfo: string = '$0.14 / 2.4k cached (省 82%)';
   let cacheStats: CacheStats | null = null;
+  let localMemoryMb: number = 0.8;
+  let localMemoryPercent: number = 1;
+  let localMemoryTooltip: string = '本機 IndexedDB 快取與文獻庫';
   let companionRef: any = null;
   let readerRef: any = null;
 
@@ -95,6 +98,10 @@
 
   async function refreshCacheStats() {
     cacheStats = await getCacheStats();
+    const storage = await getStorageEstimate();
+    localMemoryMb = storage.usageMb;
+    localMemoryPercent = storage.percent;
+    localMemoryTooltip = `本機已使用 ${storage.usageMb} MB / 總配額 ${storage.displayText.split('/')[1]?.trim() || '1 GB'}`;
   }
 
   function setPaper(paper: PaperDocument) {
@@ -719,6 +726,9 @@
     currentPath={currentMainView === 'citation-graph' ? 'citation-graph' : (readingMode === 'figures' ? 'prompt-formula-lab' : 'reading-workspace')}
     paperCount={paperLibrary.length}
     bind:isCollapsed={isRailCollapsed}
+    memoryUsageMb={localMemoryMb}
+    memoryPercent={localMemoryPercent}
+    memoryTooltip={localMemoryTooltip}
     on:openRepository={() => isRepositoryOpen = true}
     on:openNotes={() => isNotesModalOpen = true}
     on:toggleCollapse={(e) => isRailCollapsed = e.detail.isCollapsed}
