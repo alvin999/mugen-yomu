@@ -49,7 +49,7 @@ export interface SectionCompanionData {
     snippet: string;
     svo: { role: string; text: string; zh: string; color: string }[];
   };
-  terminology: { term: string; explanation: string; color: string }[];
+  terminology: { term: string; zh?: string; explanation: string; color: string }[];
   socraticQuestions: { id: string; text: string; icon: string; color: string; answerSummary: string }[];
 }
 
@@ -283,10 +283,10 @@ export const userManualDocument: PaperDocument = {
         ]
       },
       terminology: [
-        { term: 'Focus Lens', explanation: '聚焦透鏡：以琥珀光暈突顯當前段落', color: '#fe8019' },
-        { term: 'SVO Engine', explanation: '主幹拆解：主詞-動詞-受詞階層語法樹', color: '#8ec07c' },
-        { term: 'BYOK Architecture', explanation: '自帶金鑰：金鑰與文本零上傳伺服器', color: '#fabd2f' },
-        { term: 'Saccadic Tracking', explanation: '掃視追蹤：估算眼動速率與覆蓋率', color: '#83a598' }
+        { term: 'Focus Lens', zh: '聚焦透鏡', explanation: '以琥珀光暈突顯當前研讀段落，抑制周邊視覺干擾', color: '#fe8019' },
+        { term: 'SVO Engine', zh: '主幹語法拆解', explanation: '將長難句分解為主謂賓、修飾與目的核心語法樹', color: '#8ec07c' },
+        { term: 'BYOK Architecture', zh: '自帶金鑰架構', explanation: '金鑰與文本零上傳伺服器，完全於本機瀏覽器端安全推論', color: '#fabd2f' },
+        { term: 'Saccadic Tracking', zh: '眼動掃視追蹤', explanation: '估算眼動速率與覆蓋率，洞察讀者專注曲線', color: '#83a598' }
       ],
       socraticQuestions: [
         {
@@ -562,8 +562,8 @@ export const attentionPaper: PaperDocument = {
         ]
       },
       terminology: [
-        { term: 'Scaled Dot-Product', explanation: '縮放點積注意力', color: '#fabd2f' },
-        { term: 'Large in magnitude', explanation: '向量幅值過大 (非尺寸大)', color: '#8ec07c' }
+        { term: 'Scaled Dot-Product', zh: '縮放點積注意力', explanation: '點積除以根號維度穩定方差，阻斷 Softmax 梯度消失', color: '#fabd2f' },
+        { term: 'Large in magnitude', zh: '數值幅值過大', explanation: '向量內積數值幅值過大（非幾何尺寸），會將函數推入飽和區', color: '#8ec07c' }
       ],
       socraticQuestions: [
         {
@@ -698,8 +698,8 @@ export const resnetPaper: PaperDocument = {
         ]
       },
       terminology: [
-        { term: 'Degradation Problem', explanation: '退化問題 (訓練集誤差反而比淺層高)', color: '#fabd2f' },
-        { term: 'Identity Shortcut', explanation: '恆等快捷連接 (無額外參數量)', color: '#8ec07c' }
+        { term: 'Degradation Problem', zh: '深層網路退化問題', explanation: '深層網路訓練集誤差反而高於淺層網路之非過擬合現象', color: '#fabd2f' },
+        { term: 'Identity Shortcut', zh: '恆等快捷連接', explanation: '直接無損傳遞特徵 F(x)+x，不引入額外參數量與計算複雜度', color: '#8ec07c' }
       ],
       socraticQuestions: [
         {
@@ -915,14 +915,13 @@ export function parseMarkdownToDocument(
     document.companionData[sec.id] = {
       intuition: {
         title: `關於「${sec.title}」的核心探討`,
-        tag: 'Scientific Insight',
+        tag: '待 AI 解析',
         content: [
-          `本節重點闡述了「${sec.title}」的核心邏輯與論述。`,
-          '建議關注文中作者提出的關鍵前提假設與相應推導過程。'
+          '本節尚未進行 AI 科研直覺推導。點擊伴讀卡片或段落下方「白話科學直覺」按鈕，由 AI 深入解析本節的核心設計動機、痛點與工程直覺。'
         ]
       },
       terminology: [
-        { term: sec.title.split(' ')[0] || 'Term', explanation: '關鍵學術概念與定義', color: '#fabd2f' }
+        { term: sec.title.split(' ')[0] || 'Term', explanation: '點擊伴讀卡片或段落下方「學術術語對齊」按鈕，由 AI 自動萃取本節專有名詞對照字典', color: '#fabd2f' }
       ],
       socraticQuestions: [
         {

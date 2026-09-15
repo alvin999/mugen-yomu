@@ -168,7 +168,7 @@
 
         <!-- Provider Select -->
         <div class="flex flex-col gap-1.5">
-          <label class="font-mono text-[11px] text-[#d5c4a1]">選擇 AI Provider</label>
+          <span class="font-mono text-[11px] text-[#d5c4a1]">選擇 AI Provider</span>
           <div class="grid grid-cols-2 gap-2">
             {#each providers as p}
               <button
@@ -189,7 +189,7 @@
         <!-- API Key Input -->
         <div class="flex flex-col gap-1.5">
           <div class="flex items-center justify-between">
-            <label class="font-mono text-[11px] text-[#d5c4a1]">
+            <label for="byok-api-key-input" class="font-mono text-[11px] text-[#d5c4a1]">
               {currentProvider === 'groq' ? 'Groq API Key' : `${currentProvider.toUpperCase()} API Key`}
             </label>
 
@@ -208,6 +208,7 @@
 
           {#if currentProvider === 'ollama'}
             <input
+              id="byok-api-key-input"
               class="w-full bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] px-3 py-2 rounded-lg focus:outline-none focus:border-[#fe8019] font-mono text-xs"
               type="text"
               placeholder="http://localhost:11434"
@@ -216,6 +217,7 @@
             />
           {:else}
             <input
+              id="byok-api-key-input"
               class="w-full bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] px-3 py-2 rounded-lg focus:outline-none focus:border-[#fe8019] font-mono text-xs placeholder:text-[#a89984]/40"
               type="password"
               placeholder={currentProvider === 'groq' ? 'gsk_...' : 'sk-...'}
@@ -231,7 +233,7 @@
         <!-- Model Selection with Auto-fetch (cafe-prism style) -->
         <div class="flex flex-col gap-1.5">
           <div class="flex items-center justify-between">
-            <label class="font-mono text-[11px] text-[#d5c4a1] flex items-center gap-1.5">
+            <label for="byok-model-select" class="font-mono text-[11px] text-[#d5c4a1] flex items-center gap-1.5">
               <span>模型選擇 (Model ID)</span>
               {#if isLoadingModels}
                 <span class="material-symbols-outlined text-[13px] animate-spin text-[#fabd2f]">sync</span>
@@ -259,6 +261,7 @@
           <!-- Dynamic Select Dropdown -->
           <div class="relative flex items-center">
             <select
+              id="byok-model-select"
               class="w-full bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] px-3 py-2 rounded-lg focus:outline-none focus:border-[#fe8019] font-mono text-xs appearance-none cursor-pointer pr-8"
               bind:value={currentModel}
             >

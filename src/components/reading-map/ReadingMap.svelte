@@ -160,13 +160,11 @@
                 : 'text-[#ebdbb2] hover:bg-[#282828] hover:text-[#fabd2f]'
             }"
           >
-            <!-- Toggle Checkmark / Icon -->
-            <button
-              class="flex items-center gap-2 min-w-0 flex-1 text-left bg-transparent border-0 p-0 text-inherit cursor-pointer group/check"
-              on:click={() => selectSection(section.id)}
-            >
-              <span
-                class="hover:scale-125 transition-transform flex items-center shrink-0 cursor-pointer"
+            <!-- Toggle Checkmark / Icon & Section Title -->
+            <div class="flex items-center gap-2 min-w-0 flex-1">
+              <button
+                type="button"
+                class="hover:scale-125 transition-transform flex items-center shrink-0 cursor-pointer bg-transparent border-0 p-0 text-inherit"
                 on:click={(e) => toggleSectionRead(section.id, e)}
                 title={section.isRead ? "點擊標記為未讀" : "點擊標記為已讀"}
               >
@@ -179,11 +177,17 @@
                 {:else if section.progress > 0}
                   <span class="material-symbols-outlined text-[16px] text-[#fabd2f]/80">radio_button_checked</span>
                 {:else}
-                  <span class="material-symbols-outlined text-[16px] text-[#a89984] group-hover/check:text-[#ebdbb2]">radio_button_unchecked</span>
+                  <span class="material-symbols-outlined text-[16px] text-[#a89984] hover:text-[#ebdbb2]">radio_button_unchecked</span>
                 {/if}
-              </span>
-              <span class="text-xs truncate">{section.title}</span>
-            </button>
+              </button>
+              <button
+                type="button"
+                class="text-xs truncate text-left bg-transparent border-0 p-0 text-inherit cursor-pointer flex-1 min-w-0"
+                on:click={() => selectSection(section.id)}
+              >
+                {section.title}
+              </button>
+            </div>
 
             <div class="flex items-center gap-1 shrink-0">
               {#if section.isRead}
@@ -218,12 +222,10 @@
                       : 'text-[#d5c4a1] hover:text-[#ebdbb2] hover:bg-[#282828]'
                   }"
                 >
-                  <button
-                    class="flex-1 text-left truncate text-xs bg-transparent border-0 p-0 text-inherit cursor-pointer flex items-center gap-1.5"
-                    on:click={() => selectSection(sub.id)}
-                  >
-                    <span
-                      class="hover:scale-125 transition-transform flex items-center shrink-0 cursor-pointer"
+                  <div class="flex-1 text-left truncate text-xs flex items-center gap-1.5 min-w-0">
+                    <button
+                      type="button"
+                      class="hover:scale-125 transition-transform flex items-center shrink-0 cursor-pointer bg-transparent border-0 p-0 text-inherit"
                       on:click={(e) => toggleSectionRead(sub.id, e)}
                       title={sub.isRead ? "點擊標記為未讀" : "點擊標記為已讀"}
                     >
@@ -236,9 +238,15 @@
                       {:else}
                         <span class="material-symbols-outlined text-[13px] text-[#a89984]">radio_button_unchecked</span>
                       {/if}
-                    </span>
-                    <span class="truncate">{sub.title}</span>
-                  </button>
+                    </button>
+                    <button
+                      type="button"
+                      class="truncate text-left bg-transparent border-0 p-0 text-inherit cursor-pointer flex-1 min-w-0"
+                      on:click={() => selectSection(sub.id)}
+                    >
+                      {sub.title}
+                    </button>
+                  </div>
 
                   <div class="flex items-center gap-1 shrink-0">
                     {#if sub.children && sub.children.length > 0}
@@ -288,11 +296,10 @@
       </div>
 
       <!-- Mini Figure Card -->
-      <div
-        class="bg-[#282828] border border-[#3c3836] p-2 rounded-lg hover:bg-[#32302f] hover:border-[#504945] transition-colors cursor-pointer flex gap-2 group"
+      <button
+        type="button"
+        class="w-full text-left bg-[#282828] border border-[#3c3836] p-2 rounded-lg hover:bg-[#32302f] hover:border-[#504945] transition-colors cursor-pointer flex gap-2 group"
         on:click={() => selectFigure('fig1')}
-        role="button"
-        tabindex="0"
       >
         <div class="w-12 h-14 bg-[#1d2021] border border-[#3c3836] rounded shrink-0 overflow-hidden relative flex items-center justify-center p-1">
           <svg class="w-full h-full text-[#fabd2f] opacity-80 group-hover:opacity-100 transition-opacity" viewBox="0 0 40 50">
@@ -307,14 +314,13 @@
           <span class="text-xs text-[#ebdbb2] font-medium truncate">The Triad Workspace</span>
           <span class="font-mono text-[10px] text-[#a89984] truncate">三欄工作台架構與推導</span>
         </div>
-      </div>
+      </button>
 
       <!-- Mini Equation Card -->
-      <div
-        class="bg-[#282828] border border-[#3c3836] border-l-4 border-l-[#fabd2f] p-2 rounded-lg hover:bg-[#32302f] transition-colors cursor-pointer flex flex-col gap-1"
+      <button
+        type="button"
+        class="w-full text-left bg-[#282828] border border-[#3c3836] border-l-4 border-l-[#fabd2f] p-2 rounded-lg hover:bg-[#32302f] transition-colors cursor-pointer flex flex-col gap-1"
         on:click={() => selectEquation('eq_efficiency')}
-        role="button"
-        tabindex="0"
       >
         <div class="flex items-center justify-between text-[#a89984]">
           <span class="font-mono text-[10px] text-[#fabd2f] font-semibold">Eq. (1)</span>
@@ -323,7 +329,7 @@
         <div class="font-mono text-[#ebdbb2] bg-[#1d2021] border border-[#3c3836] px-1.5 py-1 rounded tracking-tight text-[10px] truncate">
           η = (C · (1 + γ)) / (ln(τ + 1) · √Ω)
         </div>
-      </div>
+      </button>
     </div>
   </div>
 

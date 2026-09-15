@@ -45,7 +45,12 @@
   <!-- Left Brand & Breadcrumb (Prioritized flexible width) -->
   <div class="flex items-center gap-2.5 min-w-0 flex-1">
     <!-- Brand -->
-    <div class="flex items-center gap-2 shrink-0 cursor-pointer" on:click={openRepository}>
+    <button
+      type="button"
+      class="flex items-center gap-2 shrink-0 cursor-pointer bg-transparent border-none p-0 text-left focus:outline-none focus:ring-1 focus:ring-[#fe8019] rounded"
+      on:click={openRepository}
+      title="開啟文獻庫"
+    >
       <div class="w-8 h-8 rounded bg-[#fe8019]/20 border border-[#fe8019]/60 flex items-center justify-center text-[#fe8019] font-bold text-base shadow-sm">
         夢
       </div>
@@ -53,7 +58,7 @@
         <span class="text-sm font-bold tracking-tight text-[#fe8019] leading-none">MUGEN YOMU</span>
         <span class="font-mono text-[9px] text-[#a89984] leading-tight mt-0.5">無限閱讀 · 伴讀工作台</span>
       </div>
-    </div>
+    </button>
 
     <div class="h-6 w-px bg-[#504945] shrink-0"></div>
 

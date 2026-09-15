@@ -29,7 +29,12 @@
     applyProgressToSections
   } from '../stores/readingStore';
   import { getCacheStats, type CacheStats } from '../services/cacheService';
-  import { formatModelDisplayName } from '../services/aiService';
+  import {
+    formatModelDisplayName,
+    generateScientificIntuition,
+    generateSentenceDeconstruction,
+    generateTerminologyAlignment
+  } from '../services/aiService';
 
   // State Management
   let currentMainView: 'workspace' | 'citation-graph' = 'workspace';
@@ -49,6 +54,11 @@
   let cacheStats: CacheStats | null = null;
   let companionRef: any = null;
   let readerRef: any = null;
+
+  // 認知核心非同步載入狀態
+  let loadingIntuitionId: string | null = null;
+  let loadingSyntaxId: string | null = null;
+  let loadingTerminologyId: string | null = null;
 
   let paperLibrary: PaperDocument[] = [];
   let activePaperId: string = 'mugen_yomu_user_manual';
@@ -402,16 +412,238 @@
     }, 60);
   }
 
-  function handleReaderAction(event: CustomEvent<{ action: string; payload?: any }>) {
-    const { action, payload } = event.detail;
+  function getAiConfig() {
+    if (typeof window === 'undefined') {
+      return { provider: 'groq', apiKey: '', model: 'llama-3.3-70b-versatile', ollamaUrl: 'http://localhost:11434' };
+    }
+    const provider = localStorage.getItem('mugen_provider') || 'groq';
+    const apiKey = localStorage.getItem(`mugen_key_${provider}`) || localStorage.getItem('mugen_key_groq') || '';
+    const model = localStorage.getItem('mugen_model') || 'llama-3.3-70b-versatile';
+    const ollamaUrl = localStorage.getItem('mugen_ollama_url') || 'http://localhost:11434';
+    return { provider, apiKey, model, ollamaUrl };
+  }
+
+  async function generateIntuitionForSection(sec: ChapterSection) {
+    if (!sec || !sec.id) return;
+    loadingIntuitionId = sec.id;
+    try {
+      const config = getAiConfig();
+      const res = await generateScientificIntuition(
+        sec.title,
+        sec.paragraphs || [],
+        config.provider,
+        config.apiKey,
+        config.model,
+        config.ollamaUrl
+      );
+
+      if (activePaper) {
+        if (!activePaper.companionData) activePaper.companionData = {};
+        const prev = activePaper.companionData[sec.id] || {
+          intuition: res,
+          terminology: [],
+          socraticQuestions: []
+        };
+        activePaper.companionData[sec.id] = {
+          ...prev,
+          intuition: {
+            title: res.title,
+            tag: res.tag,
+            content: res.content
+          }
+        };
+        activePaper = { ...activePaper };
+      }
+      refreshCacheStats();
+      setTimeout(() => {
+        companionRef?.focusCard('intuition');
+      }, 80);
+    } catch (e) {
+      console.warn('生成白話科學直覺失敗:', e);
+    } finally {
+      loadingIntuitionId = null;
+    }
+  }
+
+  async function generateSyntaxForSection(sec: ChapterSection, selectedText?: string) {
+    if (!sec || !sec.id) return;
+    loadingSyntaxId = sec.id;
+    try {
+      const config = getAiConfig();
+      const textToAnalyze = (selectedText && selectedText.trim().length > 10)
+        ? selectedText.trim()
+        : (sec.paragraphs ? sec.paragraphs.join(' ') : sec.title);
+
+      const res = await generateSentenceDeconstruction(
+        textToAnalyze,
+        sec.title,
+        config.provider,
+        config.apiKey,
+        config.model,
+        config.ollamaUrl
+      );
+
+      if (activePaper) {
+        if (!activePaper.companionData) activePaper.companionData = {};
+        const prev = activePaper.companionData[sec.id] || {
+          intuition: { title: `關於「${sec.title}」的核心探討`, tag: 'Insight', content: [] },
+          terminology: [],
+          socraticQuestions: []
+        };
+        activePaper.companionData[sec.id] = {
+          ...prev,
+          syntaxTree: {
+            line: res.line,
+            snippet: res.snippet,
+            svo: res.svo
+          }
+        };
+
+        // 同步更新章節原型的 svoSentence，讓雙語閱讀器內文也直接呈現彩色結構標籤
+        const svoItem = res.svo.find(item => item.role.includes('主幹') || item.role.includes('S-V-O')) || res.svo[0];
+        const modItem = res.svo.find(item => item.role.includes('方式') || item.role.includes('條件') || item.role.includes('修飾') || item.role.includes('平行')) || res.svo[1];
+        const purItem = res.svo.find(item => item.role.includes('目的') || item.role.includes('結果')) || res.svo[2];
+
+        sec.svoSentence = {
+          sentence: res.snippet,
+          svoBadge: 'S-V-O 認知拆解',
+          subjectVerbObject: {
+            title: svoItem ? svoItem.role : '[主幹 S-V-O]',
+            en: svoItem ? svoItem.text : res.snippet,
+            zh: svoItem ? svoItem.zh : '核心論述主幹'
+          },
+          modifier: {
+            title: modItem ? modItem.role : '[方式與條件]',
+            en: modItem ? modItem.text : '',
+            zh: modItem ? modItem.zh : '前提條件與限定修飾'
+          },
+          purpose: {
+            title: purItem ? purItem.role : '[目的與結果]',
+            en: purItem ? purItem.text : '',
+            zh: purItem ? purItem.zh : '預期達致之效應與推論'
+          }
+        };
+
+        activePaper = { ...activePaper };
+      }
+      refreshCacheStats();
+      setTimeout(() => {
+        companionRef?.focusCard('syntax');
+      }, 80);
+    } catch (e) {
+      console.warn('生成長難句拆解失敗:', e);
+    } finally {
+      loadingSyntaxId = null;
+    }
+  }
+
+  async function generateTerminologyForSection(sec: ChapterSection) {
+    if (!sec || !sec.id) return;
+    loadingTerminologyId = sec.id;
+    try {
+      const config = getAiConfig();
+      const res = await generateTerminologyAlignment(
+        sec.title,
+        sec.paragraphs || [],
+        config.provider,
+        config.apiKey,
+        config.model,
+        config.ollamaUrl
+      );
+
+      if (activePaper) {
+        if (!activePaper.companionData) activePaper.companionData = {};
+        const prev = activePaper.companionData[sec.id] || {
+          intuition: { title: `關於「${sec.title}」的核心探討`, tag: 'Insight', content: [] },
+          terminology: [],
+          socraticQuestions: []
+        };
+        activePaper.companionData[sec.id] = {
+          ...prev,
+          terminology: res.terms
+        };
+        activePaper = { ...activePaper };
+      }
+      refreshCacheStats();
+      setTimeout(() => {
+        companionRef?.focusCard('terminology');
+      }, 80);
+    } catch (e) {
+      console.warn('生成術語對齊失敗:', e);
+    } finally {
+      loadingTerminologyId = null;
+    }
+  }
+
+  function handleCompanionTriggerGenerate(e: CustomEvent<{ type: string }>) {
+    const { type } = e.detail;
+    if (!activePaper) return;
+    const allSecs = flattenSections(activePaper.sections);
+    const sec = allSecs.find(s => s.id === activeSectionId) || allSecs[0];
+    if (!sec) return;
+
+    if (type === 'intuition') {
+      generateIntuitionForSection(sec);
+    } else if (type === 'syntax') {
+      generateSyntaxForSection(sec);
+    } else if (type === 'terminology') {
+      generateTerminologyForSection(sec);
+    }
+  }
+
+  function handleReaderAction(event: CustomEvent<{ action: string; payload?: any; section?: ChapterSection; selectedText?: string }>) {
+    const { action, payload, section, selectedText } = event.detail;
+
+    // 找出對應章節
+    let targetSec = section;
+    if (!targetSec && activePaper) {
+      const allSecs = flattenSections(activePaper.sections);
+      targetSec = allSecs.find(s => s.id === (payload || activeSectionId));
+    }
+
+    // 關鍵同步：確保伴讀卡片、載入骨架態與當前章節正確聯動切換
+    if (targetSec && activeSectionId !== targetSec.id) {
+      activeSectionId = targetSec.id;
+    }
+
+    const secTitle = targetSec ? targetSec.title : activeSectionId;
+
     if (action === 'explainTerm') {
       activeContextText = `術語解析 · ${payload}`;
     } else if (action === 'showIntuition') {
-      activeContextText = `${activeSectionId} · 白話科研直覺`;
+      activeContextText = `§ ${secTitle} · 白話科研直覺`;
+      if (targetSec) {
+        const hasValidIntuition =
+          activePaper?.companionData?.[targetSec.id]?.intuition &&
+          activePaper.companionData[targetSec.id].intuition.tag !== '待 AI 解析' &&
+          !activePaper.companionData[targetSec.id].intuition.title.includes('的核心探討');
+        if (hasValidIntuition) {
+          companionRef?.focusCard('intuition');
+        } else {
+          generateIntuitionForSection(targetSec);
+        }
+      }
     } else if (action === 'showSyntax') {
-      activeContextText = `${activeSectionId} · 長難句語法拆解`;
+      activeContextText = `§ ${secTitle} · 長難句語法拆解`;
+      if (targetSec) {
+        const hasSyntax = activePaper?.companionData?.[targetSec.id]?.syntaxTree;
+        if (hasSyntax && !selectedText) {
+          companionRef?.focusCard('syntax');
+        } else {
+          generateSyntaxForSection(targetSec, selectedText);
+        }
+      }
     } else if (action === 'showTerminology') {
-      activeContextText = `${activeSectionId} · 關鍵術語對齊`;
+      activeContextText = `§ ${secTitle} · 關鍵術語對齊`;
+      if (targetSec) {
+        const terms = activePaper?.companionData?.[targetSec.id]?.terminology;
+        const hasTerms = terms && terms.length > 1;
+        if (hasTerms) {
+          companionRef?.focusCard('terminology');
+        } else {
+          generateTerminologyForSection(targetSec);
+        }
+      }
     } else if (action === 'addNote') {
       const noteTitle = payload || activeContextText;
       const newNote = {
@@ -637,6 +869,9 @@
               paper={activePaper}
               {activeSectionId}
               {readingMode}
+              {loadingIntuitionId}
+              {loadingSyntaxId}
+              {loadingTerminologyId}
               on:selectSection={handleSelectSection}
               on:readerAction={handleReaderAction}
               on:sectionDwell={handleSectionDwell}
@@ -653,6 +888,10 @@
               bind:this={companionRef}
               {activeContextText}
               companionData={activePaper?.companionData[activeSectionId]}
+              isGeneratingIntuition={loadingIntuitionId === activeSectionId}
+              isGeneratingSyntax={loadingSyntaxId === activeSectionId}
+              isGeneratingTerminology={loadingTerminologyId === activeSectionId}
+              on:triggerGenerate={handleCompanionTriggerGenerate}
               on:askQuestion={handleAskQuestion}
               on:quickAction={handleQuickCompanionAction}
               on:openSettings={() => isByokOpen = true}

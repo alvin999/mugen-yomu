@@ -160,19 +160,20 @@
 <svelte:window on:keydown={handleKeydown} />
 
 {#if isOpen}
-  <!-- Backdrop -->
-  <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 select-none"
-    on:click={close}
-    role="button"
-    tabindex="0"
-    aria-label="點擊關閉筆記面板"
-    on:keydown={(e) => e.key === 'Escape' && close()}
-  >
+  <div class="fixed inset-0 z-50 flex items-center justify-center p-4 select-none">
+    <!-- Backdrop -->
+    <div
+      class="fixed inset-0 bg-black/75 backdrop-blur-sm cursor-default"
+      on:click={close}
+      role="button"
+      tabindex="-1"
+      aria-label="點擊關閉筆記面板"
+      on:keydown={(e) => (e.key === 'Escape' || e.key === 'Enter') && close()}
+    ></div>
+
     <!-- Modal Container (select-text enabled for reading and copying) -->
     <div
-      class="w-full max-w-3xl max-h-[88vh] bg-[#1d2021] border border-[#504945] rounded-xl shadow-2xl overflow-hidden flex flex-col select-text transition-all duration-200"
-      on:click|stopPropagation
+      class="relative w-full max-w-3xl max-h-[88vh] bg-[#1d2021] border border-[#504945] rounded-xl shadow-2xl overflow-hidden flex flex-col select-text transition-all duration-200 z-10"
       role="dialog"
       aria-modal="true"
       tabindex="-1"

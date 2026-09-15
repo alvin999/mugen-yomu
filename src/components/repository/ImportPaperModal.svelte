@@ -259,12 +259,13 @@
 
             <!-- arXiv ID Input -->
             <div class="flex flex-col gap-1.5">
-              <label class="font-mono text-[11px] text-[#d5c4a1] flex items-center justify-between">
+              <label for="import-arxiv-input" class="font-mono text-[11px] text-[#d5c4a1] flex items-center justify-between">
                 <span>arXiv 論文編號或網址</span>
                 <span class="text-[#a89984]">支援格式如 1706.03762 或 https://arxiv.org/abs/...</span>
               </label>
               <div class="flex items-center gap-2">
                 <input
+                  id="import-arxiv-input"
                   class="flex-1 bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] px-3 py-2 rounded-lg focus:outline-none focus:border-[#fe8019] font-mono text-xs placeholder:text-[#a89984]/50"
                   type="text"
                   placeholder="例如: 1706.03762"
@@ -378,9 +379,10 @@
 
             <!-- URL Input Bar -->
             <div class="flex flex-col gap-1.5">
-              <label class="font-mono text-[11px] text-[#d5c4a1]">文章或論文網址 (URL)</label>
+              <label for="import-web-url" class="font-mono text-[11px] text-[#d5c4a1]">文章或論文網址 (URL)</label>
               <div class="flex items-center gap-2">
                 <input
+                  id="import-web-url"
                   class="flex-1 bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] px-3 py-2 rounded-lg focus:outline-none focus:border-[#fe8019] font-mono text-xs placeholder:text-[#a89984]/50"
                   type="url"
                   placeholder="https://transformer-circuits.pub/... 或 https://arxiv.org/html/..."
@@ -581,8 +583,9 @@
         {:else if activeTab === 'paste'}
           <div class="flex flex-col gap-3">
             <div class="flex flex-col gap-1">
-              <label class="font-mono text-[11px] text-[#d5c4a1]">文獻標題 (Title)</label>
+              <label for="import-paste-title" class="font-mono text-[11px] text-[#d5c4a1]">文獻標題 (Title)</label>
               <input
+                id="import-paste-title"
                 class="w-full bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] px-3 py-2 rounded-lg focus:outline-none focus:border-[#fe8019] text-xs"
                 type="text"
                 placeholder="例如：Self-Attention Mechanism Explained"
@@ -592,10 +595,11 @@
 
             <div class="flex flex-col gap-1">
               <div class="flex items-center justify-between">
-                <label class="font-mono text-[11px] text-[#d5c4a1]">正文內容或 Markdown</label>
+                <label for="import-paste-content" class="font-mono text-[11px] text-[#d5c4a1]">正文內容或 Markdown</label>
                 <span class="font-mono text-[10px] text-[#a89984]">支援 # 1. Intro, ## 2. Details 分段</span>
               </div>
               <textarea
+                id="import-paste-content"
                 class="w-full h-44 bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] p-3 rounded-lg focus:outline-none focus:border-[#fe8019] font-mono text-xs leading-relaxed resize-none placeholder:text-[#a89984]/50"
                 placeholder="# 1. Introduction&#10;Deep learning has evolved rapidly...&#10;&#10;## 2. Methodology&#10;We propose a novel framework..."
                 bind:value={pasteContent}

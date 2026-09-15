@@ -54,12 +54,21 @@
 </script>
 
 {#if isOpen}
-  <!-- Drawer Backdrop -->
-  <div class="fixed inset-0 z-50 flex justify-start bg-black/60 backdrop-blur-sm select-none" on:click={close}>
+  <!-- Drawer Container -->
+  <div class="fixed inset-0 z-50 flex justify-start select-none">
+    <!-- Drawer Backdrop -->
+    <div
+      role="button"
+      tabindex="-1"
+      aria-label="關閉文獻庫側邊面板"
+      class="fixed inset-0 bg-black/60 backdrop-blur-sm cursor-default"
+      on:click={close}
+      on:keydown={(e) => (e.key === 'Escape' || e.key === 'Enter') && close()}
+    ></div>
+
     <!-- Slide-in Drawer -->
     <div
-      class="w-full max-w-md bg-[#1d2021] border-r border-[#3c3836] h-full shadow-2xl flex flex-col z-50"
-      on:click|stopPropagation
+      class="relative w-full max-w-md bg-[#1d2021] border-r border-[#3c3836] h-full shadow-2xl flex flex-col z-10"
     >
       <!-- Drawer Header -->
       <div class="p-4 bg-[#141617] border-b border-[#3c3836] flex items-center justify-between">
@@ -105,8 +114,11 @@
       <div class="flex-1 overflow-y-auto p-3 flex flex-col gap-2.5">
         {#each library as paper}
           <div
+            role="button"
+            tabindex="0"
             class="bg-[#282828] border rounded-xl p-3 flex flex-col gap-2 transition-all cursor-pointer hover:border-[#504945] {paper.id === activePaperId ? 'border-[#fe8019] shadow-[0_0_12px_rgba(254,128,25,0.2)] bg-[#32302f]' : 'border-[#3c3836]'}"
             on:click={() => handleSelectPaper(paper)}
+            on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleSelectPaper(paper)}
           >
             <div class="flex items-center justify-between">
               <!-- Type & Venue Badge -->

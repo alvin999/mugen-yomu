@@ -24,6 +24,11 @@
   let isTypingMap: Record<string, boolean> = {};
   let isSectionTranslating: boolean = false;
 
+  // 認知核心動作載入狀態 (按章節 ID 標記)
+  export let loadingIntuitionId: string | null = null;
+  export let loadingSyntaxId: string | null = null;
+  export let loadingTerminologyId: string | null = null;
+
   // Image Lightbox State
   let activeLightboxImg: string | null = null;
   let activeLightboxCaption: string = '';
@@ -68,6 +73,19 @@
 
   function triggerAction(actionName: string, payload?: any) {
     dispatch('readerAction', { action: actionName, payload });
+    if (activeSectionId) {
+      dispatch('sectionInteracted', { id: activeSectionId, action: actionName });
+    }
+  }
+
+  function triggerCognitiveAction(actionName: string, sec: ChapterSection) {
+    const selectedText = typeof window !== 'undefined' ? window.getSelection()?.toString().trim() || '' : '';
+    dispatch('readerAction', {
+      action: actionName,
+      section: sec,
+      selectedText,
+      payload: sec.id
+    });
     if (activeSectionId) {
       dispatch('sectionInteracted', { id: activeSectionId, action: actionName });
     }
@@ -690,27 +708,48 @@
             <!-- Inline Semantic Action Toolbar (Always rendered with stable height, highlighted on focus/hover to prevent CLS) -->
             <div class="mt-2 flex flex-wrap items-center gap-2 rounded-lg p-1.5 transition-all duration-200 {isFocused ? 'bg-[#282828] border border-[#3c3836] shadow-sm opacity-100' : 'bg-[#1d2021]/50 border border-[#3c3836]/30 opacity-60 hover:opacity-100'}">
               <button
-                class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#fabd2f] border border-[#fabd2f]/30 px-2.5 py-1 rounded text-xs font-medium transition-colors"
-                on:click|stopPropagation={() => triggerAction('showIntuition')}
+                class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#fabd2f] border border-[#fabd2f]/30 px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
+                disabled={loadingIntuitionId === sec.id}
+                on:click|stopPropagation={() => triggerCognitiveAction('showIntuition', sec)}
+                title="深度生成或檢視本節白話科學直覺"
               >
-                <span class="material-symbols-outlined text-[14px] text-[#fabd2f]">lightbulb</span>
-                <span>白話科學直覺</span>
+                {#if loadingIntuitionId === sec.id}
+                  <span class="material-symbols-outlined text-[14px] text-[#fabd2f] animate-spin">sync</span>
+                  <span>直覺推導中...</span>
+                {:else}
+                  <span class="material-symbols-outlined text-[14px] text-[#fabd2f]">lightbulb</span>
+                  <span>白話科學直覺</span>
+                {/if}
               </button>
 
               <button
-                class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#8ec07c] border border-[#8ec07c]/30 px-2.5 py-1 rounded text-xs font-medium transition-colors"
-                on:click|stopPropagation={() => triggerAction('showSyntax')}
+                class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#8ec07c] border border-[#8ec07c]/30 px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
+                disabled={loadingSyntaxId === sec.id}
+                on:click|stopPropagation={() => triggerCognitiveAction('showSyntax', sec)}
+                title="可先在內文反白長難句，或點擊由 AI 自動拆解本節代表句"
               >
-                <span class="material-symbols-outlined text-[14px] text-[#8ec07c]">account_tree</span>
-                <span>句構拆解</span>
+                {#if loadingSyntaxId === sec.id}
+                  <span class="material-symbols-outlined text-[14px] text-[#8ec07c] animate-spin">sync</span>
+                  <span>句構拆解中...</span>
+                {:else}
+                  <span class="material-symbols-outlined text-[14px] text-[#8ec07c]">account_tree</span>
+                  <span>句構拆解</span>
+                {/if}
               </button>
 
               <button
-                class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#ebdbb2] border border-[#504945] px-2.5 py-1 rounded text-xs font-medium transition-colors"
-                on:click|stopPropagation={() => triggerAction('showTerminology')}
+                class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#ebdbb2] border border-[#504945] px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
+                disabled={loadingTerminologyId === sec.id}
+                on:click|stopPropagation={() => triggerCognitiveAction('showTerminology', sec)}
+                title="萃取並對齊本節關鍵學術術語與台灣繁體名詞"
               >
-                <span class="material-symbols-outlined text-[14px] text-[#fe8019]">menu_book</span>
-                <span>學術術語對齊</span>
+                {#if loadingTerminologyId === sec.id}
+                  <span class="material-symbols-outlined text-[14px] text-[#fe8019] animate-spin">sync</span>
+                  <span>術語對齊中...</span>
+                {:else}
+                  <span class="material-symbols-outlined text-[14px] text-[#fe8019]">menu_book</span>
+                  <span>學術術語對齊</span>
+                {/if}
               </button>
 
               <button

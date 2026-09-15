@@ -5,6 +5,9 @@
 
   export let activeContextText: string = '§ 3.2.1 Scaled Dot-Product';
   export let companionData: SectionCompanionData | undefined = undefined;
+  export let isGeneratingIntuition: boolean = false;
+  export let isGeneratingSyntax: boolean = false;
+  export let isGeneratingTerminology: boolean = false;
 
   const dispatch = createEventDispatcher();
 
@@ -14,6 +17,32 @@
   let ollamaUrl: string = 'http://localhost:11434';
   let activeModel: string = 'llama-3.3-70b-versatile';
   let activeProvider: string = 'groq';
+
+  // 卡片滾動與高亮聚焦狀態
+  let intuitionCardEl: HTMLElement | null = null;
+  let syntaxCardEl: HTMLElement | null = null;
+  let terminologyCardEl: HTMLElement | null = null;
+  let highlightedCard: 'intuition' | 'syntax' | 'terminology' | null = null;
+  let highlightTimer: any = null;
+
+  export function focusCard(cardType: 'intuition' | 'syntax' | 'terminology') {
+    highlightedCard = cardType;
+    if (highlightTimer) clearTimeout(highlightTimer);
+    highlightTimer = setTimeout(() => {
+      highlightedCard = null;
+    }, 2400);
+
+    const targetEl =
+      cardType === 'intuition'
+        ? intuitionCardEl
+        : cardType === 'syntax'
+          ? syntaxCardEl
+          : terminologyCardEl;
+
+    if (targetEl) {
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
 
   interface MessageItem {
     id: string;
@@ -65,6 +94,42 @@
       answerSummary: '超參數通常基於方差歸一化考量，旨在確保正向傳播時數值穩定，避免推入非線性函數的飽和區。'
     }
   ];
+
+  // 判斷是否為尚未經 AI 解析之初始預設範本
+  $: isPlaceholderIntuition =
+    !companionData?.intuition ||
+    companionData.intuition.title.includes('的核心探討') ||
+    companionData.intuition.tag === '待 AI 解析' ||
+    (companionData.intuition.content &&
+      companionData.intuition.content.length > 0 &&
+      (companionData.intuition.content[0].includes('重點闡述了') ||
+        companionData.intuition.content[0].includes('尚未進行')));
+
+  $: isPlaceholderTerminology =
+    !companionData?.terminology ||
+    companionData.terminology.length === 0 ||
+    (companionData.terminology.length === 1 &&
+      (companionData.terminology[0].explanation.includes('關鍵學術概念與定義') ||
+        companionData.terminology[0].explanation.includes('自動萃取本節專有名詞')));
+
+  // 萃取中文對照名稱（若資料無獨立 zh 欄位則由釋義標點解析）
+  function extractZhTerm(term: { term: string; zh?: string; explanation: string }): string | null {
+    if (term.zh && term.zh.trim()) return term.zh.trim();
+    const match = term.explanation.match(/^([^：:()（）]{2,20})[：:]\s*(.*)$/);
+    if (match) {
+      return match[1].trim();
+    }
+    return null;
+  }
+
+  // 萃取清理後的學術釋義內容
+  function extractCleanExp(term: { term: string; zh?: string; explanation: string }, zhTerm: string | null): string {
+    if (!zhTerm) return term.explanation;
+    if (term.explanation.startsWith(zhTerm + '：') || term.explanation.startsWith(zhTerm + ':')) {
+      return term.explanation.slice(zhTerm.length + 1).trim();
+    }
+    return term.explanation;
+  }
 
   async function sendQuestion(qText: string, presetAnswer?: string) {
     if (!qText.trim()) return;
@@ -185,18 +250,60 @@
     </div>
 
     <!-- 1. Scientific Intuition Card -->
-    {#if companionData?.intuition}
-      <div class="bg-[#282828] border border-[#3c3836] rounded-xl p-3 flex flex-col gap-2 shadow-sm">
-        <div class="flex items-center justify-between">
-          <span class="font-mono text-[10px] text-[#fabd2f] font-bold uppercase tracking-wider flex items-center gap-1">
-            <span class="material-symbols-outlined text-[14px] text-[#fabd2f]">psychology</span>
-            白話科研直覺 (Intuition)
-          </span>
-          <span class="font-mono text-[9px] bg-[#fabd2f]/15 border border-[#fabd2f]/30 text-[#fabd2f] px-1.5 py-0.5 rounded font-medium">
-            {companionData.intuition.tag}
-          </span>
+    <div
+      id="companion-intuition-card"
+      bind:this={intuitionCardEl}
+      class="bg-[#282828] border {highlightedCard === 'intuition' ? 'border-[#fabd2f] ring-2 ring-[#fabd2f]/40 shadow-lg' : 'border-[#3c3836]'} rounded-xl p-3 flex flex-col gap-2.5 shadow-sm transition-all duration-300"
+    >
+      <div class="flex items-center justify-between">
+        <span class="font-mono text-[10px] text-[#fabd2f] font-bold uppercase tracking-wider flex items-center gap-1">
+          <span class="material-symbols-outlined text-[14px] text-[#fabd2f]">psychology</span>
+          白話科研直覺 (Intuition)
+        </span>
+        <div class="flex items-center gap-2">
+          {#if companionData?.intuition?.tag}
+            <span class="font-mono text-[9px] bg-[#fabd2f]/15 border border-[#fabd2f]/30 text-[#fabd2f] px-1.5 py-0.5 rounded font-medium">
+              {isPlaceholderIntuition ? '待 AI 推導' : companionData.intuition.tag}
+            </span>
+          {/if}
+          <button
+            class="text-[#a89984] hover:text-[#fabd2f] text-[11px] flex items-center gap-0.5 cursor-pointer disabled:opacity-50 transition-colors"
+            disabled={isGeneratingIntuition}
+            on:click={() => dispatch('triggerGenerate', { type: 'intuition' })}
+            title="以 AI 深度推導本節物理/工程科研直覺"
+          >
+            <span class="material-symbols-outlined text-[13px] {isGeneratingIntuition ? 'animate-spin text-[#fabd2f]' : ''}">refresh</span>
+            <span class="text-[10px]">{isGeneratingIntuition ? '推導中...' : (isPlaceholderIntuition ? '啟動 AI' : '重新剖析')}</span>
+          </button>
         </div>
+      </div>
 
+      {#if isGeneratingIntuition}
+        <div class="space-y-2 py-1 animate-pulse">
+          <div class="h-3.5 bg-[#3c3836] rounded w-3/5"></div>
+          <div class="h-14 bg-[#1d2021] rounded w-full"></div>
+        </div>
+      {:else if isPlaceholderIntuition}
+        <div class="bg-[#1d2021] border border-[#fabd2f]/30 rounded-lg p-2.5 flex flex-col gap-2">
+          <div class="flex items-start gap-2">
+            <span class="material-symbols-outlined text-[16px] text-[#fabd2f] shrink-0 mt-0.5">auto_awesome</span>
+            <div class="flex flex-col gap-0.5">
+              <h4 class="text-xs font-semibold text-[#ebdbb2]">本節尚未生成深度科研直覺</h4>
+              <p class="text-[11px] text-[#d5c4a1] leading-relaxed">
+                目前僅為大綱預覽。點擊下方按鈕，由 AI 深入論證本節「為什麼要這樣設計、解決了傳統架構的何種瓶頸與物理直覺」。
+              </p>
+            </div>
+          </div>
+          <button
+            class="w-full flex items-center justify-center gap-1.5 bg-[#32302f] hover:bg-[#fabd2f] text-[#fabd2f] hover:text-[#1d2021] border border-[#fabd2f]/40 px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer shadow-sm"
+            disabled={isGeneratingIntuition}
+            on:click={() => dispatch('triggerGenerate', { type: 'intuition' })}
+          >
+            <span class="material-symbols-outlined text-[14px]">psychology</span>
+            <span>✨ 點擊由 AI 生成白話科研直覺</span>
+          </button>
+        </div>
+      {:else if companionData?.intuition}
         <h4 class="text-xs font-semibold text-[#ebdbb2]">
           {companionData.intuition.title}
         </h4>
@@ -206,20 +313,55 @@
             <p>{p}</p>
           {/each}
         </div>
-      </div>
-    {/if}
+      {:else}
+        <div class="bg-[#1d2021] border border-[#fabd2f]/30 rounded-lg p-2.5 flex flex-col gap-2">
+          <p class="text-xs text-[#a89984]">本節尚未生成白話科研直覺卡片。</p>
+          <button
+            class="flex items-center justify-center gap-1.5 bg-[#fabd2f] hover:bg-[#fe8019] text-[#1d2021] font-semibold px-3 py-1.5 rounded-lg text-xs transition-colors shadow-sm cursor-pointer"
+            disabled={isGeneratingIntuition}
+            on:click={() => dispatch('triggerGenerate', { type: 'intuition' })}
+          >
+            <span class="material-symbols-outlined text-[14px]">lightbulb</span>
+            <span>✨ 點擊由 AI 生成本節科研直覺</span>
+          </button>
+        </div>
+      {/if}
+    </div>
 
     <!-- 2. Long Sentence Structural Breakdown (Syntax Tree) -->
-    {#if companionData?.syntaxTree}
-      <div class="bg-[#282828] border border-[#3c3836] rounded-xl p-3 flex flex-col gap-2 shadow-sm">
-        <div class="flex items-center justify-between">
-          <span class="font-mono text-[10px] text-[#8ec07c] font-bold uppercase tracking-wider flex items-center gap-1">
-            <span class="material-symbols-outlined text-[14px] text-[#8ec07c]">account_tree</span>
-            長難句語法拆解 (Syntax Tree)
-          </span>
-          <span class="font-mono text-[10px] text-[#a89984]">{companionData.syntaxTree.line}</span>
+    <div
+      id="companion-syntax-card"
+      bind:this={syntaxCardEl}
+      class="bg-[#282828] border {highlightedCard === 'syntax' ? 'border-[#8ec07c] ring-2 ring-[#8ec07c]/40 shadow-lg' : 'border-[#3c3836]'} rounded-xl p-3 flex flex-col gap-2 shadow-sm transition-all duration-300"
+    >
+      <div class="flex items-center justify-between">
+        <span class="font-mono text-[10px] text-[#8ec07c] font-bold uppercase tracking-wider flex items-center gap-1">
+          <span class="material-symbols-outlined text-[14px] text-[#8ec07c]">account_tree</span>
+          長難句語法拆解 (Syntax Tree)
+        </span>
+        <div class="flex items-center gap-2">
+          {#if companionData?.syntaxTree?.line}
+            <span class="font-mono text-[10px] text-[#a89984]">{companionData.syntaxTree.line}</span>
+          {/if}
+          <button
+            class="text-[#a89984] hover:text-[#8ec07c] text-[11px] flex items-center gap-0.5 cursor-pointer disabled:opacity-50 transition-colors"
+            disabled={isGeneratingSyntax}
+            on:click={() => dispatch('triggerGenerate', { type: 'syntax' })}
+            title="以 AI 重新拆解本節代表性長難句"
+          >
+            <span class="material-symbols-outlined text-[13px] {isGeneratingSyntax ? 'animate-spin text-[#8ec07c]' : ''}">refresh</span>
+            <span class="text-[10px]">{isGeneratingSyntax ? '拆解中...' : '重新拆解'}</span>
+          </button>
         </div>
+      </div>
 
+      {#if isGeneratingSyntax}
+        <div class="space-y-2 py-1 animate-pulse">
+          <div class="h-3 bg-[#3c3836] rounded w-2/3"></div>
+          <div class="h-8 bg-[#1d2021] rounded w-full"></div>
+          <div class="h-6 bg-[#32302f] rounded w-full"></div>
+        </div>
+      {:else if companionData?.syntaxTree && companionData.syntaxTree.svo && companionData.syntaxTree.svo.length > 0}
         <div class="font-mono text-[10px] text-[#a89984] bg-[#1d2021] border border-[#3c3836] p-2 rounded leading-snug">
           "{companionData.syntaxTree.snippet}"
         </div>
@@ -235,26 +377,117 @@
             </div>
           {/each}
         </div>
-      </div>
-    {/if}
+      {:else}
+        <p class="text-xs text-[#a89984]">本節長難句尚未剖析。您可反白選取內文中的長難句，或點選下方按鈕自動拆解。</p>
+        <button
+          class="flex items-center justify-center gap-1.5 bg-[#32302f] hover:bg-[#3c3836] text-[#8ec07c] border border-[#8ec07c]/30 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+          disabled={isGeneratingSyntax}
+          on:click={() => dispatch('triggerGenerate', { type: 'syntax' })}
+        >
+          <span class="material-symbols-outlined text-[14px]">psychology</span>
+          <span>✨ 點擊由 AI 拆解本節長難句 (SVO)</span>
+        </button>
+      {/if}
+    </div>
 
     <!-- 3. Precise Academic Term Alignment -->
-    {#if companionData?.terminology && companionData.terminology.length > 0}
-      <div class="bg-[#282828] border border-[#3c3836] rounded-xl p-3 flex flex-col gap-2 shadow-sm">
+    <div
+      id="companion-terminology-card"
+      bind:this={terminologyCardEl}
+      class="bg-[#282828] border {highlightedCard === 'terminology' ? 'border-[#83a598] ring-2 ring-[#83a598]/40 shadow-lg' : 'border-[#3c3836]'} rounded-xl p-3 flex flex-col gap-2.5 shadow-sm transition-all duration-300"
+    >
+      <div class="flex items-center justify-between">
         <span class="font-mono text-[10px] text-[#a89984] uppercase tracking-wider flex items-center gap-1 font-bold">
           <span class="material-symbols-outlined text-[14px] text-[#83a598]">translate</span>
           學術術語精準對齊 (Terminology)
         </span>
-        <div class="flex flex-col gap-1.5">
+        <button
+          class="text-[#a89984] hover:text-[#83a598] text-[11px] flex items-center gap-0.5 cursor-pointer disabled:opacity-50 transition-colors"
+          disabled={isGeneratingTerminology}
+          on:click={() => dispatch('triggerGenerate', { type: 'terminology' })}
+          title="以 AI 重新掃描並萃取本節前沿學術專有名詞"
+        >
+          <span class="material-symbols-outlined text-[13px] {isGeneratingTerminology ? 'animate-spin text-[#83a598]' : ''}">refresh</span>
+          <span class="text-[10px]">{isGeneratingTerminology ? '對齊中...' : (isPlaceholderTerminology ? '啟動對齊' : '重新對齊')}</span>
+        </button>
+      </div>
+
+      {#if isGeneratingTerminology}
+        <div class="space-y-2 py-1 animate-pulse">
+          <div class="h-12 bg-[#1d2021] rounded-lg w-full"></div>
+          <div class="h-12 bg-[#1d2021] rounded-lg w-full"></div>
+        </div>
+      {:else if isPlaceholderTerminology}
+        <div class="bg-[#1d2021] border border-[#83a598]/30 rounded-lg p-2.5 flex flex-col gap-2">
+          <div class="flex items-start gap-2">
+            <span class="material-symbols-outlined text-[16px] text-[#83a598] shrink-0 mt-0.5">menu_book</span>
+            <div class="flex flex-col gap-0.5">
+              <h4 class="text-xs font-semibold text-[#ebdbb2]">尚未建立本節專有名詞對照</h4>
+              <p class="text-[11px] text-[#d5c4a1] leading-relaxed">
+                點擊下方按鈕，由 AI 自動掃描段落，萃取關鍵學術專有名詞並嚴格對齊台灣繁體標準釋義。
+              </p>
+            </div>
+          </div>
+          <button
+            class="w-full flex items-center justify-center gap-1.5 bg-[#32302f] hover:bg-[#83a598] text-[#83a598] hover:text-[#1d2021] border border-[#83a598]/40 px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer shadow-sm"
+            disabled={isGeneratingTerminology}
+            on:click={() => dispatch('triggerGenerate', { type: 'terminology' })}
+          >
+            <span class="material-symbols-outlined text-[14px]">translate</span>
+            <span>✨ 點擊由 AI 萃取並對齊學術術語</span>
+          </button>
+        </div>
+      {:else if companionData?.terminology && companionData.terminology.length > 0}
+        <div class="flex flex-col gap-2">
           {#each companionData.terminology as term}
-            <div class="flex items-center justify-between bg-[#1d2021] border border-[#3c3836] px-2 py-1.5 rounded text-xs">
-              <span class="text-[#ebdbb2] font-medium">{term.term}</span>
-              <span class="font-medium" style="color: {term.color}">{term.explanation}</span>
+            {@const zhTerm = extractZhTerm(term)}
+            {@const cleanExp = extractCleanExp(term, zhTerm)}
+            {@const termColor = term.color || '#fabd2f'}
+            <div class="flex flex-col gap-1.5 bg-[#1d2021] border border-[#3c3836] hover:border-[#504945] p-2.5 rounded-lg text-xs transition-colors">
+              <div class="flex items-baseline justify-between gap-2 flex-wrap">
+                <div class="flex items-baseline gap-1.5 flex-wrap">
+                  <!-- 原文英文術語 -->
+                  <span class="font-mono text-[#ebdbb2] font-semibold text-xs tracking-wide select-all">
+                    {term.term}
+                  </span>
+                  {#if zhTerm}
+                    <span class="text-[#a89984] text-[10px]">↔</span>
+                    <!-- 繁中學術對照 -->
+                    <span class="font-medium text-xs" style="color: {termColor}">
+                      {zhTerm}
+                    </span>
+                  {/if}
+                </div>
+                <span
+                  class="font-mono text-[9px] px-1.5 py-0.5 rounded border shrink-0 font-medium"
+                  style="color: {termColor}; border-color: {termColor}40; background-color: {termColor}15;"
+                >
+                  原文對照
+                </span>
+              </div>
+              {#if cleanExp}
+                <p
+                  class="text-[11px] leading-relaxed text-[#d5c4a1] break-words pl-2 border-l-2"
+                  style="border-color: {termColor};"
+                >
+                  {cleanExp}
+                </p>
+              {/if}
             </div>
           {/each}
         </div>
-      </div>
-    {/if}
+      {:else}
+        <p class="text-xs text-[#a89984]">尚未萃取本節專有名詞字典。</p>
+        <button
+          class="flex items-center justify-center gap-1.5 bg-[#32302f] hover:bg-[#83a598] text-[#83a598] hover:text-[#1d2021] border border-[#83a598]/30 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+          disabled={isGeneratingTerminology}
+          on:click={() => dispatch('triggerGenerate', { type: 'terminology' })}
+        >
+          <span class="material-symbols-outlined text-[14px]">menu_book</span>
+          <span>✨ 點擊萃取本節關鍵學術術語</span>
+        </button>
+      {/if}
+    </div>
 
     <!-- 4. Proactive Socratic Inquiries -->
     <div class="flex flex-col gap-1.5">
