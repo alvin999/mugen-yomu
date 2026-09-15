@@ -198,26 +198,28 @@
     }
   }
 
-  async function toggleParagraphTranslation(secId: string, pIndex: number, text: string) {
+  async function toggleParagraphTranslation(secId: string, pIndex: number, text: string, forceRetry: boolean = false) {
     const key = `${secId}_${pIndex}`;
     
     // 若正在打字機生成中，點擊可立即跳過打字動畫 (Instant Complete)
-    if (isTypingMap[key]) {
+    if (isTypingMap[key] && !forceRetry) {
       isTypingMap[key] = false;
       isTypingMap = { ...isTypingMap };
       return;
     }
 
-    if (showTranslationMap[key]) {
-      showTranslationMap[key] = false;
-      showTranslationMap = { ...showTranslationMap };
-      return;
-    }
-    if (paragraphTranslations[key]) {
-      showTranslationMap[key] = true;
-      showTranslationMap = { ...showTranslationMap };
-      dispatch('sectionInteracted', { id: secId, action: 'translate' });
-      return;
+    if (!forceRetry) {
+      if (showTranslationMap[key]) {
+        showTranslationMap[key] = false;
+        showTranslationMap = { ...showTranslationMap };
+        return;
+      }
+      if (paragraphTranslations[key] && !paragraphTranslations[key].startsWith('⚠️') && !paragraphTranslations[key].startsWith('翻譯連線異常')) {
+        showTranslationMap[key] = true;
+        showTranslationMap = { ...showTranslationMap };
+        dispatch('sectionInteracted', { id: secId, action: 'translate' });
+        return;
+      }
     }
 
     // 即刻展開卡片進入打字機串流模式，消除讀者空等感
@@ -563,6 +565,19 @@
                           <span class="inline-block w-2 h-4 bg-[#fabd2f] ml-1 animate-pulse align-middle select-none shadow-[0_0_8px_#fabd2f]"></span>
                         {/if}
                       </p>
+
+                      {#if (paragraphTranslations[key]?.startsWith('⚠️') || paragraphTranslations[key]?.startsWith('翻譯連線異常')) && !isTypingMap[key]}
+                        <div class="mt-2 pt-2 border-t border-[#3c3836] flex items-center justify-between gap-2">
+                          <button
+                            class="px-2.5 py-1 bg-[#fe8019] hover:bg-[#fe8019]/90 text-[#1d2021] font-bold rounded text-[11px] flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                            on:click|stopPropagation={() => toggleParagraphTranslation(sec.id, pIndex, para, true)}
+                          >
+                            <span class="material-symbols-outlined text-[13px]">sync</span>
+                            <span>重試此段翻譯</span>
+                          </button>
+                          <span class="text-[#a89984] text-[10px] font-mono">若頻率受限可於頂部 BYOK 切換模型</span>
+                        </div>
+                      {/if}
                     </div>
                   {/if}
                 </div>

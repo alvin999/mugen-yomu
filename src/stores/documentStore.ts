@@ -91,7 +91,7 @@ export const userManualDocument: PaperDocument = {
     'MUGEN YOMU Architecture Team*',
     'Cognitive Scholar Research Lab*'
   ],
-  venue: 'Official System Documentation · v2.4',
+  venue: 'Official System Documentation · BETA',
   arxivId: 'MUGEN-GUIDE-2026',
   citations: 'Interactive Spec',
   readingSpeedWpm: 240,

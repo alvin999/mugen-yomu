@@ -346,7 +346,7 @@
           LOCAL ARCHIVE
         {/if}
       </span>
-      <span class="font-mono text-[#d5c4a1] shrink-0">MUGEN v2.4</span>
+      <span class="font-mono text-[#fe8019] shrink-0">MUGEN BETA</span>
     </div>
   </div>
 </aside>

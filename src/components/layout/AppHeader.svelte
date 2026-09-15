@@ -51,8 +51,11 @@
       on:click={openRepository}
       title="開啟文獻庫"
     >
-      <div class="w-8 h-8 rounded bg-[#fe8019]/20 border border-[#fe8019]/60 flex items-center justify-center text-[#fe8019] font-bold text-base shadow-sm">
-        夢
+      <div
+        class="w-8 h-8 rounded-md bg-gradient-to-br from-[#d65d0e] to-[#9d0006] border border-[#fe8019]/60 ring-1 ring-inset ring-[#fbf1c7]/20 flex items-center justify-center text-[#fbf1c7] font-serif font-bold text-base shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.3),0_2px_4px_rgba(0,0,0,0.4)] select-none shrink-0"
+        title="MUGEN YOMU · 無限"
+      >
+        <span class="drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]">無</span>
       </div>
       <div class="flex flex-col">
         <span class="text-sm font-bold tracking-tight text-[#fe8019] leading-none">MUGEN YOMU</span>

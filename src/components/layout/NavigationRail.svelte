@@ -43,7 +43,7 @@
       {#if !isCollapsed}
         <span class="font-mono text-[10px] uppercase tracking-wider text-[#a89984] truncate">Cognitive Rail</span>
         <div class="flex items-center gap-1">
-          <span class="font-mono text-[10px] text-[#fabd2f] bg-[#282828] border border-[#504945] px-1 py-0.2 rounded font-medium">v2.4</span>
+          <span class="font-mono text-[10px] text-[#fe8019] bg-[#fe8019]/10 border border-[#fe8019]/40 px-1.5 py-0.5 rounded font-semibold tracking-wider">BETA</span>
           <button
             class="w-6 h-6 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828] transition-colors"
             on:click={toggleCollapse}

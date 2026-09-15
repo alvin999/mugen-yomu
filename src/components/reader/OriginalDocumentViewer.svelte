@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount, onDestroy } from 'svelte';
+  import { createEventDispatcher, onMount, onDestroy, tick } from 'svelte';
   import type { PaperDocument, ChapterSection } from '../../stores/documentStore';
   import { flattenSections } from '../../stores/readingStore';
   import {
@@ -11,6 +11,7 @@
     type MatchResult
   } from '../../services/pdfService';
   import type * as pdfjsLib from 'pdfjs-dist';
+  import katex from 'katex';
 
   export let paper: PaperDocument | null = null;
   export let mode: 'split' | 'drawer' = 'split';
@@ -22,13 +23,39 @@
   // PDF Document & Canvas State
   let pdfDoc: pdfjsLib.PDFDocumentProxy | null = null;
   let canvasElement: HTMLCanvasElement | null = null;
+  let textContainerRef: HTMLElement | null = null;
   let isLoadingPdf: boolean = false;
   let isRenderingPage: boolean = false;
   let renderError: string | null = null;
   let currentLoadedSource: string | null = null;
 
-  // Viewer Mode: 'canvas' (PDF.js 畫布引擎，支援即時跳頁與字串比對) | 'native' (備援 Iframe)
-  let viewerMode: 'canvas' | 'native' = 'canvas';
+  // Viewer Mode: 'canvas' (PDF.js 畫布) | 'text' (結構化原文對照備援) | 'native' (備援 Iframe)
+  let viewerMode: 'canvas' | 'text' | 'native' = 'canvas';
+
+  function renderMath(latex: string, displayMode: boolean = false): string {
+    if (!latex) return '';
+    try {
+      return katex.renderToString(latex, {
+        displayMode,
+        throwOnError: false
+      });
+    } catch {
+      return `<span class="text-[#fb4934] font-mono">${latex}</span>`;
+    }
+  }
+
+  function extractImageInfo(text: string): { url: string; alt: string } | null {
+    if (!text) return null;
+    const match = text.trim().match(/^!\[(.*?)\]\((https?:\/\/.*?)\)$/);
+    if (match) {
+      return { alt: match[1] || '學術圖表', url: match[2] };
+    }
+    const urlMatch = text.trim().match(/^(https?:\/\/.*\.(?:png|jpg|jpeg|svg|webp)(?:\?.*)?)$/i);
+    if (urlMatch) {
+      return { alt: '學術圖表', url: urlMatch[1] };
+    }
+    return null;
+  }
 
   // Local File States
   let localPdfBlobUrl: string | null = null;
@@ -87,6 +114,19 @@
     }
   }
 
+  // 若當前文章無 PDF（如純網頁專文），自動切換至結構化原文對照模式，絕不留空白畫布
+  $: if (!isPdf && viewerMode === 'canvas') {
+    viewerMode = 'text';
+  }
+
+  // 當處於結構化原文模式且章節焦點改變時，平滑捲動至目標章節
+  $: if (viewerMode === 'text' && activeSectionId && textContainerRef) {
+    const el = textContainerRef.querySelector(`#text-sec-${activeSectionId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
   // Synchronization Tracking State: 防止 currentPage 成為響應依賴，導致手動翻頁時被無限回彈
   let lastSyncedSectionId: string = '';
 
@@ -114,12 +154,18 @@
 
     try {
       let sourceToLoad: string | ArrayBuffer = localPdfArrayBuffer || detectedPdfUrl || '';
-      if (!sourceToLoad) return;
+      if (!sourceToLoad) {
+        viewerMode = 'text';
+        return;
+      }
 
       const loadedDoc = await loadPdf(sourceToLoad);
       pdfDoc = loadedDoc;
       totalPages = loadedDoc.numPages;
       viewerMode = 'canvas';
+
+      // 關鍵修復：等待 Svelte DOM 渲染完成，確保 canvasElement 確實已綁定掛載
+      await tick();
 
       // 載入完成後立即繪製當前頁面
       await triggerPageRender(currentPage);
@@ -127,13 +173,25 @@
       // 非同步在背景執行全文提取與「字串比對自動錨定」
       runStringMatchingPipeline();
     } catch (err: any) {
-      console.warn('PDF.js 畫布載入失敗，切換至原生瀏覽器內核模式:', err);
-      // 若因 CORS 限制無法以 Canvas 讀取遠端 PDF，自動降級為瀏覽器內核 Iframe
-      viewerMode = 'native';
-      renderError = `遠端來源受瀏覽器跨來源 (CORS) 限制：已自動切換至內核檢視器。拖放本機 PDF 即可開啟 100% 高精畫布與字串比對。`;
+      console.warn('PDF 載入失敗，自動降級為結構化原文對照模式:', err);
+      const errMsg = err?.message || '遠端 PDF 載入失敗（受網路逾時、跨來源 CORS 或伺服器安全限制）';
+      renderError = errMsg;
+      // 關鍵自動 Fallback：不再降級為容易被 X-Frame-Options 阻擋的 Iframe，而是自動切換為結構化原文模式，100% 保證左側視窗有內容！
+      viewerMode = 'text';
     } finally {
       isLoadingPdf = false;
     }
+  }
+
+  /**
+   * 使用者手動觸發重試載入 PDF
+   */
+  function handleRetry() {
+    currentLoadedSource = null;
+    renderError = null;
+    isLoadingPdf = true;
+    viewerMode = 'canvas';
+    initAndLoadPdf();
   }
 
   /**
@@ -177,7 +235,11 @@
    * 繪製指定頁面至 Canvas
    */
   async function triggerPageRender(pageToRender: number) {
-    if (!pdfDoc || !canvasElement || viewerMode !== 'canvas') return;
+    if (!pdfDoc || viewerMode !== 'canvas') return;
+    if (!canvasElement) {
+      await tick();
+      if (!canvasElement) return;
+    }
     isRenderingPage = true;
 
     try {
@@ -186,6 +248,7 @@
       await renderPageToCanvas(pdfDoc, validPage, canvasElement, zoomLevel);
     } catch (err: any) {
       console.warn('Canvas 繪圖異常:', err);
+      renderError = `Canvas 繪圖異常: ${err?.message || err}`;
     } finally {
       isRenderingPage = false;
     }
@@ -238,6 +301,16 @@
     dispatch('selectSection', { id: secId });
     const found = allSections.find(s => s.id === secId);
     if (found && found.page) {
+      jumpToPage(found.page);
+    }
+  }
+
+  function handleSectionClick(secId: string) {
+    lastSyncedSectionId = secId;
+    activeSectionId = secId;
+    dispatch('selectSection', { id: secId });
+    const found = allSections.find(s => s.id === secId);
+    if (found && found.page && viewerMode === 'canvas') {
       jumpToPage(found.page);
     }
   }
@@ -379,17 +452,51 @@
         </div>
       {/if}
 
-      <!-- Engine Switcher Toggle -->
+      <!-- Engine Switcher Pill (3-Mode: 畫布 / 原文 / 內核) -->
+      <div class="flex items-center bg-[#282828] border border-[#3c3836] rounded p-0.5 gap-0.5 text-[10px]">
+        <button
+          class="px-1.5 py-0.5 rounded transition-colors cursor-pointer flex items-center gap-0.5 {viewerMode === 'canvas' ? 'bg-[#fe8019] text-[#1d2021] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
+          on:click={() => {
+            viewerMode = 'canvas';
+            if (pdfDoc) triggerPageRender(currentPage);
+            else handleRetry();
+          }}
+          title="PDF.js 畫布高精對照模式"
+        >
+          <span class="material-symbols-outlined text-[11px]">brush</span>
+          <span>畫布</span>
+        </button>
+
+        <button
+          class="px-1.5 py-0.5 rounded transition-colors cursor-pointer flex items-center gap-0.5 {viewerMode === 'text' ? 'bg-[#fe8019] text-[#1d2021] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
+          on:click={() => viewerMode = 'text'}
+          title="結構化原文對照模式（100% 穩定，零空白）"
+        >
+          <span class="material-symbols-outlined text-[11px]">article</span>
+          <span>原文</span>
+        </button>
+
+        {#if activeBaseUrl}
+          <button
+            class="px-1.5 py-0.5 rounded transition-colors cursor-pointer flex items-center gap-0.5 {viewerMode === 'native' ? 'bg-[#fe8019] text-[#1d2021] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
+            on:click={() => viewerMode = 'native'}
+            title="瀏覽器內核 Iframe 檢視器"
+          >
+            <span class="material-symbols-outlined text-[11px]">web</span>
+            <span>內核</span>
+          </button>
+        {/if}
+      </div>
+
+      <!-- Single-Click Retry Button -->
       <button
-        class="px-1.5 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#504945] rounded text-[10px] text-[#a89984] hover:text-[#ebdbb2] flex items-center gap-1 transition-colors cursor-pointer"
-        on:click={() => {
-          viewerMode = viewerMode === 'canvas' ? 'native' : 'canvas';
-          if (viewerMode === 'canvas' && pdfDoc) triggerPageRender(currentPage);
-        }}
-        title="切換渲染引擎（畫布高精對照 / 瀏覽器內核 Iframe）"
+        class="px-2 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 rounded text-[11px] text-[#fabd2f] flex items-center gap-1 transition-colors cursor-pointer"
+        on:click={handleRetry}
+        disabled={isLoadingPdf}
+        title="重新載入 PDF 文件 (重試)"
       >
-        <span class="material-symbols-outlined text-[12px]">swap_horiz</span>
-        <span class="hidden md:inline">{viewerMode === 'canvas' ? '畫布' : '內核'}</span>
+        <span class="material-symbols-outlined text-[13px] {isLoadingPdf ? 'animate-spin text-[#fe8019]' : ''}">sync</span>
+        <span class="hidden sm:inline">重試</span>
       </button>
 
       <!-- Local PDF Upload Trigger -->
@@ -541,48 +648,254 @@
   {/if}
 
   <!-- Main Viewer Content Container -->
-  <div class="flex-1 w-full h-full bg-[#181a1b] relative overflow-auto flex justify-center items-start p-4">
-    {#if viewerMode === 'canvas'}
-      <!-- High-Fidelity PDF.js Canvas Renderer (Instant Page Turning & Full-text Anchoring) -->
-      <div class="relative flex flex-col items-center shadow-2xl rounded bg-white">
-        <canvas bind:this={canvasElement} class="block select-text max-w-full"></canvas>
+  <div class="flex-1 w-full h-full bg-[#181a1b] relative overflow-auto flex flex-col justify-start items-center">
+    {#if renderError && viewerMode !== 'canvas'}
+      <!-- Fallback / Error Alert Banner -->
+      <div class="w-full bg-[#fabd2f]/10 border-b border-[#fabd2f]/30 px-4 py-2.5 flex items-center justify-between gap-3 text-xs text-[#fabd2f] shrink-0">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="material-symbols-outlined text-[16px] text-[#fe8019] shrink-0">warning</span>
+          <span class="truncate">
+            <strong class="text-[#ebdbb2]">遠端 PDF 載入受阻：</strong>
+            <span class="text-[#d5c4a1] font-mono text-[11px]">{renderError}</span>
+            <span class="text-[#b8bb26] ml-1">（已自動備援至結構化原文對照）</span>
+          </span>
+        </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button
+            class="px-2.5 py-1 bg-[#fe8019] hover:bg-[#fe8019]/90 text-[#1d2021] font-bold rounded text-[11px] flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+            on:click={handleRetry}
+            disabled={isLoadingPdf}
+            title="重新嘗試下載並解析 PDF"
+          >
+            <span class="material-symbols-outlined text-[12px] {isLoadingPdf ? 'animate-spin' : ''}">sync</span>
+            <span>重試載入</span>
+          </button>
+          <button
+            class="px-2 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#504945] text-[#ebdbb2] rounded text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
+            on:click={handleOpenExternal}
+            title="在新分頁開啟"
+          >
+            <span class="material-symbols-outlined text-[12px]">open_in_new</span>
+            <span>另開原檔</span>
+          </button>
+        </div>
+      </div>
+    {/if}
 
-        {#if isRenderingPage || isLoadingPdf}
-          <div class="absolute inset-0 bg-[#141617]/50 backdrop-blur-[2px] flex flex-col items-center justify-center gap-2 text-xs font-mono text-[#fabd2f]">
-            <span class="material-symbols-outlined text-2xl animate-spin text-[#fe8019]">sync</span>
-            <span>{isLoadingPdf ? '載入文獻結構中...' : `繪製第 ${currentPage} 頁...`}</span>
+    {#if viewerMode === 'canvas'}
+      <div class="w-full h-full p-4 overflow-auto flex justify-center items-start">
+        {#if isLoadingPdf}
+          <div class="w-full h-full flex flex-col items-center justify-center gap-3 text-xs font-mono text-[#fabd2f]">
+            <span class="material-symbols-outlined text-3xl animate-spin text-[#fe8019]">sync</span>
+            <span class="text-sm font-semibold">正在載入 PDF 文獻結構...</span>
+            <span class="text-[#a89984] text-[11px]">透過本地代理避開 CORS 限制 · 請稍候</span>
+          </div>
+        {:else if pdfDoc}
+          <!-- High-Fidelity PDF.js Canvas Renderer -->
+          <div class="relative flex flex-col items-center shadow-2xl rounded bg-white">
+            <canvas bind:this={canvasElement} class="block select-text max-w-full"></canvas>
+
+            {#if isRenderingPage}
+              <div class="absolute inset-0 bg-[#141617]/50 backdrop-blur-[2px] flex flex-col items-center justify-center gap-2 text-xs font-mono text-[#fabd2f]">
+                <span class="material-symbols-outlined text-2xl animate-spin text-[#fe8019]">sync</span>
+                <span>繪製第 {currentPage} 頁...</span>
+              </div>
+            {/if}
+          </div>
+        {:else}
+          <!-- Canvas Loading Failed or No PDF State -->
+          <div class="w-full h-full flex flex-col items-center justify-center p-6 text-center gap-3">
+            <div class="w-14 h-14 rounded-full bg-[#282828] border border-[#fabd2f]/40 flex items-center justify-center text-[#fabd2f]">
+              <span class="material-symbols-outlined text-2xl">picture_as_pdf</span>
+            </div>
+            <div class="flex flex-col gap-1 max-w-md">
+              <h4 class="text-sm font-bold text-[#ebdbb2]">PDF 畫布未能成功載入</h4>
+              <p class="text-xs text-[#a89984] leading-relaxed">
+                {renderError || '遠端伺服器連線逾時或受跨來源安全性限制。您可以重試載入、切換為結構化原文對照，或拖入本機 PDF 原檔。'}
+              </p>
+            </div>
+            <div class="flex items-center gap-2 mt-2">
+              <button
+                class="px-3.5 py-1.5 bg-[#fe8019] text-[#1d2021] font-bold text-xs rounded-lg shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer"
+                on:click={handleRetry}
+              >
+                <span class="material-symbols-outlined text-[15px]">sync</span>
+                重新嘗試載入 PDF
+              </button>
+              <button
+                class="px-3.5 py-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#504945] text-[#ebdbb2] text-xs rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                on:click={() => viewerMode = 'text'}
+              >
+                <span class="material-symbols-outlined text-[15px] text-[#8ec07c]">article</span>
+                切換為結構化原文對照
+              </button>
+            </div>
           </div>
         {/if}
       </div>
+
+    {:else if viewerMode === 'text'}
+      <!-- Structured Original Text Reader Mode (100% Reliable, Zero Blank Window) -->
+      <div
+        bind:this={textContainerRef}
+        class="w-full h-full overflow-y-auto px-6 py-6 flex justify-center bg-[#181a1b] select-text"
+      >
+        <div class="w-full max-w-[680px] flex flex-col gap-6 pb-20">
+          <!-- Text Mode Header -->
+          <div class="flex items-center justify-between border-b border-[#3c3836] pb-3 text-xs font-mono text-[#a89984]">
+            <span class="flex items-center gap-1.5 text-[#8ec07c] font-semibold">
+              <span class="material-symbols-outlined text-[15px]">article</span>
+              結構化原文對照模式 (Original Text Mode)
+            </span>
+            <div class="flex items-center gap-2">
+              {#if isPdf}
+                <button
+                  class="text-[#fabd2f] hover:underline cursor-pointer flex items-center gap-1 text-[11px]"
+                  on:click={handleRetry}
+                >
+                  <span class="material-symbols-outlined text-[13px]">sync</span>
+                  嘗試載入 PDF 畫布
+                </button>
+              {/if}
+            </div>
+          </div>
+
+          {#if paper}
+            <!-- Paper Info Summary -->
+            <div class="flex flex-col gap-2 bg-[#282828] border border-[#3c3836] p-4 rounded-xl">
+              <h1 class="font-serif text-lg font-bold text-[#ebdbb2] leading-snug">
+                {paper.title}
+              </h1>
+              <div class="flex flex-wrap items-center gap-2 font-mono text-[11px] text-[#a89984]">
+                <span>{paper.venue || 'Academic Literature'}</span>
+                {#if paper.arxivId}
+                  <span>· {paper.arxivId}</span>
+                {/if}
+              </div>
+            </div>
+
+            <!-- Sections Stream -->
+            {#each allSections as sec (sec.id)}
+              {@const isFocused = sec.id === activeSectionId}
+              <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+              <section
+                id={`text-sec-${sec.id}`}
+                class="flex flex-col gap-3 rounded-xl p-4 transition-all duration-300 border cursor-pointer {
+                  isFocused
+                    ? 'bg-[#282828] border-[#fe8019]/60 shadow-[0_2px_16px_rgba(0,0,0,0.3)]'
+                    : 'bg-[#1d2021]/50 hover:bg-[#282828]/50 border-[#3c3836]/40'
+                }"
+                on:click={() => handleSectionClick(sec.id)}
+              >
+                <!-- Section Header -->
+                <div class="flex items-center justify-between gap-2 border-b border-[#3c3836]/60 pb-2">
+                  <h3 class="font-serif text-base font-bold text-[#ebdbb2] flex items-center gap-2 truncate">
+                    <span class="text-[#fe8019] font-mono text-sm">{sec.title.split(' ')[0] || sec.id}</span>
+                    <span class="truncate">{sec.title.replace(/^[0-9.]+\s*/, '')}</span>
+                  </h3>
+                  {#if sec.page}
+                    <span class="font-mono text-[10px] text-[#a89984] shrink-0">
+                      p.{sec.page}
+                    </span>
+                  {/if}
+                </div>
+
+                <!-- Paragraphs -->
+                <div class="flex flex-col gap-3">
+                  {#each sec.paragraphs as para}
+                    {@const imgInfo = extractImageInfo(para)}
+                    {#if imgInfo}
+                      <figure class="my-2 p-3 bg-[#141617] border border-[#3c3836] rounded-lg flex flex-col items-center gap-2">
+                        <img src={imgInfo.url} alt={imgInfo.alt} class="max-h-[300px] max-w-full rounded object-contain" />
+                        <figcaption class="text-[11px] font-mono text-[#a89984] text-center">{imgInfo.alt}</figcaption>
+                      </figure>
+                    {:else}
+                      <p class="font-serif text-[15px] text-[#d5c4a1] leading-[1.8] text-justify tracking-wide">
+                        {para}
+                      </p>
+                    {/if}
+                  {/each}
+                </div>
+
+                <!-- Formulas -->
+                {#if sec.formulas && sec.formulas.length > 0}
+                  <div class="flex flex-col gap-2 mt-1 pt-2 border-t border-[#3c3836]/40">
+                    {#each sec.formulas as formula}
+                      <div class="p-3 bg-[#141617] border border-[#3c3836] rounded-lg flex flex-col gap-1">
+                        <div class="flex items-center justify-between text-[11px] font-mono text-[#fabd2f]">
+                          <span>{formula.name || '核心公式推導'}</span>
+                          <span>{formula.number || ''}</span>
+                        </div>
+                        <div class="overflow-x-auto py-1 text-center text-[#ebdbb2]">
+                          {@html renderMath(formula.latexText, true)}
+                        </div>
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
+              </section>
+            {/each}
+          {:else}
+            <div class="text-center py-12 text-[#a89984] text-xs font-mono">
+              尚未選定文獻章節內容
+            </div>
+          {/if}
+        </div>
+      </div>
+
     {:else}
       <!-- Native Iframe Fallback -->
-      {#if activeBaseUrl}
-        <iframe
-          src="{activeBaseUrl}#page={currentPage}&navpanes=0&toolbar=1&view=FitH"
-          title="原始論文 PDF 檢視器 (瀏覽器外掛模式)"
-          class="w-full h-full border-0 bg-[#282828]"
-        ></iframe>
-      {:else}
-        <!-- Empty State -->
-        <div class="w-full h-full flex flex-col items-center justify-center p-6 text-center gap-3">
-          <div class="w-12 h-12 rounded-full bg-[#282828] border border-[#3c3836] flex items-center justify-center text-[#fe8019]">
-            <span class="material-symbols-outlined text-2xl">picture_as_pdf</span>
+      <div class="w-full h-full flex flex-col">
+        <!-- Native Mode Tip -->
+        <div class="h-7 bg-[#1d2021] border-b border-[#3c3836] px-3 flex items-center justify-between text-[10px] font-mono text-[#a89984] shrink-0">
+          <span>🌐 瀏覽器內核外掛模式（若因 X-Frame-Options 呈現空白，請切換至【畫布】或【原文】）</span>
+          <div class="flex items-center gap-2">
+            <button class="text-[#fabd2f] hover:underline cursor-pointer" on:click={() => viewerMode = 'text'}>
+              改用原文對照
+            </button>
+            <button class="text-[#8ec07c] hover:underline cursor-pointer" on:click={handleOpenExternal}>
+              另開分頁
+            </button>
           </div>
-          <div class="flex flex-col gap-1 max-w-sm">
-            <h4 class="text-sm font-bold text-[#ebdbb2]">尚未設定此文章的原檔 PDF 連結</h4>
-            <p class="text-xs text-[#a89984] leading-relaxed">
-              您可以直接將任何 <code class="text-[#fabd2f]">.pdf</code> 檔案拖曳至此處，享受即時字串比對與流暢翻頁。
-            </p>
-          </div>
-          <button
-            class="px-4 py-1.5 bg-[#fe8019] text-[#1d2021] font-bold text-xs rounded-lg shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer mt-1"
-            on:click={() => fileInputRef?.click()}
-          >
-            <span class="material-symbols-outlined text-[15px]">upload_file</span>
-            選取本機 PDF 檔案
-          </button>
         </div>
-      {/if}
+
+        {#if activeBaseUrl}
+          <iframe
+            src="{activeBaseUrl}#page={currentPage}&navpanes=0&toolbar=1&view=FitH"
+            title="原始論文 PDF 檢視器 (瀏覽器外掛模式)"
+            class="w-full flex-1 border-0 bg-[#282828]"
+          ></iframe>
+        {:else}
+          <!-- Empty State -->
+          <div class="w-full flex-1 flex flex-col items-center justify-center p-6 text-center gap-3">
+            <div class="w-12 h-12 rounded-full bg-[#282828] border border-[#3c3836] flex items-center justify-center text-[#fe8019]">
+              <span class="material-symbols-outlined text-2xl">picture_as_pdf</span>
+            </div>
+            <div class="flex flex-col gap-1 max-w-sm">
+              <h4 class="text-sm font-bold text-[#ebdbb2]">尚未設定此文章的原檔 PDF 連結</h4>
+              <p class="text-xs text-[#a89984] leading-relaxed">
+                您可以切換至【原文對照模式】，或將任何 <code class="text-[#fabd2f]">.pdf</code> 檔案拖曳至此處進行解析。
+              </p>
+            </div>
+            <div class="flex items-center gap-2 mt-1">
+              <button
+                class="px-3 py-1.5 bg-[#fe8019] text-[#1d2021] font-bold text-xs rounded-lg shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer"
+                on:click={() => viewerMode = 'text'}
+              >
+                <span class="material-symbols-outlined text-[15px]">article</span>
+                切換為結構化原文對照
+              </button>
+              <button
+                class="px-3 py-1.5 bg-[#282828] border border-[#504945] text-[#ebdbb2] text-xs rounded-lg hover:bg-[#32302f] transition-colors flex items-center gap-1.5 cursor-pointer"
+                on:click={() => fileInputRef?.click()}
+              >
+                <span class="material-symbols-outlined text-[15px]">upload_file</span>
+                選取本機 PDF
+              </button>
+            </div>
+          </div>
+        {/if}
+      </div>
     {/if}
   </div>
 

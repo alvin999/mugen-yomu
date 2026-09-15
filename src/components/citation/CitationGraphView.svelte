@@ -981,7 +981,7 @@
 
         <!-- Dossier Footer Note -->
         <div class="mt-auto p-3 border-t border-[#3c3836] bg-[#141617]/50 text-center text-[#a89984] font-mono text-[10px]">
-          MUGEN YOMU Scholar Citation Graph · v2.4
+          MUGEN YOMU Scholar Citation Graph · BETA
         </div>
       </aside>
     {/if}

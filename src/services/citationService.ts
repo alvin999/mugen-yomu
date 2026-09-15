@@ -320,7 +320,7 @@ export const userManualCitationGraph: CitationGraphData = {
       title: 'MUGEN YOMU: Operating Manual & Cognitive Reading System Guide',
       authors: ['MUGEN YOMU Architecture Team', 'Cognitive Scholar Research Lab'],
       year: 2026,
-      venue: 'Official System Documentation · v2.4',
+      venue: 'Official System Documentation · BETA',
       citations: 'System Spec',
       category: 'core',
       connectionSnippet: '當前核心主文。本系統之操作與認知伴讀規範說明。',

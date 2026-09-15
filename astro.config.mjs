@@ -4,7 +4,6 @@ import svelte from '@astrojs/svelte';
 // Allow fetching academic literature PDFs through local/development proxy
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
-// PDF Proxy Vite Plugin to bypass browser CORS for academic literature PDFs
 function pdfProxyPlugin() {
   return {
     name: 'pdf-cors-proxy',
@@ -19,25 +18,46 @@ function pdfProxyPlugin() {
             return;
           }
 
-          const response = await fetch(targetUrl, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-          });
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-          if (!response.ok) {
-            res.statusCode = response.status;
-            res.end(`Failed to fetch remote PDF: ${response.statusText}`);
+          let parsedTarget = null;
+          try {
+            parsedTarget = new URL(targetUrl);
+          } catch {
+            clearTimeout(timeoutId);
+            res.statusCode = 400;
+            res.end('Invalid target URL');
             return;
           }
 
+          const response = await fetch(targetUrl, {
+            signal: controller.signal,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+              'Accept': 'application/pdf, application/octet-stream, */*',
+              'Referer': parsedTarget.origin ? `${parsedTarget.origin}/` : 'https://arxiv.org/',
+              'Accept-Language': 'en-US,en;q=0.9'
+            }
+          });
+
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            res.statusCode = response.status;
+            res.end(`Failed to fetch remote PDF (HTTP ${response.status}): ${response.statusText}`);
+            return;
+          }
+
+          const contentType = response.headers.get('content-type') || 'application/pdf';
           res.setHeader('Access-Control-Allow-Origin', '*');
-          res.setHeader('Content-Type', response.headers.get('content-type') || 'application/pdf');
+          res.setHeader('Content-Type', contentType);
           const arrayBuffer = await response.arrayBuffer();
           res.end(Buffer.from(arrayBuffer));
         } catch (err) {
-          res.statusCode = 500;
-          res.end(`Proxy error: ${err?.message || err}`);
+          const isAbort = err?.name === 'AbortError';
+          res.statusCode = isAbort ? 504 : 500;
+          res.end(`Proxy error: ${isAbort ? '遠端 PDF 下載逾時 (15s)' : (err?.message || err)}`);
         }
       });
     }

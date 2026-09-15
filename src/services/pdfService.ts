@@ -41,15 +41,34 @@ export async function loadPdf(source: string | ArrayBuffer | Uint8Array): Promis
     const proxyUrl = getProxiedPdfUrl(source);
     try {
       // 透過本地 Vite 代理下載 PDF 為 ArrayBuffer，徹底避免瀏覽器 CORS 與憑證檢驗阻斷
-      const res = await fetch(proxyUrl);
-      if (!res.ok) throw new Error(`Proxy error ${res.status}: ${res.statusText}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+      const res = await fetch(proxyUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        const errorDetail = await res.text().catch(() => res.statusText);
+        throw new Error(`遠端 PDF 下載失敗 (${res.status}): ${errorDetail || res.statusText}`);
+      }
       const arrayBuffer = await res.arrayBuffer();
+      if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+        throw new Error('下載的 PDF 資料內容為空 (0 bytes)');
+      }
       const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
       return await loadingTask.promise;
-    } catch (proxyErr) {
+    } catch (proxyErr: any) {
       console.warn('代理下載失敗，嘗試直接透過 URL 解析:', proxyErr);
-      const loadingTask = pdfjsLib.getDocument(source);
-      return await loadingTask.promise;
+      try {
+        const loadingTask = pdfjsLib.getDocument(source);
+        return await loadingTask.promise;
+      } catch (directErr: any) {
+        // 匯集代理與直連錯誤，提供 UI 明確的失敗原因
+        const reason = proxyErr?.name === 'AbortError'
+          ? '遠端連線逾時 (15 秒無回應)'
+          : (proxyErr?.message || '跨來源限制或網路連線中斷');
+        throw new Error(`PDF 載入異常: ${reason}`);
+      }
     }
   }
 
