@@ -69,6 +69,9 @@
   let activePaper: PaperDocument | null = null;
   let activeSectionId: string = '3.2';
   let activeContextText: string = '§ 3.2 Complex Sentence Deconstruction';
+  let activeParagraphText: string = '';
+  let activeSelectedText: string = '';
+  let activeFocusedParagraphKey: string = '';
 
   // Notes in memory
   let capturedNotes: Array<{ title: string; text: string; time: string }> = [];
@@ -666,6 +669,12 @@
       };
       saveNotes([newNote, ...capturedNotes]);
       alert(`已為「${noteTitle}」新增精讀筆記！可點選左側 Cognitive Notes 檢視與編輯。`);
+    } else if (action === 'focusCompanion') {
+      const { text } = event.detail as any;
+      if (text) activeParagraphText = text;
+      if (companionRef && companionRef.askWithCustomPrompt) {
+        companionRef.askWithCustomPrompt(`請針對這一段文字進行伴讀深度解析：作者在此處的核心論據與關鍵實驗變因是什麼？`);
+      }
     } else if (action === 'translationCompleted') {
       refreshCacheStats();
     } else if (action === 'openOriginalToPage') {
@@ -699,6 +708,32 @@
       saveNotes([newNote, ...capturedNotes]);
     } else if (event.detail.action === 'exportNotes') {
       handleExportNotes();
+    }
+  }
+
+  function handleParagraphFocused(e: CustomEvent<{ sectionId: string; paragraphIndex: number; paragraphKey: string; text: string; selectedText: string }>) {
+    const { sectionId, paragraphKey, text, selectedText } = e.detail;
+    activeParagraphText = text;
+    activeFocusedParagraphKey = paragraphKey;
+    if (selectedText) activeSelectedText = selectedText;
+  }
+
+  function handleTextSelected(e: CustomEvent<{ selectedText: string }>) {
+    activeSelectedText = e.detail.selectedText;
+  }
+
+  function handleProbeCitation(e: CustomEvent<{ citation: string; sectionId: string; paragraphText: string }>) {
+    const { citation, paragraphText } = e.detail;
+    if (paragraphText) activeParagraphText = paragraphText;
+    if (companionRef && companionRef.askWithCustomPrompt) {
+      companionRef.askWithCustomPrompt(`請深入剖析文中引用的文獻 ${citation}：作者引用該論文的論證目的是什麼？其實驗設計或條件（如壓力、流速等）與本文有何關聯與局限性？`);
+    }
+  }
+
+  function handleLocateSource(e: CustomEvent<{ paragraphKey: string }>) {
+    const { paragraphKey } = e.detail;
+    if (readerRef && readerRef.highlightAndScrollToParagraph) {
+      readerRef.highlightAndScrollToParagraph(paragraphKey);
     }
   }
 
@@ -764,7 +799,7 @@
   />
 
   <!-- Main Content Body (Offset left dynamically by rail width) -->
-  <div class="transition-all duration-300 ease-in-out {isRailCollapsed ? 'pl-16' : 'pl-60'} flex-1 flex flex-col h-full overflow-hidden">
+  <div class="transition-all duration-300 ease-in-out {isRailCollapsed ? 'pl-16' : 'pl-60'} flex-1 w-full min-w-0 flex flex-col h-full overflow-hidden">
     <!-- Top Fixed Header -->
     <AppHeader
       {activePaper}
@@ -840,7 +875,7 @@
           </div>
 
           <!-- Right Track: Bilingual Academic Reader (Zoomable) -->
-          <div class="h-full overflow-hidden flex-1" style="zoom: {zoomLevel}%">
+          <div class="h-full min-w-0 overflow-hidden flex-1 flex flex-col" style="zoom: {zoomLevel}%">
             <BilingualReader
               bind:this={readerRef}
               paper={activePaper}
@@ -893,7 +928,7 @@
           {/if}
 
           <!-- Column 2: Bilingual Paper Reader (Scaled by zoomLevel) -->
-          <div class="h-full overflow-hidden" style="zoom: {zoomLevel}%">
+          <div class="h-full w-full min-w-0 overflow-hidden flex flex-col" style="zoom: {zoomLevel}%">
             <BilingualReader
               bind:this={readerRef}
               paper={activePaper}
@@ -902,7 +937,13 @@
               {loadingIntuitionId}
               {loadingSyntaxId}
               {loadingTerminologyId}
+              bind:focusedParagraphKey={activeFocusedParagraphKey}
+              bind:focusedParagraphText={activeParagraphText}
+              bind:selectedText={activeSelectedText}
               on:selectSection={handleSelectSection}
+              on:paragraphFocused={handleParagraphFocused}
+              on:textSelected={handleTextSelected}
+              on:probeCitation={handleProbeCitation}
               on:readerAction={handleReaderAction}
               on:sectionDwell={handleSectionDwell}
               on:sectionSkimmed={handleSectionSkimmed}
@@ -917,6 +958,10 @@
             <CognitiveCompanion
               bind:this={companionRef}
               {activeContextText}
+              paperTitle={activePaper?.title || ''}
+              activeParagraphText={activeParagraphText}
+              selectedText={activeSelectedText}
+              focusedParagraphKey={activeFocusedParagraphKey}
               companionData={activePaper?.companionData[activeSectionId]}
               isGeneratingIntuition={loadingIntuitionId === activeSectionId}
               isGeneratingSyntax={loadingSyntaxId === activeSectionId}
@@ -924,6 +969,7 @@
               on:triggerGenerate={handleCompanionTriggerGenerate}
               on:askQuestion={handleAskQuestion}
               on:quickAction={handleQuickCompanionAction}
+              on:locateSource={handleLocateSource}
               on:openSettings={() => isByokOpen = true}
             />
           {/if}

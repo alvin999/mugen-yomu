@@ -1,10 +1,14 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import type { SectionCompanionData } from '../../stores/documentStore';
-  import { callProviderChat, type ChatMessage } from '../../services/aiService';
+  import { callProviderChatWithResilience, type ChatMessage } from '../../services/aiService';
 
   export let activeContextText: string = '§ 3.2.1 Scaled Dot-Product';
   export let companionData: SectionCompanionData | undefined = undefined;
+  export let paperTitle: string = '';
+  export let activeParagraphText: string = '';
+  export let selectedText: string = '';
+  export let focusedParagraphKey: string = '';
   export let isGeneratingIntuition: boolean = false;
   export let isGeneratingSyntax: boolean = false;
   export let isGeneratingTerminology: boolean = false;
@@ -42,6 +46,11 @@
     if (targetEl) {
       targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
+  }
+
+  export function askWithCustomPrompt(promptText: string) {
+    promptInput = promptText;
+    handleSubmit();
   }
 
   interface MessageItem {
@@ -150,15 +159,48 @@
     // 1. If API Key is present or Ollama local is chosen, invoke live AI!
     if ((apiKey && apiKey.trim().length > 5) || isLocalOllama) {
       try {
-        const history: ChatMessage[] = messages.slice(-5).map(m => ({
+        // 1. 動態限制對話歷史輪數：Groq (6k TPM) 保留最新 2 輪，避免累積歷史過長
+        const maxTurns = activeProvider === 'groq' ? 2 : 4;
+        const history: ChatMessage[] = messages.slice(-maxTurns).map(m => ({
           role: m.sender === 'user' ? 'user' : 'assistant',
           content: m.text
         }));
 
-        const contextualPrompt = `[當前研讀章節: ${activeContextText}]\n${qText}`;
+        // 2. 輸入原文長度安全修剪，防止直接被 Groq TPM 拒收
+        const maxParaLen = activeProvider === 'groq' ? 850 : 1600;
+        const maxSelLen = activeProvider === 'groq' ? 300 : 600;
+        const safePara = activeParagraphText && activeParagraphText.trim().length > maxParaLen
+          ? activeParagraphText.trim().slice(0, maxParaLen) + '... (已自動精簡原文長度)'
+          : activeParagraphText?.trim();
+        const safeSel = selectedText && selectedText.trim().length > maxSelLen
+          ? selectedText.trim().slice(0, maxSelLen) + '... (已自動精簡反白)'
+          : selectedText?.trim();
+
+        let contextualPrompt = '';
+        if (paperTitle) {
+          contextualPrompt += `【當前研讀文獻】：${paperTitle}\n`;
+        }
+        contextualPrompt += `【當前章節】：${activeContextText}\n`;
+        if (safeSel) {
+          contextualPrompt += `【讀者當前聚焦反白字句】：\n"${safeSel}"\n`;
+        }
+        if (safePara) {
+          contextualPrompt += `【讀者當前研讀段落原文 (Evidence Context)】：\n"${safePara}"\n`;
+        }
+        contextualPrompt += `\n【讀者提問】：\n${qText}`;
+
         history.push({ role: 'user', content: contextualPrompt });
 
-        const result = await callProviderChat(activeProvider, history, apiKey, activeModel, ollamaUrl);
+        // 3. 呼叫具備輸入長度修剪、自動同源降級 (70B -> 8B Instant) 的韌性服務
+        const result = await callProviderChatWithResilience(activeProvider, history, apiKey, activeModel, ollamaUrl);
+
+        let displayTag = result.cached
+          ? `本機快取 · ${result.model} · ${result.latencyMs}ms`
+          : `${result.provider.toUpperCase()} (${result.model}) · ${result.latencyMs}ms`;
+
+        if (result.fallbackNotice) {
+          displayTag = `${displayTag} · ${result.fallbackNotice}`;
+        }
 
         const aiMsg: MessageItem = {
           id: `ai_${Date.now()}`,
@@ -166,9 +208,7 @@
           text: result.reply,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           cached: result.cached,
-          tag: result.cached
-            ? `本機快取 · ${result.model} · ${result.latencyMs}ms`
-            : `${result.provider.toUpperCase()} (${result.model}) · ${result.latencyMs}ms`
+          tag: displayTag
         };
 
         messages = [...messages, aiMsg];
@@ -189,10 +229,20 @@
   }
 
   function fallbackLocalResponse(qText: string, presetAnswer?: string, customTag?: string) {
-    const responseText = presetAnswer ||
-      `針對「${qText}」的學術深度剖析：\n` +
-      `在 ${activeContextText} 的脈絡中，作者旨在透過正交子空間將計算複雜度從序列展開降至矩陣並行。` +
-      `這種設計有效阻絕了長序列下的梯度衰減問題。`;
+    let responseText = presetAnswer;
+    if (!responseText) {
+      if (activeParagraphText && (activeParagraphText.includes('were not reported') || qText.includes('流速') || qText.includes('壓力'))) {
+        responseText = `> 「原文：The corresponding flow rates (F) for the pressure-controlled experiments were not reported.」\n\n` +
+          `📌 **內文直接依據**：作者在文中明確指出，被引用的先前研究（[22, 23, 24]）在進行 7 至 11 bar 的增壓實驗時，**並未報告或記錄對應的流速 (F)**。\n\n` +
+          `💡 **科學機制與物理直覺**：\n` +
+          `1. **流速未受控的影響**：若只控制壓力而未恆定流速，當壓力調高時咖啡粉餅容易被過度壓實（Puck Compaction），導致流阻劇增、流速反向驟降，使得杯中總萃取質量不增反降。\n` +
+          `2. **引文 [25] 的理論銜接**：作者緊接著引用 Lee et al. [[25]]，正是點出粉餅內部孔隙結構會產生「非均勻流動與通道效應（Channeling）」，進一步解釋了萃取不穩定的物理成因。`;
+      } else {
+        responseText = `針對「${qText}」的學術深度剖析：\n` +
+          `在 ${activeContextText} 的脈絡中，作者旨在透過正交子空間將計算複雜度從序列展開降至矩陣並行。` +
+          `這種設計有效阻絕了長序列下的梯度衰減問題。`;
+      }
+    }
 
     const aiMsg: MessageItem = {
       id: `ai_${Date.now()}`,
@@ -243,10 +293,53 @@
 
   <!-- Realtime Content Cards Container -->
   <div class="flex-1 overflow-y-auto px-2.5 py-2 flex flex-col gap-3">
-    <!-- Active Context Awareness Badge -->
-    <div class="flex items-center gap-1.5 px-1 font-mono text-[10px] text-[#fe8019] truncate">
-      <span class="material-symbols-outlined text-[13px] shrink-0">my_location</span>
-      <span class="truncate">當前伴讀感應區：{activeContextText}</span>
+    <!-- Active Context Awareness Radar -->
+    <div class="bg-[#141617] border border-[#3c3836] rounded-lg p-2 flex flex-col gap-1.5 shadow-inner">
+      <div class="flex items-center justify-between font-mono text-[10px]">
+        <span class="flex items-center gap-1 text-[#fe8019] font-bold">
+          <span class="material-symbols-outlined text-[13px] text-[#fe8019] animate-pulse">radar</span>
+          <span>伴讀即時感知焦點 (Live Context)</span>
+        </span>
+        <span class="text-[#a89984] text-[9px] truncate max-w-[120px]">{activeContextText}</span>
+      </div>
+
+      {#if selectedText}
+        <div class="flex items-start gap-1.5 bg-[#fe8019]/10 border border-[#fe8019]/30 rounded p-1.5 text-[11px] text-[#fabd2f]">
+          <span class="material-symbols-outlined text-[13px] text-[#fe8019] shrink-0 mt-0.5">highlight</span>
+          <div class="flex flex-col gap-0.5 min-w-0">
+            <span class="text-[9px] font-mono text-[#fe8019] font-semibold uppercase">反白語句錨定中</span>
+            <p class="font-serif italic text-[#ebdbb2] truncate text-[11px]">"{selectedText}"</p>
+          </div>
+        </div>
+      {:else if activeParagraphText}
+        <div class="flex items-start gap-1.5 bg-[#282828] border border-[#504945]/60 rounded p-1.5 text-[11px] text-[#d5c4a1]">
+          <span class="material-symbols-outlined text-[13px] text-[#fabd2f] shrink-0 mt-0.5">description</span>
+          <div class="flex flex-col gap-0.5 min-w-0 flex-1">
+            <div class="flex items-center justify-between">
+              <span class="text-[9px] font-mono text-[#fabd2f] font-medium">當前研讀段落 (Evidence Grounding)</span>
+              {#if focusedParagraphKey}
+                <button
+                  type="button"
+                  class="text-[9px] text-[#8ec07c] hover:underline cursor-pointer flex items-center gap-0.5 ml-1"
+                  on:click={() => dispatch('locateSource', { paragraphKey: focusedParagraphKey })}
+                  title="在閱讀畫布高亮定位此段落"
+                >
+                  <span>定位原段</span>
+                  <span class="material-symbols-outlined text-[10px]">my_location</span>
+                </button>
+              {/if}
+            </div>
+            <p class="font-serif italic text-[#a89984] line-clamp-2 text-[11px] leading-relaxed">
+              "{activeParagraphText}"
+            </p>
+          </div>
+        </div>
+      {:else}
+        <div class="text-[10px] text-[#7c6f64] font-mono flex items-center gap-1 italic px-0.5">
+          <span class="material-symbols-outlined text-[11px]">info</span>
+          <span>點選閱讀畫布上的段落或反白文字，即時注入伴讀推論焦點</span>
+        </div>
+      {/if}
     </div>
 
     <!-- 1. Scientific Intuition Card -->
@@ -536,9 +629,22 @@
               <p class="whitespace-pre-wrap">{msg.text}</p>
               
               {#if msg.sender === 'ai'}
-                <div class="mt-2 pt-1 border-t border-[#3c3836] flex items-center justify-end">
+                <div class="mt-2 pt-1 border-t border-[#3c3836] flex items-center justify-between">
+                  {#if focusedParagraphKey}
+                    <button
+                      type="button"
+                      class="text-[10px] text-[#8ec07c] hover:underline flex items-center gap-0.5 cursor-pointer"
+                      on:click={() => dispatch('locateSource', { paragraphKey: focusedParagraphKey })}
+                      title="在閱讀畫布高亮定位此解答對應之段落"
+                    >
+                      <span class="material-symbols-outlined text-[12px]">my_location</span>
+                      <span>定位依據段落</span>
+                    </button>
+                  {:else}
+                    <span></span>
+                  {/if}
                   <button
-                    class="text-[10px] text-[#a89984] hover:text-[#fabd2f] flex items-center gap-0.5"
+                    class="text-[10px] text-[#a89984] hover:text-[#fabd2f] flex items-center gap-0.5 cursor-pointer"
                     on:click={() => handleSaveMessageToNotes(msg.text)}
                   >
                     <span class="material-symbols-outlined text-[12px]">note_add</span>

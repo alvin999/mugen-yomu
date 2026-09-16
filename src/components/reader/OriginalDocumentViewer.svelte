@@ -1090,7 +1090,7 @@
         class="w-full h-full overflow-y-auto px-3 sm:px-6 py-6 flex flex-col items-center bg-[#121314] select-text relative"
       >
         <!-- Paper Sheet Floating Toolbar -->
-        <div class="w-full max-w-[780px] mb-3 flex items-center justify-between bg-[#1d2021]/90 backdrop-blur-sm border border-[#3c3836] px-3.5 py-2 rounded-xl text-xs font-mono text-[#a89984] shadow-md shrink-0">
+        <div class="w-full {mode === 'split' ? 'max-w-none' : 'max-w-[840px]'} mb-3 flex items-center justify-between bg-[#1d2021]/90 backdrop-blur-sm border border-[#3c3836] px-3.5 py-2 rounded-xl text-xs font-mono text-[#a89984] shadow-md shrink-0">
           <div class="flex items-center gap-2">
             <span class="flex items-center gap-1.5 text-[#fe8019] font-bold">
               <span class="material-symbols-outlined text-[15px]">menu_book</span>
@@ -1153,7 +1153,7 @@
         {#if paper}
           <!-- Physical Paper Sheet Canvas Container -->
           <article
-            class="w-full max-w-[780px] my-2 transition-all duration-300 rounded-sm shadow-2xl p-6 sm:p-12 mb-20 {
+            class="w-full {mode === 'split' ? 'max-w-none' : 'max-w-[840px]'} my-2 transition-all duration-300 rounded-sm shadow-2xl p-6 sm:p-12 mb-20 {
               paperTheme === 'parchment'
                 ? 'bg-[#fcfbf9] text-[#1c1b1a] border border-[#e2ded6]'
                 : 'bg-[#1d2021] text-[#ebdbb2] border border-[#3c3836]'

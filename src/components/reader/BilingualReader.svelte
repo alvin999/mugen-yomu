@@ -15,6 +15,11 @@
   let selectedAuthorInfo: string | null = null;
   let scrollContainer: HTMLElement | null = null;
 
+  // 研讀焦點段落與文字選取狀態 (Paragraph Focus & Text Selection)
+  export let focusedParagraphKey: string = '';
+  export let focusedParagraphText: string = '';
+  export let selectedText: string = '';
+
   // Paragraph Translation States
   let paragraphTranslations: Record<string, string> = {};
   let showTranslationMap: Record<string, boolean> = {};
@@ -277,7 +282,7 @@
   }
 
   // Markdown 超連結與巢狀引註解析器：支援 [text](url) 與 [[1](url)]
-  function parseLinksAndText(rawText: string): string {
+  function parseLinksAndText(rawText: string, currentMode: string = readingMode): string {
     if (!rawText) return '';
     const linkRegex = /(?<!!)\[([^\[\]]+)\]\(((?:https?:\/\/|#)[^\s'")]+)\)/g;
     let last = 0;
@@ -290,7 +295,18 @@
       }
       const anchor = escapeHtml(m[1]);
       const url = m[2].replace(/"/g, '&quot;');
-      res.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center text-[#8ec07c] hover:text-[#b8bb26] underline decoration-[#8ec07c]/40 hover:decoration-[#b8bb26] transition-colors font-medium px-0.5 rounded hover:bg-[#8ec07c]/10 cursor-pointer" title="${url}">${anchor}</a>`);
+      const cleanAnchor = anchor.trim();
+      const isCitation = /^\[?\d+(?:[,\s–\-]+\d+)*\]?$/.test(cleanAnchor) || url.includes('#B') || url.includes('foods-') || url.includes('arxiv');
+      if (isCitation) {
+        const displayNum = cleanAnchor.replace(/^\[|\]$/g, '');
+        // 純沉浸閱讀模式 (Zen Mode) 不顯示向 AI 探尋的 🤖 圖示，保持最純淨的閱讀專注感
+        const probeBtn = currentMode !== 'zen'
+          ? `<button type="button" class="cite-probe-btn text-[#a89984] hover:text-[#fe8019] px-0.5 rounded cursor-pointer transition-transform hover:scale-125 text-[11px]" title="向 AI 伴讀助理探詢此引文背景與論證目的" data-citation="[${displayNum}]">🤖</button>`
+          : '';
+        res.push(`<span class="inline-flex items-center gap-0.5 mx-0.5 align-baseline group/cite bg-[#1d2021]/80 px-1 py-0.2 rounded border border-[#504945]/60 hover:border-[#fe8019] transition-all"><a href="${url}" target="_blank" rel="noopener noreferrer" class="text-[#fabd2f] hover:text-[#fe8019] underline decoration-[#fabd2f]/40 hover:decoration-[#fe8019] font-mono text-[12px] font-bold cursor-pointer" title="查看引文來源：${url}">[${displayNum}]</a>${probeBtn}</span>`);
+      } else {
+        res.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center text-[#8ec07c] hover:text-[#b8bb26] underline decoration-[#8ec07c]/40 hover:decoration-[#b8bb26] transition-colors font-medium px-0.5 rounded hover:bg-[#8ec07c]/10 cursor-pointer" title="${url}">${anchor}</a>`);
+      }
       last = linkRegex.lastIndex;
     }
 
@@ -301,11 +317,11 @@
     return res.join('');
   }
 
-  function formatParagraphWithMath(text: string): string {
+  function formatParagraphWithMath(text: string, currentMode: string = readingMode): string {
     if (!text) return '';
     // 若段落無任何 $ 符號，仍進行超連結與引註解析
     if (!text.includes('$')) {
-      return parseLinksAndText(text);
+      return parseLinksAndText(text, currentMode);
     }
 
     const parts: string[] = [];
@@ -315,7 +331,7 @@
 
     while ((match = regex.exec(text)) !== null) {
       if (match.index > lastIndex) {
-        parts.push(parseLinksAndText(text.slice(lastIndex, match.index)));
+        parts.push(parseLinksAndText(text.slice(lastIndex, match.index), currentMode));
       }
       const math = match[1].trim();
       const rendered = renderMath(math, false);
@@ -324,7 +340,7 @@
     }
 
     if (lastIndex < text.length) {
-      parts.push(parseLinksAndText(text.slice(lastIndex)));
+      parts.push(parseLinksAndText(text.slice(lastIndex), currentMode));
     }
 
     return parts.join('');
@@ -441,6 +457,82 @@
       }, 500);
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+  }
+
+  export function highlightAndScrollToParagraph(paragraphKey: string) {
+    if (typeof document === 'undefined') return;
+    focusedParagraphKey = paragraphKey;
+    const cleanKey = paragraphKey.startsWith('para-') ? paragraphKey : `para-${paragraphKey}`;
+    const el = document.getElementById(cleanKey);
+    if (el) {
+      isProgrammaticScrolling = true;
+      if (scrollTimeout) clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        isProgrammaticScrolling = false;
+      }, 500);
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('para-pulse-highlight');
+      setTimeout(() => {
+        el.classList.remove('para-pulse-highlight');
+      }, 3200);
+    }
+  }
+
+  function handleParagraphClick(secId: string, pIndex: number, text: string) {
+    const key = `${secId}_${pIndex}`;
+    focusedParagraphKey = key;
+    focusedParagraphText = text;
+    activeSectionId = secId;
+    dispatch('paragraphFocused', {
+      sectionId: secId,
+      paragraphIndex: pIndex,
+      paragraphKey: key,
+      text,
+      selectedText
+    });
+  }
+
+  function askCompanionAboutParagraph(sec: ChapterSection, pIndex: number, text: string) {
+    handleParagraphClick(sec.id, pIndex, text);
+    dispatch('readerAction', {
+      action: 'focusCompanion',
+      section: sec,
+      paragraphIndex: pIndex,
+      text
+    });
+  }
+
+  function handleContainerClick(e: MouseEvent) {
+    const target = e.target as HTMLElement;
+    const probeBtn = target.closest('.cite-probe-btn') as HTMLElement | null;
+    if (probeBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const cite = probeBtn.getAttribute('data-citation') || '';
+      const paraEl = probeBtn.closest('[data-para-key]') as HTMLElement | null;
+      const paraText = paraEl?.getAttribute('data-para-text') || '';
+      const secId = paraEl?.getAttribute('data-sec-id') || activeSectionId;
+      dispatch('probeCitation', {
+        citation: cite,
+        sectionId: secId,
+        paragraphText: paraText
+      });
+    }
+  }
+
+  function handleMouseUp() {
+    if (typeof window === 'undefined') return;
+    setTimeout(() => {
+      const sel = window.getSelection();
+      const str = sel ? sel.toString().trim() : '';
+      if (str && str.length > 2) {
+        selectedText = str;
+        dispatch('textSelected', { selectedText: str });
+      } else if (!str && selectedText) {
+        selectedText = '';
+        dispatch('textSelected', { selectedText: '' });
+      }
+    }, 30);
   }
 
   function handleContainerScroll() {
@@ -596,43 +688,49 @@
 <main
   bind:this={scrollContainer}
   on:scroll={handleContainerScroll}
-  class="h-full overflow-y-auto px-6 py-6 flex justify-center bg-[#282828]"
+  on:click={handleContainerClick}
+  on:mouseup={handleMouseUp}
+  class="h-full w-full overflow-y-auto overflow-x-hidden {readingMode === 'split' ? 'px-3 sm:px-5' : 'px-4 sm:px-8'} py-6 flex justify-center items-start bg-[#282828]"
 >
-  <div class="w-full {readingMode === 'zen' ? 'max-w-[840px]' : 'max-w-[760px]'} flex flex-col gap-6 pb-28 transition-[max-width] duration-300">
+  <div class="w-full {readingMode === 'split' ? 'max-w-none' : (readingMode === 'zen' ? 'max-w-[980px]' : 'max-w-[880px] xl:max-w-[940px]')} flex flex-col gap-6 pb-28 transition-[max-width] duration-300 mx-auto">
 
     {#if paper}
       <!-- Paper Academic Header -->
-      <header class="flex flex-col gap-3 pb-5 bg-[#32302f] border border-[#3c3836] p-5 rounded-xl relative overflow-hidden shadow-md">
-        <div class="flex flex-wrap items-center gap-2">
-          {#if paper.type === 'web'}
-            <span class="font-mono text-[10px] bg-[#83a598]/15 border border-[#83a598]/40 text-[#83a598] px-2 py-0.5 rounded font-semibold flex items-center gap-1">
-              <span class="material-symbols-outlined text-[12px]">language</span> 網頁專文 · Web Article
-            </span>
-          {:else}
-            <span class="font-mono text-[10px] bg-[#fe8019]/15 border border-[#fe8019]/40 text-[#fe8019] px-2 py-0.5 rounded font-semibold">
-              {paper.venue}
-            </span>
-          {/if}
+      <header class="flex flex-col gap-3.5 bg-[#32302f] border border-[#3c3836] p-5 sm:p-6 rounded-xl relative overflow-hidden shadow-md">
+        <!-- Top Meta Tag Bar (Balanced vertical alignment and clean separator) -->
+        <div class="flex flex-wrap items-center justify-between gap-2.5 border-b border-[#3c3836]/60 pb-3">
+          <div class="flex flex-wrap items-center gap-2">
+            {#if paper.type === 'web'}
+              <span class="font-mono text-[10px] bg-[#83a598]/15 border border-[#83a598]/40 text-[#83a598] px-2.5 py-1 rounded-md font-semibold flex items-center gap-1.5 shadow-xs">
+                <span class="material-symbols-outlined text-[13px]">language</span>
+                <span>網頁專文 · Web Article</span>
+              </span>
+            {:else}
+              <span class="font-mono text-[10px] bg-[#fe8019]/15 border border-[#fe8019]/40 text-[#fe8019] px-2.5 py-1 rounded-md font-semibold shadow-xs flex items-center">
+                {paper.venue}
+              </span>
+            {/if}
 
-          {#if paper.arxivId}
-            <span class="font-mono text-[10px] text-[#a89984]">{paper.arxivId}</span>
-          {/if}
+            {#if paper.arxivId}
+              <span class="font-mono text-[10px] bg-[#282828] border border-[#504945] text-[#a89984] px-2 py-0.5 rounded">{paper.arxivId}</span>
+            {/if}
 
-          {#if paper.citations}
-            <span class="font-mono text-[10px] bg-[#282828] border border-[#504945] text-[#fabd2f] px-2 py-0.5 rounded font-medium">
-              Citations: {paper.citations}
-            </span>
-          {/if}
+            {#if paper.citations}
+              <span class="font-mono text-[10px] bg-[#282828] border border-[#504945] text-[#fabd2f] px-2 py-0.5 rounded font-medium">
+                Citations: {paper.citations}
+              </span>
+            {/if}
+          </div>
 
           {#if paper.sourceUrl}
             <a
               href={paper.sourceUrl}
               target="_blank"
               rel="noopener noreferrer"
-              class="font-mono text-[10px] text-[#8ec07c] hover:underline flex items-center gap-0.5 ml-auto"
+              class="font-mono text-[11px] text-[#8ec07c] hover:text-[#b8bb26] hover:underline flex items-center gap-1 transition-colors px-2 py-0.5 rounded hover:bg-[#8ec07c]/10 cursor-pointer ml-auto"
             >
               <span>查看原文</span>
-              <span class="material-symbols-outlined text-[12px]">open_in_new</span>
+              <span class="material-symbols-outlined text-[13px]">open_in_new</span>
             </a>
           {/if}
         </div>
@@ -853,10 +951,51 @@
                   {@const pIndex = item.originalIndex}
                   {@const key = `${sec.id}_${pIndex}`}
                   {@const para = item.text}
-                  <div class="flex flex-col gap-2 group/para relative">
+                  {@const isParaFocused = focusedParagraphKey === key}
+                  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+                  <div
+                    id={`para-${key}`}
+                    class="flex flex-col gap-2 group/para relative rounded-lg p-2.5 transition-all duration-200 {isParaFocused ? 'bg-[#32302f]/90 border-l-4 border-[#fe8019] shadow-sm' : 'hover:bg-[#282828]/50'}"
+                    data-para-key={key}
+                    data-para-text={para}
+                    data-sec-id={sec.id}
+                    on:click={() => handleParagraphClick(sec.id, pIndex, para)}
+                  >
+                    <!-- Paragraph Quick Micro-Toolbar (Appears on hover or when focused) -->
+                    <div class="flex items-center justify-between opacity-0 group-hover/para:opacity-100 {isParaFocused ? '!opacity-100' : ''} transition-opacity duration-150 text-[11px] font-mono text-[#a89984] border-b border-[#3c3836]/40 pb-1 mb-0.5">
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-[#fe8019] font-bold">¶ {pIndex + 1}</span>
+                        {#if isParaFocused && readingMode !== 'zen'}
+                          <span class="text-[10px] bg-[#fe8019]/15 text-[#fe8019] border border-[#fe8019]/40 px-1.5 py-0.2 rounded font-sans">當前研讀焦點</span>
+                        {/if}
+                      </div>
+                      <div class="flex items-center gap-1.5">
+                        {#if readingMode !== 'zen'}
+                          <button
+                            type="button"
+                            class="flex items-center gap-1 bg-[#1d2021] hover:bg-[#3c3836] text-[#fabd2f] hover:text-[#fe8019] border border-[#504945] px-2 py-0.5 rounded cursor-pointer transition-colors shadow-xs"
+                            on:click|stopPropagation={() => askCompanionAboutParagraph(sec, pIndex, para)}
+                            title="將此段落設為伴讀焦點並向 AI 提問"
+                          >
+                            <span class="material-symbols-outlined text-[13px]">psychology</span>
+                            <span>伴讀此段</span>
+                          </button>
+                        {/if}
+                        <button
+                          type="button"
+                          class="flex items-center gap-1 bg-[#1d2021] hover:bg-[#3c3836] text-[#8ec07c] hover:text-[#b8bb26] border border-[#504945] px-2 py-0.5 rounded cursor-pointer transition-colors shadow-xs"
+                          on:click|stopPropagation={() => toggleParagraphTranslation(sec.id, pIndex, para)}
+                          title="顯示或切換繁體中文精讀對照"
+                        >
+                          <span class="material-symbols-outlined text-[13px]">translate</span>
+                          <span>{showTranslationMap[key] ? '收起翻譯' : '雙語對照'}</span>
+                        </button>
+                      </div>
+                    </div>
+
                     <!-- English paragraph with inline KaTeX math and typography -->
-                    <p class="font-serif text-[17px] text-[#ebdbb2]/95 leading-[33px] text-justify w-full tracking-[0.01em]">
-                      {@html formatParagraphWithMath(para)}
+                    <p class="font-serif text-[17px] text-[#ebdbb2]/95 leading-[33px] text-justify w-full tracking-[0.01em] select-text break-words">
+                      {@html formatParagraphWithMath(para, readingMode)}
                     </p>
 
                     <!-- Inline Translated Card with Enhanced Typography & Typewriter Stream -->
@@ -934,8 +1073,8 @@
               {/each}
             </div>
 
-            <!-- SVO Sentence Highlight (Always rendered when present to guarantee Zero CLS) -->
-            {#if sec.svoSentence}
+            <!-- SVO Sentence Highlight (Always rendered when present, hidden in Zen mode for pure immersion) -->
+            {#if sec.svoSentence && readingMode !== 'zen'}
               <div class="my-2 p-3 bg-[#282828] border-l-4 {isFocused ? 'border-[#8ec07c] shadow-sm' : 'border-[#8ec07c]/60'} rounded-r-lg flex flex-col gap-2 transition-colors">
                 <div class="flex items-center justify-between">
                   <span class="font-mono text-[10px] bg-[#8ec07c] text-[#1d2021] font-bold px-1.5 py-0.5 rounded uppercase flex items-center gap-1">
@@ -1070,52 +1209,54 @@
               {/each}
             {/if}
 
-            <!-- Inline Semantic Action Toolbar (Always rendered with stable height, highlighted on focus/hover to prevent CLS) -->
+            <!-- Inline Semantic Action Toolbar (In Zen mode, only retains Bilingual Translation) -->
             <div class="mt-2 flex flex-wrap items-center gap-2 rounded-lg p-1.5 transition-all duration-200 {isFocused ? 'bg-[#282828] border border-[#3c3836] shadow-sm opacity-100' : 'bg-[#1d2021]/50 border border-[#3c3836]/30 opacity-60 hover:opacity-100'}">
-              <button
-                class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#fabd2f] border border-[#fabd2f]/30 px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
-                disabled={loadingIntuitionId === sec.id}
-                on:click|stopPropagation={() => triggerCognitiveAction('showIntuition', sec)}
-                title="深度生成或檢視本節白話科學直覺"
-              >
-                {#if loadingIntuitionId === sec.id}
-                  <span class="material-symbols-outlined text-[14px] text-[#fabd2f] animate-spin">sync</span>
-                  <span>直覺推導中...</span>
-                {:else}
-                  <span class="material-symbols-outlined text-[14px] text-[#fabd2f]">lightbulb</span>
-                  <span>白話科學直覺</span>
-                {/if}
-              </button>
+              {#if readingMode !== 'zen'}
+                <button
+                  class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#fabd2f] border border-[#fabd2f]/30 px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
+                  disabled={loadingIntuitionId === sec.id}
+                  on:click|stopPropagation={() => triggerCognitiveAction('showIntuition', sec)}
+                  title="深度生成或檢視本節白話科學直覺"
+                >
+                  {#if loadingIntuitionId === sec.id}
+                    <span class="material-symbols-outlined text-[14px] text-[#fabd2f] animate-spin">sync</span>
+                    <span>直覺推導中...</span>
+                  {:else}
+                    <span class="material-symbols-outlined text-[14px] text-[#fabd2f]">lightbulb</span>
+                    <span>白話科學直覺</span>
+                  {/if}
+                </button>
 
-              <button
-                class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#8ec07c] border border-[#8ec07c]/30 px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
-                disabled={loadingSyntaxId === sec.id}
-                on:click|stopPropagation={() => triggerCognitiveAction('showSyntax', sec)}
-                title="可先在內文反白長難句，或點擊由 AI 自動拆解本節代表句"
-              >
-                {#if loadingSyntaxId === sec.id}
-                  <span class="material-symbols-outlined text-[14px] text-[#8ec07c] animate-spin">sync</span>
-                  <span>句構拆解中...</span>
-                {:else}
-                  <span class="material-symbols-outlined text-[14px] text-[#8ec07c]">account_tree</span>
-                  <span>句構拆解</span>
-                {/if}
-              </button>
+                <button
+                  class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#8ec07c] border border-[#8ec07c]/30 px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
+                  disabled={loadingSyntaxId === sec.id}
+                  on:click|stopPropagation={() => triggerCognitiveAction('showSyntax', sec)}
+                  title="可先在內文反白長難句，或點擊由 AI 自動拆解本節代表句"
+                >
+                  {#if loadingSyntaxId === sec.id}
+                    <span class="material-symbols-outlined text-[14px] text-[#8ec07c] animate-spin">sync</span>
+                    <span>句構拆解中...</span>
+                  {:else}
+                    <span class="material-symbols-outlined text-[14px] text-[#8ec07c]">account_tree</span>
+                    <span>句構拆解</span>
+                  {/if}
+                </button>
 
-              <button
-                class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#ebdbb2] border border-[#504945] px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
-                disabled={loadingTerminologyId === sec.id}
-                on:click|stopPropagation={() => triggerCognitiveAction('showTerminology', sec)}
-                title="萃取並對齊本節關鍵學術術語與台灣繁體名詞"
-              >
-                {#if loadingTerminologyId === sec.id}
-                  <span class="material-symbols-outlined text-[14px] text-[#fe8019] animate-spin">sync</span>
-                  <span>術語對齊中...</span>
-                {:else}
-                  <span class="material-symbols-outlined text-[14px] text-[#fe8019]">menu_book</span>
-                  <span>學術術語對齊</span>
-                {/if}
-              </button>
+                <button
+                  class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#ebdbb2] border border-[#504945] px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
+                  disabled={loadingTerminologyId === sec.id}
+                  on:click|stopPropagation={() => triggerCognitiveAction('showTerminology', sec)}
+                  title="萃取並對齊本節關鍵學術術語與台灣繁體名詞"
+                >
+                  {#if loadingTerminologyId === sec.id}
+                    <span class="material-symbols-outlined text-[14px] text-[#fe8019] animate-spin">sync</span>
+                    <span>術語對齊中...</span>
+                  {:else}
+                    <span class="material-symbols-outlined text-[14px] text-[#fe8019]">menu_book</span>
+                    <span>學術術語對齊</span>
+                  {/if}
+                </button>
+              {/if}
 
               <button
                 class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#fabd2f] border border-[#fabd2f]/40 px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
@@ -1132,15 +1273,17 @@
                 {/if}
               </button>
 
-              <div class="h-4 w-px bg-[#504945] mx-0.5"></div>
+              {#if readingMode !== 'zen'}
+                <div class="h-4 w-px bg-[#504945] mx-0.5"></div>
 
-              <button
-                class="flex items-center gap-1.5 hover:bg-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] px-2 py-1 rounded text-xs transition-colors"
-                on:click|stopPropagation={() => triggerAction('addNote', sec.title)}
-              >
-                <span class="material-symbols-outlined text-[14px]">push_pin</span>
-                <span>標註精讀筆記</span>
-              </button>
+                <button
+                  class="flex items-center gap-1.5 hover:bg-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] px-2 py-1 rounded text-xs transition-colors"
+                  on:click|stopPropagation={() => triggerAction('addNote', sec.title)}
+                >
+                  <span class="material-symbols-outlined text-[14px]">push_pin</span>
+                  <span>標註精讀筆記</span>
+                </button>
+              {/if}
             </div>
 
           </section>

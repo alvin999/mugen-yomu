@@ -99,3 +99,22 @@ html, body {
 .focus-lens-bar {
   animation: pulse-lens 3s infinite ease-in-out;
 }
+
+/* Paragraph Focus Lens & Evidence Anchor Pulse */
+@keyframes para-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 2px #fe8019, 0 0 20px rgba(254, 128, 25, 0.45);
+    background-color: rgba(254, 128, 25, 0.14);
+  }
+  50% {
+    box-shadow: 0 0 0 2px #fabd2f, 0 0 12px rgba(250, 189, 47, 0.3);
+    background-color: rgba(254, 128, 25, 0.06);
+  }
+}
+
+.para-pulse-highlight {
+  animation: para-pulse 1.2s ease-in-out infinite;
+  border-radius: 8px !important;
+  transition: all 0.3s ease;
+}
+
