@@ -88,7 +88,7 @@
     return null;
   }
 
-  export interface NormalizedParagraphItem {
+  interface NormalizedParagraphItem {
     type: 'subheading' | 'formula' | 'image' | 'text';
     text?: string;
     level?: number;

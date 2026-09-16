@@ -127,7 +127,7 @@
     return null;
   }
 
-  export interface NormalizedParagraphItem {
+  interface NormalizedParagraphItem {
     type: 'subheading' | 'formula' | 'image' | 'text';
     text?: string;
     level?: number;
@@ -1442,6 +1442,7 @@
     </span>
     <span class="text-[#d5c4a1] shrink-0 hidden sm:inline">
       {viewerMode === 'canvas' ? '⚡ 畫布即時渲染 (零重載翻頁)' : '🌐 瀏覽器內核模式'} · 可隨時拖放 .pdf 比對
+    </span>
   </footer>
 
   <!-- Figure Lightbox Modal -->
