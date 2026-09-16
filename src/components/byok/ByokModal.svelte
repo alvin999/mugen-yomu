@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import { fetchProviderModels, FALLBACK_MODELS, type ProviderModelItem } from '../../services/aiService';
+  import { THEMES, currentTheme, setTheme } from '../../stores/themeStore';
 
   export let isOpen: boolean = false;
   export let currentProvider: string = 'groq';
@@ -290,6 +291,48 @@
             <span class="text-[#a89984]">Groq LPU 預期推論速度</span>
           </div>
           <span class="text-[#fabd2f] font-semibold">300 ~ 750 tokens / 秒</span>
+        </div>
+
+        <!-- Theme & Appearance Section -->
+        <div class="flex flex-col gap-1.5 pt-2 border-t border-[#3c3836]">
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-[11px] text-[#d5c4a1] flex items-center gap-1">
+              <span class="material-symbols-outlined text-[14px] text-[#fe8019]">palette</span>
+              <span>介面與閱讀主題 (Appearance & Theme)</span>
+            </span>
+            <span class="font-mono text-[10px] text-[#a89984]">
+              {THEMES.find(t => t.id === $currentTheme)?.zhName || '經典暖墨'}
+            </span>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-1 bg-[#1d2021] rounded-lg border border-[#3c3836]">
+            {#each THEMES as t}
+              <button
+                type="button"
+                class="px-2.5 py-2 rounded-lg border text-left flex flex-col gap-1.5 transition-all cursor-pointer {t.id === $currentTheme ? 'bg-[#3c3836] border-[#fe8019] shadow-sm' : 'bg-[#282828] border-[#3c3836] hover:border-[#504945] hover:bg-[#32302f]'}"
+                on:click={() => setTheme(t.id)}
+              >
+                <div class="flex items-center justify-between w-full">
+                  <div class="flex items-center gap-0.5 p-0.5 bg-[#141617] rounded border border-[#504945] shrink-0">
+                    {#each t.previewColors as color}
+                      <span class="w-1.5 h-3 rounded-xs" style="background-color: {color};"></span>
+                    {/each}
+                  </div>
+                  {#if t.id === $currentTheme}
+                    <span class="material-symbols-outlined text-[13px] text-[#fe8019]">check_circle</span>
+                  {/if}
+                </div>
+                <div class="flex flex-col min-w-0">
+                  <span class="font-medium text-[11px] truncate {t.id === $currentTheme ? 'text-[#fe8019] font-bold' : 'text-[#ebdbb2]'}">
+                    {t.zhName}
+                  </span>
+                  <span class="font-mono text-[9px] text-[#a89984] truncate">
+                    {t.name}
+                  </span>
+                </div>
+              </button>
+            {/each}
+          </div>
         </div>
 
       </div>

@@ -1,6 +1,7 @@
 ---
 import MugenYomuApp from '../components/MugenYomuApp.svelte';
 import '../styles/gruvbox-theme.css';
+import '../styles/themes.css';
 import 'katex/dist/katex.min.css';
 ---
 
@@ -11,6 +12,23 @@ import 'katex/dist/katex.min.css';
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MUGEN YOMU (無限閱讀) - AI 科學文獻閱讀工具</title>
     <meta name="description" content="幫助使用者真正讀懂科學文獻與論文原文，而不只是翻譯原文。結合三欄認知空間、長難句語法拆解、變數互動推導與本機 BYOK 隱私架構。" />
+
+    <!-- Early theme initialization to prevent Flash of Unstyled Content (FOUC) -->
+    <script is:inline>
+      (function () {
+        try {
+          var saved = localStorage.getItem('mugen_theme') || 'gruvbox-dark';
+          document.documentElement.setAttribute('data-theme', saved);
+          if (saved === 'gruvbox-light') {
+            document.documentElement.classList.remove('dark');
+            document.documentElement.classList.add('light');
+          } else {
+            document.documentElement.classList.remove('light');
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
 
     <!-- Google Fonts & Material Icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

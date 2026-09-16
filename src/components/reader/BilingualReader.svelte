@@ -47,21 +47,104 @@
 
   function extractImageInfo(text: string): { url: string; alt: string } | null {
     if (!text) return null;
-    const match = text.trim().match(/^!\[(.*?)\]\((https?:\/\/.*?)\)$/);
-    if (match) {
-      return { alt: match[1] || '學術圖表', url: match[2] };
+    const trimmed = text.trim();
+
+    // 1. Linked markdown image: [![alt](imgUrl)](linkUrl)
+    const linkedMatch = trimmed.match(/^\[!\[(.*?)\]\((.*?)\)\]\((.*?)\)$/);
+    if (linkedMatch) {
+      const url = linkedMatch[2].split(' ')[0].replace(/['"]/g, '');
+      return { alt: linkedMatch[1] || '學術圖表', url };
     }
-    const urlMatch = text.trim().match(/^(https?:\/\/.*\.(?:png|jpg|jpeg|svg|webp)(?:\?.*)?)$/i);
+
+    // 2. Standard markdown image: ![alt](imgUrl)
+    const match = trimmed.match(/^!\[(.*?)\]\((.*?)\)$/);
+    if (match) {
+      const url = match[2].split(' ')[0].replace(/['"]/g, '');
+      return { alt: match[1] || '學術圖表', url };
+    }
+
+    // 3. HTML img tag: <img src="url" alt="alt">
+    const htmlMatch = trimmed.match(/<img\s+[^>]*src=["'](.*?)["'][^>]*>/i);
+    if (htmlMatch) {
+      const altMatch = trimmed.match(/alt=["'](.*?)["']/i);
+      return { alt: altMatch ? altMatch[1] : '學術圖表', url: htmlMatch[1] };
+    }
+
+    // 4. Direct image URL
+    const urlMatch = trimmed.match(/^(https?:\/\/.*\.(?:png|jpg|jpeg|svg|webp|gif)(?:\?.*)?)$/i);
     if (urlMatch) {
       return { alt: '學術圖表', url: urlMatch[1] };
     }
+
     return null;
+  }
+
+  function extractBlockFormula(para: string): string | null {
+    if (!para) return null;
+    const trimmed = para.trim();
+    if (trimmed.startsWith('$$') && trimmed.endsWith('$$') && trimmed.length >= 4) {
+      return trimmed.slice(2, -2).trim();
+    }
+    return null;
+  }
+
+  let copyToastText: string | null = null;
+  let copyToastTimeout: any = null;
+  function copyLatex(latex: string) {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(latex);
+      copyToastText = '已複製 LaTeX 方程式碼';
+      if (copyToastTimeout) clearTimeout(copyToastTimeout);
+      copyToastTimeout = setTimeout(() => copyToastText = null, 2200);
+    }
+  }
+
+  function escapeHtml(str: string): string {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function formatParagraphWithMath(text: string): string {
+    if (!text) return '';
+    // 若段落無任何 $ 符號，直接快速跳過以維護極致效能
+    if (!text.includes('$')) {
+      return escapeHtml(text);
+    }
+
+    const parts: string[] = [];
+    let lastIndex = 0;
+    const regex = /\$([^$\n]+?)\$/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(escapeHtml(text.slice(lastIndex, match.index)));
+      }
+      const math = match[1].trim();
+      const rendered = renderMath(math, false);
+      parts.push(`<span class="inline-math px-0.5 align-baseline">${rendered}</span>`);
+      lastIndex = regex.lastIndex;
+    }
+
+    if (lastIndex < text.length) {
+      parts.push(escapeHtml(text.slice(lastIndex)));
+    }
+
+    return parts.join('');
   }
 
   function renderMath(latex: string, displayMode: boolean = false): string {
     if (!latex) return '';
     try {
-      return katex.renderToString(latex, {
+      // 容錯清洗常用語法瑕疵
+      const cleanLatex = latex
+        .replace(/\\left\{/g, '\\left\\{')
+        .replace(/\\right\}/g, '\\right\\}');
+      return katex.renderToString(cleanLatex, {
         displayMode,
         throwOnError: false
       });
@@ -453,6 +536,7 @@
               {#each sec.paragraphs as para, pIndex}
                 {@const key = `${sec.id}_${pIndex}`}
                 {@const imgInfo = extractImageInfo(para)}
+                {@const formulaLatex = extractBlockFormula(para)}
 
                 {#if imgInfo}
                   <!-- Inline Markdown Image Figure Card -->
@@ -491,6 +575,7 @@
                       <img
                         src={imgInfo.url}
                         alt={imgInfo.alt}
+                        referrerpolicy="no-referrer"
                         class="max-h-[380px] max-w-full object-contain rounded transition-transform group-hover/img:scale-[1.01]"
                         loading="lazy"
                       />
@@ -502,11 +587,41 @@
                       </figcaption>
                     {/if}
                   </figure>
+                {:else if formulaLatex}
+                  <!-- Inline KaTeX Block Formula Card -->
+                  <div class="my-3 p-4 bg-[#1d2021] border border-[#504945] rounded-xl flex flex-col items-center justify-center relative shadow-inner group/display-math">
+                    <div class="w-full flex items-center justify-between text-xs font-mono text-[#fabd2f] border-b border-[#3c3836]/60 pb-2 mb-2">
+                      <span class="flex items-center gap-1.5 font-semibold">
+                        <span class="material-symbols-outlined text-[15px] text-[#fe8019]">functions</span>
+                        <span>核心方程式推導 (Mathematical Equation)</span>
+                      </span>
+                      <div class="flex items-center gap-2">
+                        {#if copyToastText}
+                          <span class="font-mono text-[10px] text-[#b8bb26] bg-[#b8bb26]/15 border border-[#b8bb26]/40 px-2 py-0.5 rounded animate-fade-in">
+                            {copyToastText}
+                          </span>
+                        {/if}
+                        <button
+                          class="text-[#a89984] hover:text-[#ebdbb2] text-[11px] flex items-center gap-1 cursor-pointer transition-colors bg-[#282828] border border-[#3c3836] px-2 py-0.5 rounded"
+                          on:click|stopPropagation={() => copyLatex(formulaLatex)}
+                          title="複製 LaTeX 方程式原始碼"
+                        >
+                          <span class="material-symbols-outlined text-[13px]">content_copy</span>
+                          <span>複製 LaTeX</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="w-full flex items-center justify-center py-2 overflow-x-auto text-[#ebdbb2]">
+                      <div class="text-[19px] px-2 select-text">
+                        {@html renderMath(formulaLatex, true)}
+                      </div>
+                    </div>
+                  </div>
                 {:else}
                   <div class="flex flex-col gap-2 group/para relative">
-                    <!-- English paragraph: 100% full width, no side-button squeezing -->
+                    <!-- English paragraph with inline KaTeX math and typography -->
                     <p class="font-serif text-[17px] text-[#ebdbb2]/95 leading-[33px] text-justify w-full tracking-[0.01em]">
-                      {para}
+                      {@html formatParagraphWithMath(para)}
                     </p>
 
 

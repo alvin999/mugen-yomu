@@ -8,6 +8,7 @@
     type CitationCategory
   } from '../../services/citationService';
   import type { PaperDocument } from '../../stores/documentStore';
+  import { currentTheme, getCurrentThemeMeta } from '../../stores/themeStore';
 
   export let paper: PaperDocument | null = null;
 
@@ -82,33 +83,41 @@
     return visibleNodeIds.has(sId) && visibleNodeIds.has(tId);
   });
 
-  // 顏色與樣式對應表 (Cognitive Scholar Gruvbox Palette)
-  const categoryMeta: Record<CitationCategory, { name: string; color: string; bgBadge: string; borderBadge: string }> = {
+  // 顏色與樣式對應表 (隨當前主題動態切換)
+  $: themeMeta = getCurrentThemeMeta($currentTheme);
+  $: graphColors = themeMeta.graphColors || {
+    core: '#fe8019',
+    foundational: '#b8bb26',
+    derivative: '#83a598',
+    methodological: '#d3869b'
+  };
+
+  $: categoryMeta = {
     core: {
       name: '核心研讀主文',
-      color: '#fe8019', // 琥珀橘
-      bgBadge: 'rgba(254, 128, 25, 0.15)',
-      borderBadge: 'rgba(254, 128, 25, 0.4)'
+      color: graphColors.core,
+      bgBadge: `color-mix(in srgb, ${graphColors.core} 15%, transparent)`,
+      borderBadge: `color-mix(in srgb, ${graphColors.core} 40%, transparent)`
     },
     foundational: {
       name: '奠基前置理論',
-      color: '#b8bb26', // 學院綠
-      bgBadge: 'rgba(184, 187, 38, 0.15)',
-      borderBadge: 'rgba(184, 187, 38, 0.4)'
+      color: graphColors.foundational,
+      bgBadge: `color-mix(in srgb, ${graphColors.foundational} 15%, transparent)`,
+      borderBadge: `color-mix(in srgb, ${graphColors.foundational} 40%, transparent)`
     },
     derivative: {
       name: '後續衍生突破',
-      color: '#83a598', // 鋼鐵藍
-      bgBadge: 'rgba(131, 165, 152, 0.15)',
-      borderBadge: 'rgba(131, 165, 152, 0.4)'
+      color: graphColors.derivative,
+      bgBadge: `color-mix(in srgb, ${graphColors.derivative} 15%, transparent)`,
+      borderBadge: `color-mix(in srgb, ${graphColors.derivative} 40%, transparent)`
     },
     methodological: {
       name: '架構組件親緣',
-      color: '#d3869b', // 暮光紫
-      bgBadge: 'rgba(211, 134, 155, 0.15)',
-      borderBadge: 'rgba(211, 134, 155, 0.4)'
+      color: graphColors.methodological,
+      bgBadge: `color-mix(in srgb, ${graphColors.methodological} 15%, transparent)`,
+      borderBadge: `color-mix(in srgb, ${graphColors.methodological} 40%, transparent)`
     }
-  };
+  } as Record<CitationCategory, { name: string; color: string; bgBadge: string; borderBadge: string }>;
 
   function initGraphData(graph: CitationGraphData) {
     if (!graph || !graph.nodes || graph.nodes.length === 0) return;

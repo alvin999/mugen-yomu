@@ -1,0 +1,695 @@
+/**
+ * MUGEN YOMU Theme Engine & Variable Mapping Stylesheet
+ * Supports Gruvbox Dark (Default), Gruvbox Soft Dark, Catppuccin, Tokyo Night, IntelliJ, Nord, Dracula, One Dark, Solarized, GitHub Dark, Gruvbox Light
+ */
+
+/* 1. Theme Token Definitions */
+
+/* 1.1 Gruvbox Dark (Default Fallback) */
+:root,
+[data-theme="gruvbox-dark"] {
+  --bg-deep: #141617;
+  --bg-gutter: #1d2021;
+  --bg-main: #282828;
+  --bg-surface: #32302f;
+  --bg-card: #3c3836;
+  --border-dim: #3c3836;
+  --border-rule: #504945;
+  --border-bright: #665c54;
+
+  --fg-primary: #ebdbb2;
+  --fg-secondary: #d5c4a1;
+  --fg-muted: #a89984;
+  --fg-dim: #7c6f64;
+
+  --color-orange: #fe8019;
+  --color-orange-dark: #d65d0e;
+  --color-yellow: #fabd2f;
+  --color-yellow-dark: #d79921;
+  --color-green: #b8bb26;
+  --color-green-dark: #98971a;
+  --color-aqua: #8ec07c;
+  --color-aqua-dark: #689d6a;
+  --color-blue: #83a598;
+  --color-blue-dark: #458588;
+  --color-purple: #d3869b;
+  --color-purple-dark: #b16286;
+  --color-red: #fb4934;
+}
+
+/* 1.2 Gruvbox Soft Dark */
+[data-theme="gruvbox-soft"] {
+  --bg-deep: #242322;
+  --bg-gutter: #2a2726;
+  --bg-main: #32302f;
+  --bg-surface: #3a3735;
+  --bg-card: #45403d;
+  --border-dim: #45403d;
+  --border-rule: #5a524c;
+  --border-bright: #6f655d;
+
+  --fg-primary: #ebdbb2;
+  --fg-secondary: #d5c4a1;
+  --fg-muted: #a89984;
+  --fg-dim: #7c6f64;
+
+  --color-orange: #fe8019;
+  --color-orange-dark: #d65d0e;
+  --color-yellow: #fabd2f;
+  --color-yellow-dark: #d79921;
+  --color-green: #b8bb26;
+  --color-green-dark: #98971a;
+  --color-aqua: #8ec07c;
+  --color-aqua-dark: #689d6a;
+  --color-blue: #83a598;
+  --color-blue-dark: #458588;
+  --color-purple: #d3869b;
+  --color-purple-dark: #b16286;
+  --color-red: #fb4934;
+}
+
+/* 1.3 Catppuccin Mocha */
+[data-theme="catppuccin"] {
+  --bg-deep: #11111b;
+  --bg-gutter: #181825;
+  --bg-main: #1e1e2e;
+  --bg-surface: #24253a;
+  --bg-card: #313244;
+  --border-dim: #313244;
+  --border-rule: #45475a;
+  --border-bright: #585b70;
+
+  --fg-primary: #cdd6f4;
+  --fg-secondary: #bac2de;
+  --fg-muted: #a6adc8;
+  --fg-dim: #6c7086;
+
+  --color-orange: #cba6f7; /* Signature Mauve */
+  --color-orange-dark: #b4befe;
+  --color-yellow: #fab387; /* Warm Peach */
+  --color-yellow-dark: #f9e2af;
+  --color-green: #a6e3a1;
+  --color-green-dark: #94e2d5;
+  --color-aqua: #89dceb;
+  --color-aqua-dark: #74c7ec;
+  --color-blue: #89b4fa;
+  --color-blue-dark: #b4befe;
+  --color-purple: #f5c2e7;
+  --color-purple-dark: #eba0ac;
+  --color-red: #f38ba8;
+}
+
+/* 1.4 Tokyo Night */
+[data-theme="tokyo"] {
+  --bg-deep: #16161e;
+  --bg-gutter: #1a1b26;
+  --bg-main: #24283b;
+  --bg-surface: #1f2335;
+  --bg-card: #292e42;
+  --border-dim: #2f3549;
+  --border-rule: #3b4261;
+  --border-bright: #545c7e;
+
+  --fg-primary: #c0caf5;
+  --fg-secondary: #a9b1d6;
+  --fg-muted: #787c99;
+  --fg-dim: #565f89;
+
+  --color-orange: #7aa2f7; /* Tokyo Blue Primary */
+  --color-orange-dark: #3d59a1;
+  --color-yellow: #e0af68; /* Tokyo Warm Amber */
+  --color-yellow-dark: #ff9e64;
+  --color-green: #9ece6a;
+  --color-green-dark: #73daca;
+  --color-aqua: #7dcfff;
+  --color-aqua-dark: #2ac3de;
+  --color-blue: #7aa2f7;
+  --color-blue-dark: #3d59a1;
+  --color-purple: #bb9af7;
+  --color-purple-dark: #9d7cd8;
+  --color-red: #f7768e;
+}
+
+/* 1.5 IntelliJ Dark (Darcula) */
+[data-theme="intellij"] {
+  --bg-deep: #191a1c;
+  --bg-gutter: #1e1f22;
+  --bg-main: #2b2d30;
+  --bg-surface: #313438;
+  --bg-card: #393b40;
+  --border-dim: #393b40;
+  --border-rule: #43454a;
+  --border-bright: #52565e;
+
+  --fg-primary: #dfe1e5;
+  --fg-secondary: #bcbec4;
+  --fg-muted: #868a91;
+  --fg-dim: #6f737a;
+
+  --color-orange: #3574f0; /* IntelliJ Signature Electric Blue */
+  --color-orange-dark: #2558c4;
+  --color-yellow: #f59e0b; /* IntelliJ Accent Amber */
+  --color-yellow-dark: #d97706;
+  --color-green: #59a869;
+  --color-green-dark: #498b57;
+  --color-aqua: #56a8f5;
+  --color-aqua-dark: #3574f0;
+  --color-blue: #3574f0;
+  --color-blue-dark: #2558c4;
+  --color-purple: #c77dbb;
+  --color-purple-dark: #ab60a0;
+  --color-red: #e05555;
+}
+
+/* 1.6 Nord */
+[data-theme="nord"] {
+  --bg-deep: #242933;
+  --bg-gutter: #2e3440;
+  --bg-main: #3b4252;
+  --bg-surface: #434c5e;
+  --bg-card: #4c566a;
+  --border-dim: #434c5e;
+  --border-rule: #4c566a;
+  --border-bright: #616e88;
+
+  --fg-primary: #eceff4;
+  --fg-secondary: #e5e9f0;
+  --fg-muted: #d8dee9;
+  --fg-dim: #7c879c;
+
+  --color-orange: #88c0d0; /* Frost Blue/Teal */
+  --color-orange-dark: #5e81ac;
+  --color-yellow: #ebcb8b; /* Aurora Gold */
+  --color-yellow-dark: #d08770;
+  --color-green: #a3be8c;
+  --color-green-dark: #8fbcbb;
+  --color-aqua: #8fbcbb;
+  --color-aqua-dark: #81a1c1;
+  --color-blue: #81a1c1;
+  --color-blue-dark: #5e81ac;
+  --color-purple: #b48ead;
+  --color-purple-dark: #987192;
+  --color-red: #bf616a;
+}
+
+/* 1.7 Dracula */
+[data-theme="dracula"] {
+  --bg-deep: #191a21;
+  --bg-gutter: #21222c;
+  --bg-main: #282a36;
+  --bg-surface: #343746;
+  --bg-card: #44475a;
+  --border-dim: #44475a;
+  --border-rule: #6272a4;
+  --border-bright: #7e8db9;
+
+  --fg-primary: #f8f8f2;
+  --fg-secondary: #e2e4e9;
+  --fg-muted: #9ea8c7;
+  --fg-dim: #6272a4;
+
+  --color-orange: #bd93f9; /* Dracula Purple */
+  --color-orange-dark: #9c68ea;
+  --color-yellow: #ffb86c; /* Dracula Orange */
+  --color-yellow-dark: #f1fa8c;
+  --color-green: #50fa7b;
+  --color-green-dark: #37d65f;
+  --color-aqua: #8be9fd;
+  --color-aqua-dark: #58d8f5;
+  --color-blue: #8be9fd;
+  --color-blue-dark: #6272a4;
+  --color-purple: #ff79c6;
+  --color-purple-dark: #bd93f9;
+  --color-red: #ff5555;
+}
+
+/* 1.8 One Dark Pro */
+[data-theme="one-dark"] {
+  --bg-deep: #1b1d23;
+  --bg-gutter: #21252b;
+  --bg-main: #282c34;
+  --bg-surface: #2c313a;
+  --bg-card: #353b45;
+  --border-dim: #353b45;
+  --border-rule: #3e4451;
+  --border-bright: #4e5666;
+
+  --fg-primary: #abb2bf;
+  --fg-secondary: #9da5b4;
+  --fg-muted: #6b727d;
+  --fg-dim: #5c6370;
+
+  --color-orange: #61afef; /* One Dark Blue */
+  --color-orange-dark: #4d8cc7;
+  --color-yellow: #e5c07b; /* One Dark Yellow */
+  --color-yellow-dark: #d19a66;
+  --color-green: #98c379;
+  --color-green-dark: #7da85f;
+  --color-aqua: #56b6c2;
+  --color-aqua-dark: #3b9ca8;
+  --color-blue: #61afef;
+  --color-blue-dark: #4d8cc7;
+  --color-purple: #c678dd;
+  --color-purple-dark: #a85bbb;
+  --color-red: #e06c75;
+}
+
+/* 1.9 Solarized Dark */
+[data-theme="solarized-dark"] {
+  --bg-deep: #00212b;
+  --bg-gutter: #002b36;
+  --bg-main: #073642;
+  --bg-surface: #0d424f;
+  --bg-card: #134e5c;
+  --border-dim: #134e5c;
+  --border-rule: #586e75;
+  --border-bright: #657b83;
+
+  --fg-primary: #93a1a1;
+  --fg-secondary: #839496;
+  --fg-muted: #657b83;
+  --fg-dim: #586e75;
+
+  --color-orange: #268bd2; /* Solarized Blue Accent */
+  --color-orange-dark: #1f72ac;
+  --color-yellow: #b58900; /* Solarized Gold */
+  --color-yellow-dark: #cb4b16;
+  --color-green: #859900;
+  --color-green-dark: #6e7f00;
+  --color-aqua: #2aa198;
+  --color-aqua-dark: #207e77;
+  --color-blue: #268bd2;
+  --color-blue-dark: #1f72ac;
+  --color-purple: #6c71c4;
+  --color-purple-dark: #5459a8;
+  --color-red: #dc322f;
+}
+
+/* 1.10 GitHub Dark */
+[data-theme="github-dark"] {
+  --bg-deep: #010409;
+  --bg-gutter: #0d1117;
+  --bg-main: #161b22;
+  --bg-surface: #21262d;
+  --bg-card: #30363d;
+  --border-dim: #30363d;
+  --border-rule: #3c444d;
+  --border-bright: #484f58;
+
+  --fg-primary: #e6edf3;
+  --fg-secondary: #c9d1d9;
+  --fg-muted: #8b949e;
+  --fg-dim: #6e7681;
+
+  --color-orange: #2f81f7; /* GitHub Brand Blue */
+  --color-orange-dark: #1f6feb;
+  --color-yellow: #d29922; /* GitHub Gold */
+  --color-yellow-dark: #bb8009;
+  --color-green: #3fb950;
+  --color-green-dark: #2ea043;
+  --color-aqua: #39c5cf;
+  --color-aqua-dark: #1b7c83;
+  --color-blue: #58a6ff;
+  --color-blue-dark: #1f6feb;
+  --color-purple: #bc8cff;
+  --color-purple-dark: #a371f7;
+  --color-red: #f85149;
+}
+
+/* 1.11 Gruvbox Light */
+[data-theme="gruvbox-light"] {
+  --bg-deep: #f2e5bc;
+  --bg-gutter: #fbf1c7;
+  --bg-main: #ebdbb2;
+  --bg-surface: #d5c4a1;
+  --bg-card: #bdae93;
+  --border-dim: #bdae93;
+  --border-rule: #a89984;
+  --border-bright: #928374;
+
+  --fg-primary: #282828;
+  --fg-secondary: #3c3836;
+  --fg-muted: #504945;
+  --fg-dim: #7c6f64;
+
+  --color-orange: #af3a03; /* Gruvbox Light Warm Ochre */
+  --color-orange-dark: #9d0006;
+  --color-yellow: #b57614;
+  --color-yellow-dark: #92630f;
+  --color-green: #79740e;
+  --color-green-dark: #5e5907;
+  --color-aqua: #427b58;
+  --color-aqua-dark: #2f593f;
+  --color-blue: #076678;
+  --color-blue-dark: #044b58;
+  --color-purple: #8f3f71;
+  --color-purple-dark: #6f2f56;
+  --color-red: #9d0006;
+}
+
+/* 2. Universal Dynamic Token Mapping Layer */
+/* Applies to all non-default themes to seamlessly rebind all component classes */
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) body {
+  background-color: var(--bg-gutter) !important;
+  color: var(--fg-primary) !important;
+}
+
+/* 2.1 Solid Background Overrides */
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#141617\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#141617]"] {
+  background-color: var(--bg-deep) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#1d2021\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#1d2021]"]:not([class*="/"]) {
+  background-color: var(--bg-gutter) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#282828\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#282828]"]:not([class*="/"]) {
+  background-color: var(--bg-main) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#32302f\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#32302f]"] {
+  background-color: var(--bg-surface) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#3c3836\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#3c3836]"] {
+  background-color: var(--bg-card) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#fe8019\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#fe8019]"]:not([class*="/"]) {
+  background-color: var(--color-orange) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#d65d0e\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#d65d0e]"] {
+  background-color: var(--color-orange-dark) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#fabd2f\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#fabd2f]"]:not([class*="/"]) {
+  background-color: var(--color-yellow) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#b8bb26\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#b8bb26]"]:not([class*="/"]) {
+  background-color: var(--color-green) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#8ec07c\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#8ec07c]"]:not([class*="/"]) {
+  background-color: var(--color-aqua) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#83a598\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#83a598]"]:not([class*="/"]) {
+  background-color: var(--color-blue) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#fb4934\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#fb4934]"]:not([class*="/"]) {
+  background-color: var(--color-red) !important;
+}
+
+/* 2.2 Semi-transparent Overrides */
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#1d2021\]\/95,
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#1d2021]/95"] {
+  background-color: color-mix(in srgb, var(--bg-gutter) 95%, transparent) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#1d2021\]\/80,
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#1d2021]/80"] {
+  background-color: color-mix(in srgb, var(--bg-gutter) 80%, transparent) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#282828\]\/50,
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#282828]/50"] {
+  background-color: color-mix(in srgb, var(--bg-main) 50%, transparent) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#fe8019\]\/20,
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#fe8019]/20"] {
+  background-color: color-mix(in srgb, var(--color-orange) 20%, transparent) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#fe8019\]\/15,
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#fe8019]/15"] {
+  background-color: color-mix(in srgb, var(--color-orange) 15%, transparent) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#fe8019\]\/10,
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#fe8019]/10"] {
+  background-color: color-mix(in srgb, var(--color-orange) 10%, transparent) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#fabd2f\]\/20,
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#fabd2f]/20"] {
+  background-color: color-mix(in srgb, var(--color-yellow) 20%, transparent) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#fabd2f\]\/15,
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#fabd2f]/15"] {
+  background-color: color-mix(in srgb, var(--color-yellow) 15%, transparent) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#fabd2f\]\/10,
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#fabd2f]/10"] {
+  background-color: color-mix(in srgb, var(--color-yellow) 10%, transparent) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#b8bb26\]\/20,
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#b8bb26]/20"] {
+  background-color: color-mix(in srgb, var(--color-green) 20%, transparent) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#8ec07c\]\/10,
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#8ec07c]/10"] {
+  background-color: color-mix(in srgb, var(--color-aqua) 10%, transparent) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#83a598\]\/15,
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#83a598]/15"] {
+  background-color: color-mix(in srgb, var(--color-blue) 15%, transparent) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .bg-\[\#fb4934\]\/15,
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="bg-[#fb4934]/15"] {
+  background-color: color-mix(in srgb, var(--color-red) 15%, transparent) !important;
+}
+
+/* 2.3 Text Color Overrides */
+html[data-theme]:not([data-theme="gruvbox-dark"]) .text-\[\#ebdbb2\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="text-[#ebdbb2]"] {
+  color: var(--fg-primary) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .text-\[\#d5c4a1\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="text-[#d5c4a1]"] {
+  color: var(--fg-secondary) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .text-\[\#a89984\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="text-[#a89984]"] {
+  color: var(--fg-muted) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .text-\[\#7c6f64\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="text-[#7c6f64]"] {
+  color: var(--fg-dim) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .text-\[\#fe8019\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="text-[#fe8019]"] {
+  color: var(--color-orange) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .text-\[\#fabd2f\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="text-[#fabd2f]"] {
+  color: var(--color-yellow) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .text-\[\#b8bb26\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="text-[#b8bb26]"] {
+  color: var(--color-green) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .text-\[\#8ec07c\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="text-[#8ec07c]"] {
+  color: var(--color-aqua) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .text-\[\#83a598\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="text-[#83a598]"] {
+  color: var(--color-blue) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .text-\[\#d3869b\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="text-[#d3869b]"] {
+  color: var(--color-purple) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .text-\[\#fb4934\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="text-[#fb4934]"] {
+  color: var(--color-red) !important;
+}
+
+/* Inverted / Contrast button text */
+html[data-theme]:not([data-theme="gruvbox-dark"]) .text-\[\#1d2021\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="text-[#1d2021]"] {
+  color: var(--bg-gutter) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .text-\[\#282828\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="text-[#282828]"] {
+  color: var(--bg-main) !important;
+}
+
+/* 2.4 Border Color Overrides */
+html[data-theme]:not([data-theme="gruvbox-dark"]) .border-\[\#3c3836\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="border-[#3c3836]"] {
+  border-color: var(--border-dim) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .border-\[\#504945\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="border-[#504945]"] {
+  border-color: var(--border-rule) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .border-\[\#665c54\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="border-[#665c54]"] {
+  border-color: var(--border-bright) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .border-\[\#fe8019\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="border-[#fe8019]"]:not([class*="/"]) {
+  border-color: var(--color-orange) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .border-\[\#fabd2f\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="border-[#fabd2f]"]:not([class*="/"]) {
+  border-color: var(--color-yellow) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .border-\[\#b8bb26\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="border-[#b8bb26]"] {
+  border-color: var(--color-green) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .border-\[\#8ec07c\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="border-[#8ec07c]"]:not([class*="/"]) {
+  border-color: var(--color-aqua) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .border-\[\#83a598\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="border-[#83a598]"]:not([class*="/"]) {
+  border-color: var(--color-blue) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .border-\[\#fb4934\],
+html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="border-[#fb4934]"]:not([class*="/"]) {
+  border-color: var(--color-red) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .border-\[\#fe8019\]\/40,
+html[data-theme]:not([data-theme="gruvbox-dark"]) .border-\[\#fe8019\]\/50,
+html[data-theme]:not([data-theme="gruvbox-dark"]) .border-\[\#fe8019\]\/60 {
+  border-color: color-mix(in srgb, var(--color-orange) 50%, transparent) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .border-\[\#fabd2f\]\/40 {
+  border-color: color-mix(in srgb, var(--color-yellow) 40%, transparent) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .border-\[\#8ec07c\]\/40 {
+  border-color: color-mix(in srgb, var(--color-aqua) 40%, transparent) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .border-\[\#83a598\]\/40 {
+  border-color: color-mix(in srgb, var(--color-blue) 40%, transparent) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .border-\[\#fb4934\]\/40 {
+  border-color: color-mix(in srgb, var(--color-red) 40%, transparent) !important;
+}
+
+/* 2.5 Interactive & Pseudo-State Overrides */
+html[data-theme]:not([data-theme="gruvbox-dark"]) .hover\:bg-\[\#32302f\]:hover {
+  background-color: var(--bg-surface) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .hover\:bg-\[\#282828\]:hover {
+  background-color: var(--bg-main) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .hover\:bg-\[\#3c3836\]:hover {
+  background-color: var(--bg-card) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .hover\:bg-\[\#1d2021\]:hover {
+  background-color: var(--bg-gutter) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .hover\:bg-\[\#d65d0e\]:hover {
+  background-color: var(--color-orange-dark) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .hover\:text-\[\#ebdbb2\]:hover {
+  color: var(--fg-primary) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .hover\:text-\[\#fe8019\]:hover {
+  color: var(--color-orange) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .hover\:text-\[\#fb4934\]:hover {
+  color: var(--color-red) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .hover\:border-\[\#fe8019\]:hover {
+  border-color: var(--color-orange) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .hover\:border-\[\#fe8019\]\/60:hover {
+  border-color: color-mix(in srgb, var(--color-orange) 60%, transparent) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .hover\:border-\[\#504945\]:hover {
+  border-color: var(--border-rule) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .focus\:border-\[\#fe8019\]:focus {
+  border-color: var(--color-orange) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .focus\:ring-\[\#fe8019\]:focus {
+  --tw-ring-color: var(--color-orange) !important;
+}
+
+/* 2.6 Native Selection & Scrollbars */
+html[data-theme]:not([data-theme="gruvbox-dark"]) ::selection {
+  background-color: color-mix(in srgb, var(--color-orange) 35%, transparent) !important;
+  color: var(--color-yellow) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) ::-webkit-scrollbar-track {
+  background: var(--bg-gutter) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) ::-webkit-scrollbar-thumb {
+  background: var(--border-rule) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) ::-webkit-scrollbar-thumb:hover {
+  background: var(--color-orange) !important;
+}
+
+/* Focus lens glow dynamic update */
+html[data-theme]:not([data-theme="gruvbox-dark"]) .focus-lens-bar {
+  background-color: var(--color-orange) !important;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--color-orange) 65%, transparent) !important;
+}

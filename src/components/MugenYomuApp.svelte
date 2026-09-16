@@ -18,6 +18,7 @@
     getInitialLibrary,
     getActivePaperId,
     setActivePaperId,
+    saveLibraryToStorage,
     type PaperDocument,
     type ChapterSection
   } from '../stores/documentStore';
@@ -705,6 +706,17 @@
     setPaper(event.detail.paper);
   }
 
+  function handleDirectImportPaper(event: CustomEvent<{ paper: PaperDocument }>) {
+    const paper = event.detail.paper;
+    const exists = paperLibrary.some(p => p.id === paper.id);
+    const updatedLibrary = exists
+      ? paperLibrary.map(p => p.id === paper.id ? paper : p)
+      : [paper, ...paperLibrary];
+    paperLibrary = updatedLibrary;
+    saveLibraryToStorage(updatedLibrary);
+    setPaper(paper);
+  }
+
   function handlePaperSelected(event: CustomEvent<{ paper: PaperDocument }>) {
     setPaper(event.detail.paper);
   }
@@ -796,6 +808,7 @@
               sections={activePaper?.sections || []}
               on:selectSection={handleSelectSection}
               on:sectionsAligned={handleSectionsAligned}
+              on:importPaper={handleDirectImportPaper}
               on:switchToSplit={() => {}}
             />
           </div>
@@ -971,6 +984,11 @@
         sections={activePaper?.sections || []}
         on:selectSection={handleSelectSection}
         on:sectionsAligned={handleSectionsAligned}
+        on:importPaper={(e) => {
+          handleDirectImportPaper(e);
+          isPdfDrawerOpen = false;
+          readingMode = 'split';
+        }}
         on:close={() => isPdfDrawerOpen = false}
         on:switchToSplit={() => { isPdfDrawerOpen = false; readingMode = 'split'; }}
       />

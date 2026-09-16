@@ -12,6 +12,7 @@
   } from '../../services/pdfService';
   import type * as pdfjsLib from 'pdfjs-dist';
   import katex from 'katex';
+  import { parsePdfToDocument } from '../../services/pdfParserService';
 
   export let paper: PaperDocument | null = null;
   export let mode: 'split' | 'drawer' = 'split';
@@ -46,22 +47,92 @@
 
   function extractImageInfo(text: string): { url: string; alt: string } | null {
     if (!text) return null;
-    const match = text.trim().match(/^!\[(.*?)\]\((https?:\/\/.*?)\)$/);
-    if (match) {
-      return { alt: match[1] || '學術圖表', url: match[2] };
+    const trimmed = text.trim();
+
+    // 1. Linked markdown image: [![alt](imgUrl)](linkUrl)
+    const linkedMatch = trimmed.match(/^\[!\[(.*?)\]\((.*?)\)\]\((.*?)\)$/);
+    if (linkedMatch) {
+      const url = linkedMatch[2].split(' ')[0].replace(/['"]/g, '');
+      return { alt: linkedMatch[1] || '學術圖表', url };
     }
-    const urlMatch = text.trim().match(/^(https?:\/\/.*\.(?:png|jpg|jpeg|svg|webp)(?:\?.*)?)$/i);
+
+    // 2. Standard markdown image: ![alt](imgUrl)
+    const match = trimmed.match(/^!\[(.*?)\]\((.*?)\)$/);
+    if (match) {
+      const url = match[2].split(' ')[0].replace(/['"]/g, '');
+      return { alt: match[1] || '學術圖表', url };
+    }
+
+    // 3. HTML img tag: <img src="url" alt="alt">
+    const htmlMatch = trimmed.match(/<img\s+[^>]*src=["'](.*?)["'][^>]*>/i);
+    if (htmlMatch) {
+      const altMatch = trimmed.match(/alt=["'](.*?)["']/i);
+      return { alt: altMatch ? altMatch[1] : '學術圖表', url: htmlMatch[1] };
+    }
+
+    // 4. Direct image URL
+    const urlMatch = trimmed.match(/^(https?:\/\/.*\.(?:png|jpg|jpeg|svg|webp)(?:\?.*)?)$/i);
     if (urlMatch) {
       return { alt: '學術圖表', url: urlMatch[1] };
     }
+
     return null;
+  }
+
+  function extractBlockFormula(para: string): string | null {
+    if (!para) return null;
+    const trimmed = para.trim();
+    if (trimmed.startsWith('$$') && trimmed.endsWith('$$') && trimmed.length >= 4) {
+      return trimmed.slice(2, -2).trim();
+    }
+    return null;
+  }
+
+  function escapeHtml(str: string): string {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function formatParagraphWithMath(text: string): string {
+    if (!text) return '';
+    if (!text.includes('$')) {
+      return escapeHtml(text);
+    }
+
+    const parts: string[] = [];
+    let lastIndex = 0;
+    const regex = /\$([^$\n]+?)\$/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(escapeHtml(text.slice(lastIndex, match.index)));
+      }
+      const math = match[1].trim();
+      const rendered = renderMath(math, false);
+      parts.push(`<span class="inline-math px-0.5 align-baseline">${rendered}</span>`);
+      lastIndex = regex.lastIndex;
+    }
+
+    if (lastIndex < text.length) {
+      parts.push(escapeHtml(text.slice(lastIndex)));
+    }
+
+    return parts.join('');
   }
 
   // Local File States
   let localPdfBlobUrl: string | null = null;
   let localPdfArrayBuffer: ArrayBuffer | null = null;
+  let localPdfFile: File | null = null;
   let isDraggingOver: boolean = false;
   let fileInputRef: HTMLInputElement | null = null;
+  let isConvertingToPaper: boolean = false;
+  let convertProgress: number = 0;
 
   // Pagination & Display States
   let isSyncEnabled: boolean = true;
@@ -343,6 +414,7 @@
   }
 
   function loadLocalFile(file: File) {
+    localPdfFile = file;
     if (localPdfBlobUrl) URL.revokeObjectURL(localPdfBlobUrl);
     localPdfBlobUrl = URL.createObjectURL(file);
 
@@ -358,6 +430,7 @@
   }
 
   function clearLocalPdf() {
+    localPdfFile = null;
     if (localPdfBlobUrl) {
       URL.revokeObjectURL(localPdfBlobUrl);
       localPdfBlobUrl = null;
@@ -366,6 +439,30 @@
     currentPage = 1;
     pageInputVal = 1;
     currentLoadedSource = null;
+  }
+
+  async function handleConvertToPaper() {
+    if (!localPdfFile && !localPdfArrayBuffer) return;
+    isConvertingToPaper = true;
+    convertProgress = 0;
+
+    try {
+      const source = localPdfFile || localPdfArrayBuffer!;
+      const name = localPdfFile ? localPdfFile.name : (paper?.title || '本機文獻');
+      const doc = await parsePdfToDocument(source, name, (pct) => {
+        convertProgress = pct;
+      });
+
+      if (localPdfBlobUrl && !doc.pdfUrl) {
+        doc.pdfUrl = localPdfBlobUrl;
+      }
+
+      dispatch('importPaper', { paper: doc });
+    } catch (err: any) {
+      alert(`解析本機 PDF 失敗：${err?.message || err}`);
+    } finally {
+      isConvertingToPaper = false;
+    }
   }
 
   function handleClose() {
@@ -435,6 +532,24 @@
 
     <!-- Right: Zoom, Engine Switch & Actions -->
     <div class="flex items-center gap-1.5 shrink-0">
+      <!-- Quick Convert to Study Canvas Button -->
+      {#if (localPdfFile || localPdfArrayBuffer)}
+        <button
+          class="px-2 py-0.5 rounded bg-[#fe8019]/20 hover:bg-[#fe8019] text-[#fe8019] hover:text-[#1d2021] border border-[#fe8019]/60 transition-colors flex items-center gap-1 text-[10px] font-mono font-bold cursor-pointer disabled:opacity-50"
+          disabled={isConvertingToPaper}
+          on:click={handleConvertToPaper}
+          title="將此本機 PDF 抽取大綱與章節，轉換為三欄雙語伴讀畫布"
+        >
+          {#if isConvertingToPaper}
+            <span class="material-symbols-outlined text-[12px] animate-spin">sync</span>
+            <span>解析中 {convertProgress}%</span>
+          {:else}
+            <span class="material-symbols-outlined text-[12px]">auto_stories</span>
+            <span>⚡ 轉換為研讀畫布</span>
+          {/if}
+        </button>
+      {/if}
+
       <!-- Zoom Controls (Canvas Mode) -->
       {#if viewerMode === 'canvas' && pdfDoc}
         <div class="flex items-center bg-[#282828] border border-[#3c3836] rounded px-1 py-0.5 gap-1 text-[11px]">
@@ -452,38 +567,40 @@
         </div>
       {/if}
 
-      <!-- Engine Switcher Pill (3-Mode: 畫布 / 原文 / 內核) -->
+      <!-- Engine Switcher Pill (3-Mode: 畫布 / 原文 / 網頁) -->
       <div class="flex items-center bg-[#282828] border border-[#3c3836] rounded p-0.5 gap-0.5 text-[10px]">
-        <button
-          class="px-1.5 py-0.5 rounded transition-colors cursor-pointer flex items-center gap-0.5 {viewerMode === 'canvas' ? 'bg-[#fe8019] text-[#1d2021] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
-          on:click={() => {
-            viewerMode = 'canvas';
-            if (pdfDoc) triggerPageRender(currentPage);
-            else handleRetry();
-          }}
-          title="PDF.js 畫布高精對照模式"
-        >
-          <span class="material-symbols-outlined text-[11px]">brush</span>
-          <span>畫布</span>
-        </button>
+        {#if isPdf}
+          <button
+            class="px-1.5 py-0.5 rounded transition-colors cursor-pointer flex items-center gap-0.5 {viewerMode === 'canvas' ? 'bg-[#fe8019] text-[#1d2021] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
+            on:click={() => {
+              viewerMode = 'canvas';
+              if (pdfDoc) triggerPageRender(currentPage);
+              else handleRetry();
+            }}
+            title="PDF.js 向量畫布高精對照模式"
+          >
+            <span class="material-symbols-outlined text-[11px]">brush</span>
+            <span>畫布</span>
+          </button>
+        {/if}
 
         <button
           class="px-1.5 py-0.5 rounded transition-colors cursor-pointer flex items-center gap-0.5 {viewerMode === 'text' ? 'bg-[#fe8019] text-[#1d2021] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
           on:click={() => viewerMode = 'text'}
-          title="結構化原文對照模式（100% 穩定，零空白）"
+          title="結構化原文對照模式（完整圖表與 KaTeX 算式，零空白）"
         >
           <span class="material-symbols-outlined text-[11px]">article</span>
           <span>原文</span>
         </button>
 
-        {#if activeBaseUrl}
+        {#if paper?.sourceUrl || activeBaseUrl}
           <button
             class="px-1.5 py-0.5 rounded transition-colors cursor-pointer flex items-center gap-0.5 {viewerMode === 'native' ? 'bg-[#fe8019] text-[#1d2021] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
             on:click={() => viewerMode = 'native'}
-            title="瀏覽器內核 Iframe 檢視器"
+            title={paper?.type === 'web' ? '原站即時網頁內嵌檢視器' : '瀏覽器外掛 PDF 檢視器'}
           >
             <span class="material-symbols-outlined text-[11px]">web</span>
-            <span>內核</span>
+            <span>{paper?.type === 'web' ? '網頁' : '內核'}</span>
           </button>
         {/if}
       </div>
@@ -804,14 +921,27 @@
                 <div class="flex flex-col gap-3">
                   {#each sec.paragraphs as para}
                     {@const imgInfo = extractImageInfo(para)}
+                    {@const formulaLatex = extractBlockFormula(para)}
                     {#if imgInfo}
-                      <figure class="my-2 p-3 bg-[#141617] border border-[#3c3836] rounded-lg flex flex-col items-center gap-2">
-                        <img src={imgInfo.url} alt={imgInfo.alt} class="max-h-[300px] max-w-full rounded object-contain" />
-                        <figcaption class="text-[11px] font-mono text-[#a89984] text-center">{imgInfo.alt}</figcaption>
+                      <figure class="my-2 p-3 bg-[#141617] border border-[#3c3836] rounded-lg flex flex-col items-center gap-2 shadow-sm">
+                        <img
+                          src={imgInfo.url}
+                          alt={imgInfo.alt}
+                          referrerpolicy="no-referrer"
+                          class="max-h-[320px] max-w-full rounded object-contain"
+                          loading="lazy"
+                        />
+                        <figcaption class="text-[11px] font-mono text-[#a89984] text-center max-w-[90%] leading-relaxed">{imgInfo.alt}</figcaption>
                       </figure>
+                    {:else if formulaLatex}
+                      <div class="p-3 bg-[#141617] border border-[#3c3836] rounded-lg flex flex-col gap-1 my-1">
+                        <div class="overflow-x-auto py-1 text-center text-[#ebdbb2]">
+                          {@html renderMath(formulaLatex, true)}
+                        </div>
+                      </div>
                     {:else}
                       <p class="font-serif text-[15px] text-[#d5c4a1] leading-[1.8] text-justify tracking-wide">
-                        {para}
+                        {@html formatParagraphWithMath(para)}
                       </p>
                     {/if}
                   {/each}
@@ -844,25 +974,38 @@
       </div>
 
     {:else}
-      <!-- Native Iframe Fallback -->
+      <!-- Native Iframe / Live Web View -->
       <div class="w-full h-full flex flex-col">
-        <!-- Native Mode Tip -->
-        <div class="h-7 bg-[#1d2021] border-b border-[#3c3836] px-3 flex items-center justify-between text-[10px] font-mono text-[#a89984] shrink-0">
-          <span>🌐 瀏覽器內核外掛模式（若因 X-Frame-Options 呈現空白，請切換至【畫布】或【原文】）</span>
-          <div class="flex items-center gap-2">
-            <button class="text-[#fabd2f] hover:underline cursor-pointer" on:click={() => viewerMode = 'text'}>
-              改用原文對照
+        <!-- Address & Action Bar -->
+        <div class="h-8 bg-[#1d2021] border-b border-[#3c3836] px-3 flex items-center justify-between text-[11px] font-mono text-[#a89984] shrink-0">
+          <div class="flex items-center gap-1.5 truncate max-w-[65%] text-[#ebdbb2]">
+            <span class="material-symbols-outlined text-[15px] text-[#8ec07c]">language</span>
+            <span class="truncate">{paper?.sourceUrl || activeBaseUrl}</span>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              class="text-[#fabd2f] hover:underline cursor-pointer flex items-center gap-0.5 text-[10px]"
+              on:click={() => viewerMode = 'text'}
+              title="切換為零破圖的純淨結構化原文模式"
+            >
+              <span class="material-symbols-outlined text-[12px]">article</span>
+              <span>切換原文對照</span>
             </button>
-            <button class="text-[#8ec07c] hover:underline cursor-pointer" on:click={handleOpenExternal}>
-              另開分頁
+            <button
+              class="text-[#8ec07c] hover:underline cursor-pointer flex items-center gap-0.5 text-[10px]"
+              on:click={handleOpenExternal}
+              title="另開原站分頁"
+            >
+              <span class="material-symbols-outlined text-[12px]">open_in_new</span>
+              <span>另開原站</span>
             </button>
           </div>
         </div>
 
-        {#if activeBaseUrl}
+        {#if paper?.sourceUrl || activeBaseUrl}
           <iframe
-            src="{activeBaseUrl}#page={currentPage}&navpanes=0&toolbar=1&view=FitH"
-            title="原始論文 PDF 檢視器 (瀏覽器外掛模式)"
+            src={isPdf ? `${activeBaseUrl}#page=${currentPage}&navpanes=0&toolbar=1&view=FitH` : (paper?.sourceUrl || activeBaseUrl)}
+            title="原檔或原站網頁檢視器"
             class="w-full flex-1 border-0 bg-[#282828]"
           ></iframe>
         {:else}

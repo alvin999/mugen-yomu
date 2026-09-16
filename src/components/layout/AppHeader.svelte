@@ -2,6 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import type { PaperDocument } from '../../stores/documentStore';
   import type { CacheStats } from '../../services/cacheService';
+  import { THEMES, currentTheme, setTheme } from '../../stores/themeStore';
 
   export let activePaper: PaperDocument | null = null;
   export let readingMode: 'bilingual' | 'split' | 'zen' | 'figures' = 'bilingual';
@@ -11,6 +12,14 @@
   export let cachedInfo: string = '$0.14 / 2.4k cached (省 82%)';
   export let isRailCollapsed: boolean = false;
   export let cacheStats: CacheStats | null = null;
+
+  let isThemeDropdownOpen: boolean = false;
+
+  function handleWindowClick() {
+    if (isThemeDropdownOpen) {
+      isThemeDropdownOpen = false;
+    }
+  }
 
   const dispatch = createEventDispatcher();
 
@@ -40,6 +49,8 @@
     dispatch('openImport');
   }
 </script>
+
+<svelte:window on:click={handleWindowClick} />
 
 <header class="fixed top-0 {isRailCollapsed ? 'left-16' : 'left-60'} right-0 h-16 bg-[#1d2021]/95 backdrop-blur-xl border-b border-[#3c3836] z-40 px-4 flex items-center justify-between shadow-md select-none gap-4 transition-all duration-300 ease-in-out">
   <!-- Left Brand & Breadcrumb (Prioritized flexible width) -->
@@ -133,7 +144,7 @@
       <button
         class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 {readingMode === 'split' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
         on:click={() => setMode('split')}
-        title="左右 50/50 雙軌並列：左側原始 PDF，右側雙語伴讀"
+        title="左右 50/50 雙軌並列：左側原始論文/網頁，右側雙語伴讀"
       >
         <span class="material-symbols-outlined text-[13px]">view_column</span>
         <span>雙軌對照</span>
@@ -159,14 +170,14 @@
 
   <!-- Right BYOK & Utilities -->
   <div class="flex items-center gap-2 shrink-0">
-    <!-- Slide-out PDF Drawer Toggle Button -->
+    <!-- Slide-out PDF / Web Drawer Toggle Button -->
     <button
       class="px-2.5 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 text-[#fabd2f] hover:text-[#fe8019] rounded-lg text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm {isPdfDrawerOpen ? '!bg-[#fe8019] !text-[#1d2021] font-semibold' : ''}"
       on:click={() => dispatch('togglePdfDrawer')}
-      title="開啟/收合原檔 PDF 側邊抽屜 (快捷鍵: Alt+P)"
+      title="開啟/收合原檔或原站側邊抽屜 (快捷鍵: Alt+P)"
     >
-      <span class="material-symbols-outlined text-[14px]">picture_as_pdf</span>
-      <span class="hidden md:inline">原檔抽屜</span>
+      <span class="material-symbols-outlined text-[14px]">{activePaper?.type === 'web' ? 'web' : 'picture_as_pdf'}</span>
+      <span class="hidden md:inline">{activePaper?.type === 'web' ? '原檔抽屜' : '原檔抽屜'}</span>
       <span class="font-mono text-[9px] opacity-70">Alt+P</span>
     </button>
     <!-- BYOK Status Pill -->
@@ -200,6 +211,66 @@
 
     <!-- Actions -->
     <div class="flex items-center gap-1">
+      <!-- Theme Switcher Dropdown -->
+      <div class="relative" id="theme-switcher-container">
+        <button
+          class="w-7 h-7 rounded-lg flex items-center justify-center text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2] transition-colors cursor-pointer {isThemeDropdownOpen ? 'bg-[#3c3836] text-[#fe8019]' : ''}"
+          on:click|stopPropagation={() => isThemeDropdownOpen = !isThemeDropdownOpen}
+          title="切換介面主題 (當前：{$currentTheme})"
+          id="btn-theme-switcher"
+        >
+          <span class="material-symbols-outlined text-[16px]">palette</span>
+        </button>
+
+        {#if isThemeDropdownOpen}
+          <div
+            class="absolute right-0 top-9 w-64 bg-[#282828] border border-[#504945] rounded-xl shadow-2xl z-50 p-2 flex flex-col gap-1 max-h-96 overflow-y-auto animate-fade-in"
+            on:click|stopPropagation
+          >
+            <div class="px-2 py-1.5 border-b border-[#3c3836] flex items-center justify-between">
+              <span class="font-mono text-[11px] text-[#ebdbb2] font-semibold flex items-center gap-1">
+                <span class="material-symbols-outlined text-[13px] text-[#fe8019]">palette</span>
+                <span>閱讀主題 (Themes)</span>
+              </span>
+              <span class="font-mono text-[9px] text-[#a89984] bg-[#1d2021] px-1.5 py-0.5 rounded">
+                {THEMES.length} 款
+              </span>
+            </div>
+
+            <div class="flex flex-col gap-1 mt-1">
+              {#each THEMES as t}
+                <button
+                  class="w-full px-2 py-1.5 rounded-lg flex items-center justify-between transition-all text-left group cursor-pointer {t.id === $currentTheme ? 'bg-[#3c3836] border border-[#fe8019]/50' : 'hover:bg-[#32302f] border border-transparent'}"
+                  on:click={() => { setTheme(t.id); isThemeDropdownOpen = false; }}
+                >
+                  <div class="flex items-center gap-2 min-w-0">
+                    <!-- Swatch preview -->
+                    <div class="flex items-center gap-0.5 p-0.5 bg-[#141617] rounded border border-[#504945] shrink-0">
+                      {#each t.previewColors as color}
+                        <span class="w-2 h-3.5 rounded-sm" style="background-color: {color};"></span>
+                      {/each}
+                    </div>
+
+                    <div class="flex flex-col min-w-0">
+                      <span class="font-medium text-[11px] truncate {t.id === $currentTheme ? 'text-[#fe8019]' : 'text-[#ebdbb2] group-hover:text-[#fe8019]'}">
+                        {t.zhName}
+                      </span>
+                      <span class="font-mono text-[9px] text-[#a89984] truncate">
+                        {t.name}
+                      </span>
+                    </div>
+                  </div>
+
+                  {#if t.id === $currentTheme}
+                    <span class="material-symbols-outlined text-[14px] text-[#fe8019] shrink-0">check</span>
+                  {/if}
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/if}
+      </div>
+
       <button class="w-7 h-7 rounded-lg flex items-center justify-center text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2] transition-colors" on:click={exportNotes} title="匯出精讀筆記與標註">
         <span class="material-symbols-outlined text-[16px]">ios_share</span>
       </button>

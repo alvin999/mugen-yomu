@@ -12,13 +12,14 @@
     setActivePaperId,
     type PaperDocument
   } from '../../stores/documentStore';
+  import { parsePdfToDocument } from '../../services/pdfParserService';
 
   export let isOpen: boolean = false;
   export let currentLibrary: PaperDocument[] = [];
 
   const dispatch = createEventDispatcher();
 
-  let activeTab: 'arxiv' | 'web' | 'preset' | 'paste' | 'upload' = 'arxiv';
+  let activeTab: 'arxiv' | 'pdf' | 'web' | 'preset' | 'paste' | 'upload' = 'arxiv';
 
   // Tab 0: arXiv ID Import State
   let arxivInput: string = '1706.03762';
@@ -36,6 +37,14 @@
   let pasteTitle: string = '';
   let pasteContent: string = '';
   let pasteError: string = '';
+
+  // Tab PDF: Local PDF Parser State
+  let isParsingPdf: boolean = false;
+  let pdfParsePercent: number = 0;
+  let pdfParseStepText: string = '';
+  let pdfError: string = '';
+  let previewPdfPaper: PaperDocument | null = null;
+  let pdfDragOver: boolean = false;
 
   // Tab 4: File Upload State
   let uploadJsonText: string = '';
@@ -150,6 +159,53 @@
     reader.readAsText(file);
   }
 
+  // --- Tab PDF: Local Offline PDF Parser Logic ---
+  async function handlePdfFile(file: File) {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+      pdfError = '請選取標準 PDF 格式檔案 (.pdf)！';
+      return;
+    }
+    pdfError = '';
+    isParsingPdf = true;
+    pdfParsePercent = 0;
+    pdfParseStepText = '準備解析本機 PDF...';
+    previewPdfPaper = null;
+
+    try {
+      const doc = await parsePdfToDocument(file, file.name, (pct, msg) => {
+        pdfParsePercent = pct;
+        pdfParseStepText = msg;
+      });
+      previewPdfPaper = doc;
+    } catch (err: any) {
+      console.error('PDF 解析失敗:', err);
+      pdfError = `PDF 解析失敗: ${err?.message || '未知錯誤'}`;
+    } finally {
+      isParsingPdf = false;
+    }
+  }
+
+  function handlePdfInput(e: Event) {
+    const target = e.target as HTMLInputElement;
+    if (target.files && target.files[0]) {
+      handlePdfFile(target.files[0]);
+    }
+  }
+
+  function handlePdfDrop(e: DragEvent) {
+    e.preventDefault();
+    pdfDragOver = false;
+    if (e.dataTransfer?.files && e.dataTransfer.files[0]) {
+      handlePdfFile(e.dataTransfer.files[0]);
+    }
+  }
+
+  function handleImportPdfPaper() {
+    if (!previewPdfPaper) return;
+    importAndActivatePaper(previewPdfPaper);
+  }
+
   function handleImportUploadedPaper() {
     if (!previewUploadPaper) return;
     importAndActivatePaper(previewUploadPaper);
@@ -203,6 +259,15 @@
           <span class="material-symbols-outlined text-[15px] text-[#fabd2f]">auto_stories</span>
           <span>arXiv 一鍵匯入 (原圖)</span>
           <span class="bg-[#fe8019]/20 text-[#fe8019] text-[9px] px-1 py-0.2 rounded font-bold">推薦</span>
+        </button>
+
+        <button
+          class="px-3.5 py-2 font-mono text-xs rounded-t-lg transition-colors flex items-center gap-1.5 {activeTab === 'pdf' ? 'bg-[#282828] text-[#fe8019] border-t-2 border-[#fe8019] font-semibold' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]/50'}"
+          on:click={() => activeTab = 'pdf'}
+        >
+          <span class="material-symbols-outlined text-[15px] text-[#fe8019]">picture_as_pdf</span>
+          <span>本機 PDF 解析</span>
+          <span class="bg-[#b8bb26]/20 text-[#b8bb26] text-[9px] px-1 py-0.2 rounded font-bold">離線</span>
         </button>
 
         <button
@@ -359,6 +424,132 @@
                 >
                   <span class="material-symbols-outlined text-[16px]">library_add</span>
                   匯入至文獻庫並開啟研讀
+                </button>
+              </div>
+            {/if}
+          </div>
+
+        <!-- ==================== TAB PDF: LOCAL OFFLINE PDF PARSER ==================== -->
+        {:else if activeTab === 'pdf'}
+          <div class="flex flex-col gap-3.5">
+            <div class="bg-[#32302f] border border-[#3c3836] p-3 rounded-lg flex items-start gap-2.5 shadow-inner">
+              <span class="material-symbols-outlined text-[20px] text-[#fe8019] shrink-0 mt-0.5">lock</span>
+              <div class="flex flex-col gap-0.5">
+                <span class="font-semibold text-[#ebdbb2] flex items-center gap-1.5">
+                  100% 瀏覽器本機離線解析 (Zero-Server Privacy)
+                  <span class="font-mono text-[10px] text-[#b8bb26] bg-[#282828] px-1.5 py-0.2 rounded border border-[#504945]">極致隱私</span>
+                </span>
+                <span class="text-[#a89984] leading-relaxed">
+                  拖入任何學術論文或技術文獻 PDF，系統將在您的瀏覽器端直接由底層二進制流抽取大綱目錄、雙欄重排、去斷字並建立雙語伴讀工作台。文獻絕不離開您的裝置。
+                </span>
+              </div>
+            </div>
+
+            <!-- PDF Upload Drop Zone -->
+            <div
+              class="border-2 border-dashed {pdfDragOver ? 'border-[#fe8019] bg-[#fe8019]/10' : 'border-[#504945] hover:border-[#fe8019] bg-[#1d2021]'} p-6 rounded-xl flex flex-col items-center justify-center gap-2 text-center transition-all cursor-pointer relative"
+              on:dragover|preventDefault={() => pdfDragOver = true}
+              on:dragleave|preventDefault={() => pdfDragOver = false}
+              on:drop|preventDefault={handlePdfDrop}
+            >
+              <input
+                class="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                type="file"
+                accept=".pdf,application/pdf"
+                disabled={isParsingPdf}
+                on:change={handlePdfInput}
+              />
+              <span class="material-symbols-outlined text-4xl text-[#fe8019]">picture_as_pdf</span>
+              <span class="text-xs font-semibold text-[#ebdbb2]">
+                {isParsingPdf ? '正在解析中，請稍候...' : '點擊選擇或直接拖曳 PDF 檔案至此'}
+              </span>
+              <span class="font-mono text-[10px] text-[#a89984]">
+                支援 IEEE、NeurIPS、ACM、Nature 等雙欄與單欄論文排版格式
+              </span>
+            </div>
+
+            {#if isParsingPdf}
+              <!-- Progress Indicator -->
+              <div class="p-3.5 bg-[#1d2021] border border-[#fe8019]/40 rounded-xl flex flex-col gap-2 shadow-md animate-fade-in">
+                <div class="flex items-center justify-between font-mono text-[11px]">
+                  <span class="text-[#fe8019] font-semibold flex items-center gap-1.5">
+                    <span class="material-symbols-outlined text-[15px] animate-spin">sync</span>
+                    {pdfParseStepText || '正在解析 PDF 文件...'}
+                  </span>
+                  <span class="text-[#fabd2f] font-bold">{pdfParsePercent}%</span>
+                </div>
+                <div class="w-full h-1.5 bg-[#282828] rounded-full overflow-hidden">
+                  <div
+                    class="h-full bg-gradient-to-r from-[#fe8019] to-[#fabd2f] transition-all duration-300 rounded-full"
+                    style="width: {pdfParsePercent}%"
+                  ></div>
+                </div>
+              </div>
+            {/if}
+
+            {#if pdfError}
+              <div class="p-2.5 rounded bg-[#fb4934]/15 border border-[#fb4934]/40 text-[#fb4934] font-mono text-[11px] flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[14px]">error</span>
+                <span>{pdfError}</span>
+              </div>
+            {/if}
+
+            {#if previewPdfPaper}
+              <!-- Preview Card -->
+              <div class="p-4 bg-[#1d2021] border border-[#b8bb26] rounded-xl flex flex-col gap-3 shadow-lg animate-fade-in">
+                <div class="flex items-center justify-between text-[11px] font-mono">
+                  <span class="text-[#b8bb26] font-semibold flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[14px]">check_circle</span>
+                    已成功解析本機文獻結構
+                  </span>
+                  <span class="text-[#8ec07c] bg-[#8ec07c]/10 border border-[#8ec07c]/40 px-1.5 py-0.2 rounded">
+                    純本機離線文獻
+                  </span>
+                </div>
+
+                <!-- Editable Title -->
+                <div class="flex flex-col gap-1">
+                  <label for="pdf-preview-title" class="font-mono text-[10px] text-[#a89984]">文獻標題 (可直接修改確認):</label>
+                  <input
+                    id="pdf-preview-title"
+                    type="text"
+                    bind:value={previewPdfPaper.title}
+                    class="bg-[#282828] border border-[#3c3836] text-[#ebdbb2] px-2.5 py-1.5 rounded text-xs font-serif font-bold focus:outline-none focus:border-[#fe8019]"
+                  />
+                </div>
+
+                <!-- Meta row -->
+                <div class="flex items-center gap-3 font-mono text-[10px] text-[#d5c4a1] pt-1 border-t border-[#3c3836]">
+                  <span>{previewPdfPaper.sections.length} 個主要章節</span>
+                  <span class="text-[#8ec07c]">{previewPdfPaper.authors.slice(0, 2).join(', ')}</span>
+                  <span class="text-[#fe8019] flex items-center gap-0.5">
+                    <span class="material-symbols-outlined text-[12px]">picture_as_pdf</span>
+                    已就緒原檔畫布
+                  </span>
+                </div>
+
+                <!-- Outline Preview -->
+                <div class="flex flex-col gap-1">
+                  <span class="font-mono text-[10px] text-[#a89984]">辨識之章節目錄預覽：</span>
+                  <div class="max-h-28 overflow-y-auto bg-[#282828] p-2 rounded border border-[#3c3836] flex flex-col gap-1 font-mono text-[11px] text-[#ebdbb2]">
+                    {#each previewPdfPaper.sections.slice(0, 8) as sec}
+                      <div class="flex items-center justify-between text-[#d5c4a1]">
+                        <span class="truncate">§ {sec.title}</span>
+                        <span class="text-[#a89984] text-[9px] shrink-0 ml-2">p.{sec.page || 1}</span>
+                      </div>
+                    {/each}
+                    {#if previewPdfPaper.sections.length > 8}
+                      <span class="text-[#a89984] text-[10px] italic">... 其餘 {previewPdfPaper.sections.length - 8} 個章節</span>
+                    {/if}
+                  </div>
+                </div>
+
+                <button
+                  class="mt-1 w-full py-2 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
+                  on:click={handleImportPdfPaper}
+                >
+                  <span class="material-symbols-outlined text-[16px]">library_add</span>
+                  匯入至文獻庫並開啟雙語研讀
                 </button>
               </div>
             {/if}

@@ -811,6 +811,40 @@ export const anthropicCircuitsWeb: PaperDocument = {
 // -------------------------------------------------------------
 // 解析器 1: Markdown / 純文字轉 PaperDocument
 // -------------------------------------------------------------
+// 輔助函式：自 LaTeX 簡單萃取關鍵變數符號標記
+function extractVariablesFromLatex(latex: string): { symbol: string; meaning: string; color: string }[] {
+  const colorPalette = ['#fe8019', '#fabd2f', '#b8bb26', '#8ec07c', '#83a598', '#d3869b'];
+  const symbols = Array.from(new Set(latex.match(/\\[a-zA-Z]+|[a-zA-Z]_[a-zA-Z0-9]+|[a-zA-Z]/g) || []))
+    .filter(s => !['\\frac', '\\text', '\\sum', '\\int', '\\left', '\\right', '\\cdot', '\\quad', '\\sqrt', '\\in', '\\exp', '\\ln', '\\sin', '\\cos', '\\partial', '\\limits'].includes(s))
+    .slice(0, 5);
+
+  return symbols.map((sym, idx) => ({
+    symbol: sym,
+    meaning: `變數符號 ${sym}`,
+    color: colorPalette[idx % colorPalette.length]
+  }));
+}
+
+// 輔助函式：解析絕對圖片網址
+function resolveUrl(url: string, baseUrl?: string): string {
+  if (!url) return '';
+  const trimmed = url.trim().replace(/^<|>$/g, '');
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:')) {
+    return trimmed;
+  }
+  if (baseUrl) {
+    try {
+      return new URL(trimmed, baseUrl).href;
+    } catch {
+      return trimmed;
+    }
+  }
+  return trimmed;
+}
+
+// -------------------------------------------------------------
+// 解析器 1: Markdown / 純文字轉 PaperDocument
+// -------------------------------------------------------------
 export function parseMarkdownToDocument(
   title: string,
   markdown: string,
@@ -819,19 +853,31 @@ export function parseMarkdownToDocument(
 ): PaperDocument {
   const lines = markdown.split('\n');
   const sections: ChapterSection[] = [];
+  const allFigures: FigureItem[] = [];
   let currentSection: ChapterSection | null = null;
   let sectionCounter = 1;
+  let formulaCounter = 1;
+  let figureCounter = 1;
   const abstractParagraphs: string[] = [];
 
-  for (let i = 0; i < lines.length; i++) {
+  let i = 0;
+  while (i < lines.length) {
     const rawLine = lines[i];
     const trimmed = rawLine.trim();
 
-    if (!trimmed) continue;
+    if (!trimmed) {
+      i++;
+      continue;
+    }
 
-    // Detect Markdown Headers
-    if (trimmed.startsWith('# ') || trimmed.startsWith('## ') || trimmed.startsWith('### ')) {
-      const headerLevel = trimmed.startsWith('# ') ? 1 : trimmed.startsWith('## ') ? 2 : 3;
+    // 1. Detect Markdown Headers (H1 ~ H4)
+    if (
+      trimmed.startsWith('# ') ||
+      trimmed.startsWith('## ') ||
+      trimmed.startsWith('### ') ||
+      trimmed.startsWith('#### ')
+    ) {
+      const headerLevel = trimmed.startsWith('# ') ? 1 : trimmed.startsWith('## ') ? 2 : trimmed.startsWith('### ') ? 3 : 4;
       const headerTitle = trimmed.replace(/^#+\s*/, '');
 
       const secIdx = sectionCounter++;
@@ -842,31 +888,148 @@ export function parseMarkdownToDocument(
         page: Math.max(1, Math.ceil(secIdx * 0.9)),
         progress: 0,
         isRead: false,
-        paragraphs: []
+        paragraphs: [],
+        formulas: [],
+        figures: []
       };
       sections.push(currentSection);
-    } else {
-      // 檢測圖片標籤 ![alt](url) 並萃取為圖表物件
-      const imgMatch = trimmed.match(/^!\[(.*?)\]\((https?:\/\/.*?)\)$/);
-      if (imgMatch && currentSection) {
-        if (!currentSection.figures) currentSection.figures = [];
-        const figIdx = currentSection.figures.length + 1;
-        currentSection.figures.push({
-          id: `fig_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-          name: imgMatch[1] || `圖表 ${figIdx}`,
-          caption: imgMatch[1] || '論文架構與實驗分析圖表',
-          figureNumber: `Figure ${figIdx}`,
-          imageUrl: imgMatch[2]
-        });
+      i++;
+      continue;
+    }
+
+    // 2. 檢測區塊公式 (Display Math: $$ ... $$)
+    if (trimmed.startsWith('$$')) {
+      let formulaLatex = '';
+      if (trimmed.length > 2 && trimmed.endsWith('$$')) {
+        // 單行 $$ formula $$
+        formulaLatex = trimmed.slice(2, -2).trim();
+        i++;
+      } else {
+        // 多行 $$ ... $$
+        const latexParts: string[] = [];
+        const firstPart = trimmed.slice(2).trim();
+        if (firstPart) latexParts.push(firstPart);
+        i++;
+        while (i < lines.length) {
+          const nextTrimmed = lines[i].trim();
+          if (nextTrimmed.endsWith('$$')) {
+            const lastPart = nextTrimmed.slice(0, -2).trim();
+            if (lastPart) latexParts.push(lastPart);
+            i++;
+            break;
+          } else {
+            if (nextTrimmed) latexParts.push(nextTrimmed);
+            i++;
+          }
+        }
+        formulaLatex = latexParts.join(' ').trim();
       }
 
-      if (currentSection) {
-        currentSection.paragraphs.push(trimmed);
-      } else {
-        // Collect into Abstract if before any header
-        abstractParagraphs.push(trimmed);
+      // 檢查下一行是否為公式編號，如 (1)、(2)、Equation (1)
+      let formulaNumber = '';
+      if (i < lines.length) {
+        const nextLine = lines[i].trim();
+        const numMatch = nextLine.match(/^\(([0-9]+[a-zA-Z]?|[ivx]+)\)$/i) || nextLine.match(/^Equation\s*\(([0-9]+)\)/i);
+        if (numMatch) {
+          formulaNumber = `(${numMatch[1]})`;
+          i++; // 消耗此編號行
+        }
       }
+
+      if (!formulaNumber) {
+        formulaNumber = `(${formulaCounter++})`;
+      }
+
+      // 建立 FormulaItem
+      const formulaItem: FormulaItem = {
+        id: `eq_${currentSection ? currentSection.id : 'root'}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        number: formulaNumber,
+        name: `公式 ${formulaNumber}`,
+        latexText: formulaLatex,
+        page: `p. ${currentSection ? currentSection.page || 1 : 1}`,
+        variables: extractVariablesFromLatex(formulaLatex)
+      };
+
+      if (currentSection) {
+        if (!currentSection.formulas) currentSection.formulas = [];
+        currentSection.formulas.push(formulaItem);
+        // 同時以標準區塊公式語法放入 paragraphs
+        currentSection.paragraphs.push(`$$\n${formulaLatex}\n$$`);
+      } else {
+        abstractParagraphs.push(`$$\n${formulaLatex}\n$$`);
+      }
+      continue;
     }
+
+    // 3. 檢測圖片標籤 (支援 [![alt](url)](link), ![alt](url), <img src="..." />)
+    // 支援包含外層連結之語法或標準 Markdown 圖片
+    const linkedImgMatch = trimmed.match(/^\[!\[(.*?)\]\((.*?)\)\]\((.*?)\)$/);
+    const stdImgMatch = trimmed.match(/^!\[(.*?)\]\((.*?)\)$/);
+    const htmlImgMatch = trimmed.match(/<img\s+[^>]*src=["'](.*?)["'][^>]*>/i);
+
+    if (linkedImgMatch || stdImgMatch || htmlImgMatch) {
+      let rawAlt = '';
+      let rawUrl = '';
+
+      if (linkedImgMatch) {
+        rawAlt = linkedImgMatch[1];
+        rawUrl = linkedImgMatch[2];
+      } else if (stdImgMatch) {
+        rawAlt = stdImgMatch[1];
+        rawUrl = stdImgMatch[2];
+      } else if (htmlImgMatch) {
+        rawUrl = htmlImgMatch[1];
+        const altMatch = trimmed.match(/alt=["'](.*?)["']/i);
+        rawAlt = altMatch ? altMatch[1] : '';
+      }
+
+      // 清理網址參數與引號
+      const cleanUrl = rawUrl.split(' ')[0].replace(/['"]/g, '').trim();
+      const resolvedUrl = resolveUrl(cleanUrl, sourceUrl);
+
+      // 嘗試配對相鄰的圖表說明文字 (Figure X. Caption)
+      let figName = rawAlt || `圖表 ${figureCounter}`;
+      let figCaption = rawAlt || '學術文獻圖表與實驗分析數據';
+      let figNum = `Figure ${figureCounter}`;
+
+      // 若前一行或當前段落有 Figure 說明
+      const figNumMatch = figName.match(/Figure\s*([0-9A-Za-z]+)/i) || trimmed.match(/Figure\s*([0-9A-Za-z]+)/i);
+      if (figNumMatch) {
+        figNum = `Figure ${figNumMatch[1]}`;
+      }
+
+      figureCounter++;
+
+      const figureItem: FigureItem = {
+        id: `fig_${currentSection ? currentSection.id : 'root'}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        name: figName,
+        caption: figCaption,
+        figureNumber: figNum,
+        imageUrl: resolvedUrl
+      };
+
+      allFigures.push(figureItem);
+
+      if (currentSection) {
+        if (!currentSection.figures) currentSection.figures = [];
+        currentSection.figures.push(figureItem);
+        // 以標準 Markdown 格式置入段落
+        currentSection.paragraphs.push(`![${figName}](${resolvedUrl})`);
+      } else {
+        abstractParagraphs.push(`![${figName}](${resolvedUrl})`);
+      }
+
+      i++;
+      continue;
+    }
+
+    // 4. 一般內文段落
+    if (currentSection) {
+      currentSection.paragraphs.push(trimmed);
+    } else {
+      abstractParagraphs.push(trimmed);
+    }
+    i++;
   }
 
   // Fallback if no markdown headers were found
@@ -904,10 +1067,11 @@ export function parseMarkdownToDocument(
     depthLevel: 'Cognitive Synthesis',
     abstract: {
       english: abstractParagraphs.slice(0, 3).join(' ') || 'Custom document content imported into MUGEN YOMU workspace.',
-      chineseSummary: '此文獻已由 MUGEN YOMU 智能解析並完成章節大綱切割，支援長篇專注閱讀與 AI 伴讀探索。'
+      chineseSummary: '此文獻已由 MUGEN YOMU 智能解析並完成章節大綱切割，支援長篇專注閱讀、KaTeX 公式排版與 AI 伴讀探索。'
     },
     sections,
-    companionData: {}
+    companionData: {},
+    figureList: allFigures.length > 0 ? allFigures : undefined
   };
 
   // Auto-generate basic companion template for each section
@@ -961,7 +1125,7 @@ export async function fetchWebArticle(url: string): Promise<PaperDocument> {
       throw new Error(`Reader API returned HTTP ${response.status}`);
     }
 
-    const markdownText = await response.text();
+    let markdownText = await response.text();
     
     // Extract Title from first line or domain
     let parsedTitle = '';
@@ -974,7 +1138,31 @@ export async function fetchWebArticle(url: string): Promise<PaperDocument> {
     }
 
     const domainName = new URL(targetUrl).hostname;
-    return parseMarkdownToDocument(parsedTitle, markdownText, targetUrl, domainName);
+
+    // 針對 MDPI 網站處理相對圖片網址與官方 PDF
+    const isMdpi = targetUrl.includes('mdpi.com');
+    if (isMdpi) {
+      // 自動將相對圖片網址補齊
+      markdownText = markdownText.replace(/!\[(.*?)\]\((?!https?:\/\/)(.*?)\)/g, (_match, alt, relPath) => {
+        const cleanPath = relPath.replace(/^\.?\//, '');
+        return `![${alt}](https://www.mdpi.com/${cleanPath})`;
+      });
+    }
+
+    const doc = parseMarkdownToDocument(parsedTitle, markdownText, targetUrl, isMdpi ? 'MDPI Open Access' : domainName);
+
+    // 智慧推導官方 PDF 網址：MDPI 文章網址通常為 https://www.mdpi.com/2304-8158/12/15/2871
+    // 對應之官方 PDF 為 https://www.mdpi.com/2304-8158/12/15/2871/pdf
+    if (isMdpi) {
+      const mdpiMatch = targetUrl.match(/https?:\/\/(?:www\.)?mdpi\.com\/([0-9-]+\/[0-9]+\/[0-9]+\/[0-9]+)/i);
+      if (mdpiMatch) {
+        doc.pdfUrl = `https://www.mdpi.com/${mdpiMatch[1]}/pdf`;
+      } else {
+        doc.pdfUrl = `${targetUrl.replace(/\/$/, '')}/pdf`;
+      }
+    }
+
+    return doc;
   } catch (err) {
     console.warn('線上 Reader 引擎連線逾時或受限，啟用備用高品質萃取器:', err);
     // Fallback: 產生優質結構化文章以確保使用者體驗順暢不中斷
