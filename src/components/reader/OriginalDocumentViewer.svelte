@@ -66,6 +66,33 @@
     }
   }
 
+  // Paper Sheet Theme: 'parchment' (經典米白論文紙張) | 'dark' (深邃學者模式)
+  let paperTheme: 'parchment' | 'dark' = 'parchment';
+  let paperFontSize: 'normal' | 'large' = 'normal';
+
+  // Lightbox State for Academic Figures
+  let activeLightboxImg: string | null = null;
+  let activeLightboxCaption: string = '';
+
+  function openLightbox(imgUrl: string, caption?: string) {
+    if (!imgUrl) return;
+    activeLightboxImg = imgUrl;
+    activeLightboxCaption = caption || '學術圖表預覽';
+  }
+
+  function closeLightbox() {
+    activeLightboxImg = null;
+  }
+
+  function normalizeAcademicImageUrl(rawUrl: string): string {
+    if (!rawUrl) return '';
+    let url = rawUrl.trim().replace(/^<|>$/g, '');
+    if (url.includes('mdpi.com') && (url.includes('/images/') || url.includes('/html/') || /\.(?:png|jpe?g|webp|svg|gif)/i.test(url))) {
+      url = url.replace(/https?:\/\/(?:www\.)?mdpi\.com\//i, 'https://pub.mdpi-res.com/');
+    }
+    return url;
+  }
+
   function extractImageInfo(text: string): { url: string; alt: string } | null {
     if (!text) return null;
     const trimmed = text.trim();
@@ -74,27 +101,27 @@
     const linkedMatch = trimmed.match(/^\[!\[(.*?)\]\((.*?)\)\]\((.*?)\)$/);
     if (linkedMatch) {
       const url = linkedMatch[2].split(' ')[0].replace(/['"]/g, '');
-      return { alt: linkedMatch[1] || '學術圖表', url };
+      return { alt: linkedMatch[1] || '學術圖表', url: normalizeAcademicImageUrl(url) };
     }
 
     // 2. Standard markdown image: ![alt](imgUrl)
     const match = trimmed.match(/^!\[(.*?)\]\((.*?)\)$/);
     if (match) {
       const url = match[2].split(' ')[0].replace(/['"]/g, '');
-      return { alt: match[1] || '學術圖表', url };
+      return { alt: match[1] || '學術圖表', url: normalizeAcademicImageUrl(url) };
     }
 
     // 3. HTML img tag: <img src="url" alt="alt">
     const htmlMatch = trimmed.match(/<img\s+[^>]*src=["'](.*?)["'][^>]*>/i);
     if (htmlMatch) {
       const altMatch = trimmed.match(/alt=["'](.*?)["']/i);
-      return { alt: altMatch ? altMatch[1] : '學術圖表', url: htmlMatch[1] };
+      return { alt: altMatch ? altMatch[1] : '學術圖表', url: normalizeAcademicImageUrl(htmlMatch[1]) };
     }
 
     // 4. Direct image URL
-    const urlMatch = trimmed.match(/^(https?:\/\/.*\.(?:png|jpg|jpeg|svg|webp)(?:\?.*)?)$/i);
+    const urlMatch = trimmed.match(/^(https?:\/\/.*\.(?:png|jpg|jpeg|svg|webp|gif)(?:\?.*)?)$/i);
     if (urlMatch) {
-      return { alt: '學術圖表', url: urlMatch[1] };
+      return { alt: '學術圖表', url: normalizeAcademicImageUrl(urlMatch[1]) };
     }
 
     return null;
@@ -613,7 +640,7 @@
         </div>
       {/if}
 
-      <!-- Engine Switcher Pill (3-Mode: 畫布 / 原文 / 網頁) -->
+      <!-- Engine Switcher Pill (3-Mode: 畫布 / 學術紙本 / 原站網頁) -->
       <div class="flex items-center bg-[#282828] border border-[#3c3836] rounded p-0.5 gap-0.5 text-[10px]">
         {#if isPdf}
           <button
@@ -633,20 +660,20 @@
         <button
           class="px-1.5 py-0.5 rounded transition-colors cursor-pointer flex items-center gap-0.5 {viewerMode === 'text' ? 'bg-[#fe8019] text-[#1d2021] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
           on:click={() => viewerMode = 'text'}
-          title="結構化原文對照模式（完整圖表與 KaTeX 算式，零空白）"
+          title="仿真學術紙本專刊視角（完整期刊排版、圖表與 KaTeX 算式）"
         >
-          <span class="material-symbols-outlined text-[11px]">article</span>
-          <span>原文</span>
+          <span class="material-symbols-outlined text-[11px]">menu_book</span>
+          <span>紙本原文</span>
         </button>
 
         {#if paper?.sourceUrl || activeBaseUrl}
           <button
             class="px-1.5 py-0.5 rounded transition-colors cursor-pointer flex items-center gap-0.5 {viewerMode === 'native' ? 'bg-[#fe8019] text-[#1d2021] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
             on:click={() => viewerMode = 'native'}
-            title={paper?.type === 'web' ? '原站即時網頁內嵌檢視器' : '瀏覽器外掛 PDF 檢視器'}
+            title={paper?.type === 'web' ? '原站官方網頁檢視器' : '瀏覽器外掛 PDF 檢視器'}
           >
-            <span class="material-symbols-outlined text-[11px]">web</span>
-            <span>{paper?.type === 'web' ? '網頁' : '內核'}</span>
+            <span class="material-symbols-outlined text-[11px]">language</span>
+            <span>{paper?.type === 'web' ? '原站網頁' : '內核'}</span>
           </button>
         {/if}
       </div>
@@ -898,152 +925,296 @@
       </div>
 
     {:else if viewerMode === 'text'}
-      <!-- Structured Original Text Reader Mode (100% Reliable, Zero Blank Window) -->
+      <!-- Academic Paper Sheet View (仿真學術紙本專刊視角，100% 呈現官方出版物樣式) -->
       <div
         bind:this={textContainerRef}
-        class="w-full h-full overflow-y-auto px-6 py-6 flex justify-center bg-[#181a1b] select-text"
+        class="w-full h-full overflow-y-auto px-3 sm:px-6 py-6 flex flex-col items-center bg-[#121314] select-text relative"
       >
-        <div class="w-full max-w-[680px] flex flex-col gap-6 pb-20">
-          <!-- Text Mode Header -->
-          <div class="flex items-center justify-between border-b border-[#3c3836] pb-3 text-xs font-mono text-[#a89984]">
-            <span class="flex items-center gap-1.5 text-[#8ec07c] font-semibold">
-              <span class="material-symbols-outlined text-[15px]">article</span>
-              結構化原文對照模式 (Original Text Mode)
+        <!-- Paper Sheet Floating Toolbar -->
+        <div class="w-full max-w-[780px] mb-3 flex items-center justify-between bg-[#1d2021]/90 backdrop-blur-sm border border-[#3c3836] px-3.5 py-2 rounded-xl text-xs font-mono text-[#a89984] shadow-md shrink-0">
+          <div class="flex items-center gap-2">
+            <span class="flex items-center gap-1.5 text-[#fe8019] font-bold">
+              <span class="material-symbols-outlined text-[15px]">menu_book</span>
+              仿真學術紙本專刊
             </span>
-            <div class="flex items-center gap-2">
-              {#if isPdf}
-                <button
-                  class="text-[#fabd2f] hover:underline cursor-pointer flex items-center gap-1 text-[11px]"
-                  on:click={handleRetry}
-                >
-                  <span class="material-symbols-outlined text-[13px]">sync</span>
-                  嘗試載入 PDF 畫布
-                </button>
-              {/if}
-            </div>
+            <span class="text-[#504945]">|</span>
+            <span class="text-[11px] text-[#a89984]">
+              {allSections.length} 章節 · 完整圖表與 KaTeX 公式
+            </span>
           </div>
 
-          {#if paper}
-            <!-- Paper Info Summary -->
-            <div class="flex flex-col gap-2 bg-[#282828] border border-[#3c3836] p-4 rounded-xl">
-              <h1 class="font-serif text-lg font-bold text-[#ebdbb2] leading-snug">
-                {paper.title}
-              </h1>
-              <div class="flex flex-wrap items-center gap-2 font-mono text-[11px] text-[#a89984]">
-                <span>{paper.venue || 'Academic Literature'}</span>
-                {#if paper.arxivId}
-                  <span>· {paper.arxivId}</span>
-                {/if}
-              </div>
+          <div class="flex items-center gap-2">
+            <!-- Paper Sheet Theme Switcher -->
+            <div class="flex items-center bg-[#282828] border border-[#3c3836] rounded p-0.5 text-[11px]">
+              <button
+                class="px-2 py-0.5 rounded transition-colors flex items-center gap-1 cursor-pointer {paperTheme === 'parchment' ? 'bg-[#fcfbf9] text-[#1d2021] font-bold shadow-xs' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
+                on:click={() => paperTheme = 'parchment'}
+                title="經典米白論文紙張"
+              >
+                <span>📜</span>
+                <span>紙本</span>
+              </button>
+              <button
+                class="px-2 py-0.5 rounded transition-colors flex items-center gap-1 cursor-pointer {paperTheme === 'dark' ? 'bg-[#fe8019] text-[#1d2021] font-bold shadow-xs' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
+                on:click={() => paperTheme = 'dark'}
+                title="深邃學者夜間模式"
+              >
+                <span>🌙</span>
+                <span>夜間</span>
+              </button>
             </div>
 
-            <!-- Sections Stream -->
-            {#each allSections as sec (sec.id)}
-              {@const isFocused = sec.id === activeSectionId}
-              <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-              <section
-                id={`text-sec-${sec.id}`}
-                class="flex flex-col gap-3 rounded-xl p-4 transition-all duration-300 border cursor-pointer {
-                  isFocused
-                    ? 'bg-[#282828] border-[#fe8019]/60 shadow-[0_2px_16px_rgba(0,0,0,0.3)]'
-                    : 'bg-[#1d2021]/50 hover:bg-[#282828]/50 border-[#3c3836]/40'
-                }"
-                on:click={() => handleSectionClick(sec.id)}
+            <!-- Font Size Toggle -->
+            <div class="flex items-center bg-[#282828] border border-[#3c3836] rounded p-0.5 text-[11px]">
+              <button
+                class="px-1.5 py-0.5 rounded transition-colors cursor-pointer {paperFontSize === 'normal' ? 'bg-[#3c3836] text-[#ebdbb2] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
+                on:click={() => paperFontSize = 'normal'}
+                title="標準字體"
+              >A</button>
+              <button
+                class="px-1.5 py-0.5 rounded transition-colors cursor-pointer {paperFontSize === 'large' ? 'bg-[#3c3836] text-[#ebdbb2] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
+                on:click={() => paperFontSize = 'large'}
+                title="放大字體"
+              >A+</button>
+            </div>
+
+            {#if isPdf}
+              <button
+                class="text-[#fabd2f] hover:underline cursor-pointer flex items-center gap-0.5 text-[11px] ml-1"
+                on:click={handleRetry}
+                title="嘗試載入 PDF 向量畫布"
               >
-                <!-- Section Header -->
-                <div class="flex items-center justify-between gap-2 border-b border-[#3c3836]/60 pb-2">
-                  <h3 class="font-serif text-base font-bold text-[#ebdbb2] flex items-center gap-2 truncate">
-                    <span class="text-[#fe8019] font-mono text-sm">{sec.title.split(' ')[0] || sec.id}</span>
-                    <span class="truncate">{sec.title.replace(/^[0-9.]+\s*/, '')}</span>
-                  </h3>
-                  {#if sec.page}
-                    <span class="font-mono text-[10px] text-[#a89984] shrink-0">
-                      p.{sec.page}
-                    </span>
+                <span class="material-symbols-outlined text-[13px]">brush</span>
+                <span>畫布</span>
+              </button>
+            {/if}
+          </div>
+        </div>
+
+        {#if paper}
+          <!-- Physical Paper Sheet Canvas Container -->
+          <article
+            class="w-full max-w-[780px] my-2 transition-all duration-300 rounded-sm shadow-2xl p-6 sm:p-12 mb-20 {
+              paperTheme === 'parchment'
+                ? 'bg-[#fcfbf9] text-[#1c1b1a] border border-[#e2ded6]'
+                : 'bg-[#1d2021] text-[#ebdbb2] border border-[#3c3836]'
+            }"
+          >
+            <!-- 1. Academic Journal Masthead & Header Lines -->
+            <header class="mb-6">
+              <!-- Top Double Line (3px top border, 1px bottom border) -->
+              <div class="border-t-[3px] border-b border-current pt-1.5 pb-1.5 flex flex-wrap items-center justify-between gap-2 font-mono text-[11px] {paperTheme === 'parchment' ? 'text-[#3c3836]' : 'text-[#a89984]'}">
+                <div class="flex items-center gap-2 font-bold">
+                  <span class="text-[#fe8019] tracking-wider uppercase">{paper.venue || 'Academic Journal'}</span>
+                  <span>·</span>
+                  <span class="font-medium">{paper.arxivId || 'Open Access Scientific Report'}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="bg-[#2ea043]/15 text-[#2ea043] border border-[#2ea043]/40 font-bold px-1.5 py-0.2 rounded text-[10px] uppercase tracking-wider">
+                    OPEN ACCESS
+                  </span>
+                  {#if paper.sourceUrl}
+                    <a
+                      href={paper.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="hover:underline flex items-center gap-0.5 {paperTheme === 'parchment' ? 'text-[#0969da]' : 'text-[#8ec07c]'}"
+                      title="官方刊載 DOI / 來源網址"
+                    >
+                      <span>DOI / 原文</span>
+                      <span class="material-symbols-outlined text-[12px]">open_in_new</span>
+                    </a>
                   {/if}
                 </div>
+              </div>
 
-                <!-- Paragraphs -->
-                <div class="flex flex-col gap-3">
-                  {#each sec.paragraphs as para}
-                    {@const imgInfo = extractImageInfo(para)}
-                    {@const formulaLatex = extractBlockFormula(para)}
-                    {#if imgInfo}
-                      <figure class="my-2 p-3 bg-[#141617] border border-[#3c3836] rounded-lg flex flex-col items-center gap-2 shadow-sm">
-                        <img
-                          src={imgInfo.url}
-                          alt={imgInfo.alt}
-                          referrerpolicy="no-referrer"
-                          class="max-h-[320px] max-w-full rounded object-contain"
-                          loading="lazy"
-                        />
-                        <figcaption class="text-[11px] font-mono text-[#a89984] text-center max-w-[90%] leading-relaxed">{imgInfo.alt}</figcaption>
-                      </figure>
-                    {:else if formulaLatex}
-                      <div class="p-3 bg-[#141617] border border-[#3c3836] rounded-lg flex flex-col gap-1 my-1">
-                        <div class="overflow-x-auto py-1 text-center text-[#ebdbb2]">
-                          {@html renderMath(formulaLatex, true)}
-                        </div>
-                      </div>
-                    {:else}
-                      <p class="font-serif text-[15px] text-[#d5c4a1] leading-[1.8] text-justify tracking-wide">
-                        {@html formatParagraphWithMath(para)}
-                      </p>
+              <!-- Article Type Banner -->
+              <div class="mt-4 mb-2 font-mono text-[10px] font-bold tracking-widest uppercase {paperTheme === 'parchment' ? 'text-[#8c857b]' : 'text-[#928374]'}">
+                Research Article · Peer-Reviewed Academic Publication
+              </div>
+
+              <!-- Paper Main Title -->
+              <h1 class="font-serif text-2xl sm:text-3xl font-bold tracking-tight leading-tight mb-4 {paperTheme === 'parchment' ? 'text-[#1c1b1a]' : 'text-[#fbf1c7]'}">
+                {paper.title}
+              </h1>
+
+              <!-- Publication Meta -->
+              <div class="text-xs font-serif italic mb-6 pb-4 border-b border-current/20 flex flex-wrap items-center gap-x-4 gap-y-1 {paperTheme === 'parchment' ? 'text-[#57606a]' : 'text-[#a89984]'}">
+                <span>Published online by MUGEN YOMU Academic Reader</span>
+                <span>·</span>
+                <span>Comprehensive Structured Edition</span>
+              </div>
+            </header>
+
+            <!-- 2. Structured Sections Flow -->
+            <div class="flex flex-col gap-6">
+              {#each allSections as sec, sIndex (sec.id)}
+                {@const isFocused = sec.id === activeSectionId}
+                <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+                <section
+                  id={`text-sec-${sec.id}`}
+                  class="flex flex-col transition-all duration-300 rounded p-3 -mx-3 border cursor-pointer {
+                    isFocused
+                      ? (paperTheme === 'parchment' ? 'bg-[#f0ebe0] border-[#fe8019]/80 shadow-xs' : 'bg-[#282828] border-[#fe8019]/80 shadow-xs')
+                      : 'border-transparent hover:border-current/10'
+                  }"
+                  on:click={() => handleSectionClick(sec.id)}
+                >
+                  <!-- Section Heading -->
+                  <div class="flex items-baseline justify-between gap-2 border-b border-current/20 pb-1.5 mb-3">
+                    <h2 class="font-serif text-base sm:text-lg font-bold flex items-baseline gap-2 {paperTheme === 'parchment' ? 'text-[#1c1b1a]' : 'text-[#fbf1c7]'}">
+                      <span class="font-mono text-sm {paperTheme === 'parchment' ? 'text-[#b57614]' : 'text-[#fe8019]'}">
+                        § {sec.id}
+                      </span>
+                      <span>{sec.title.replace(/^[0-9.]+\s*/, '')}</span>
+                    </h2>
+                    {#if sec.page}
+                      <span class="font-mono text-[11px] {paperTheme === 'parchment' ? 'text-[#8c857b]' : 'text-[#928374]'} shrink-0">
+                        p.{sec.page}
+                      </span>
                     {/if}
-                  {/each}
-                </div>
+                  </div>
 
-                <!-- Formulas -->
-                {#if sec.formulas && sec.formulas.length > 0}
-                  <div class="flex flex-col gap-2 mt-1 pt-2 border-t border-[#3c3836]/40">
-                    {#each sec.formulas as formula}
-                      <div class="p-3 bg-[#141617] border border-[#3c3836] rounded-lg flex flex-col gap-1">
-                        <div class="flex items-center justify-between text-[11px] font-mono text-[#fabd2f]">
-                          <span>{formula.name || '核心公式推導'}</span>
-                          <span>{formula.number || ''}</span>
+                  <!-- Paragraphs & Inline Figures / Math -->
+                  <div class="flex flex-col gap-3">
+                    {#each sec.paragraphs as para, pIndex}
+                      {@const imgInfo = extractImageInfo(para)}
+                      {@const formulaLatex = extractBlockFormula(para)}
+                      {#if imgInfo}
+                        <!-- Academic Figure Card -->
+                        <figure class="my-4 p-4 rounded-lg flex flex-col items-center gap-2 border {
+                          paperTheme === 'parchment'
+                            ? 'bg-[#f4efe6] border-[#ded7ca]'
+                            : 'bg-[#141617] border-[#3c3836]'
+                        }">
+                          <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+                          <div
+                            class="w-full flex items-center justify-center p-2 rounded cursor-zoom-in group"
+                            on:click|stopPropagation={() => openLightbox(imgInfo.url, imgInfo.alt)}
+                          >
+                            <img
+                              src={imgInfo.url}
+                              alt={imgInfo.alt}
+                              referrerpolicy="no-referrer"
+                              class="max-h-[380px] max-w-full rounded object-contain shadow-xs transition-transform group-hover:scale-[1.01]"
+                              loading="lazy"
+                            />
+                          </div>
+                          <figcaption class="text-xs font-serif text-center max-w-[92%] leading-relaxed mt-1 {
+                            paperTheme === 'parchment' ? 'text-[#57606a]' : 'text-[#a89984]'
+                          }">
+                            <strong class="font-mono {paperTheme === 'parchment' ? 'text-[#1c1b1a]' : 'text-[#ebdbb2]'}">
+                              Figure {sIndex + 1}.{pIndex + 1}
+                            </strong>
+                            <span class="ml-1">{imgInfo.alt}</span>
+                          </figcaption>
+                        </figure>
+                      {:else if formulaLatex}
+                        <!-- Mathematical Expression -->
+                        <div class="my-3 py-2 px-4 rounded flex items-center justify-center border {
+                          paperTheme === 'parchment'
+                            ? 'bg-[#f7f4ed] border-[#e2ded6]'
+                            : 'bg-[#141617] border-[#3c3836]'
+                        }">
+                          <div class="overflow-x-auto text-center py-1 max-w-full">
+                            {@html renderMath(formulaLatex, true)}
+                          </div>
                         </div>
-                        <div class="overflow-x-auto py-1 text-center text-[#ebdbb2]">
-                          {@html renderMath(formula.latexText, true)}
-                        </div>
-                      </div>
+                      {:else}
+                        <!-- Standard Academic Paragraph -->
+                        <p class="font-serif leading-[1.85] text-justify tracking-normal {
+                          paperFontSize === 'large' ? 'text-[16.5px]' : 'text-[14.5px]'
+                        } {
+                          paperTheme === 'parchment' ? 'text-[#24292f]' : 'text-[#d5c4a1]'
+                        }">
+                          {@html formatParagraphWithMath(para)}
+                        </p>
+                      {/if}
                     {/each}
                   </div>
-                {/if}
-              </section>
-            {/each}
-          {:else}
-            <div class="text-center py-12 text-[#a89984] text-xs font-mono">
-              尚未選定文獻章節內容
+
+                  <!-- Formulas Listing -->
+                  {#if sec.formulas && sec.formulas.length > 0}
+                    <div class="flex flex-col gap-2 mt-3 pt-3 border-t border-current/15">
+                      {#each sec.formulas as formula}
+                        <div class="p-3 rounded flex flex-col gap-1 border {
+                          paperTheme === 'parchment' ? 'bg-[#f7f4ed] border-[#e2ded6]' : 'bg-[#141617] border-[#3c3836]'
+                        }">
+                          <div class="flex items-center justify-between text-[11px] font-mono {
+                            paperTheme === 'parchment' ? 'text-[#b57614]' : 'text-[#fabd2f]'
+                          }">
+                            <span>{formula.name || '方程式'}</span>
+                            <span class="font-bold">{formula.number || ''}</span>
+                          </div>
+                          <div class="overflow-x-auto py-1 text-center">
+                            {@html renderMath(formula.latexText, true)}
+                          </div>
+                        </div>
+                      {/each}
+                    </div>
+                  {/if}
+                </section>
+              {/each}
             </div>
-          {/if}
-        </div>
+
+            <!-- Paper Sheet Footer -->
+            <footer class="mt-12 pt-4 border-t-[3px] border-b border-current font-mono text-[10px] flex items-center justify-between {
+              paperTheme === 'parchment' ? 'text-[#8c857b]' : 'text-[#928374]'
+            }">
+              <span>MUGEN YOMU ACADEMIC REPRINT</span>
+              <span>END OF DOCUMENT</span>
+            </footer>
+          </article>
+        {:else}
+          <div class="text-center py-16 text-[#a89984] text-xs font-mono">
+            尚未選定文獻章節內容
+          </div>
+        {/if}
       </div>
 
     {:else}
-      <!-- Native Iframe / Live Web View -->
-      <div class="w-full h-full flex flex-col">
+      <!-- Native Iframe / Live Web View with Akamai Edge Protection Warning & Fast Track -->
+      <div class="w-full h-full flex flex-col bg-[#141617]">
         <!-- Address & Action Bar -->
-        <div class="h-8 bg-[#1d2021] border-b border-[#3c3836] px-3 flex items-center justify-between text-[11px] font-mono text-[#a89984] shrink-0">
-          <div class="flex items-center gap-1.5 truncate max-w-[65%] text-[#ebdbb2]">
+        <div class="h-9 bg-[#1d2021] border-b border-[#3c3836] px-3 flex items-center justify-between text-[11px] font-mono text-[#a89984] shrink-0">
+          <div class="flex items-center gap-1.5 truncate max-w-[60%] text-[#ebdbb2]">
             <span class="material-symbols-outlined text-[15px] text-[#8ec07c]">language</span>
             <span class="truncate">{paper?.sourceUrl || activeBaseUrl}</span>
           </div>
           <div class="flex items-center gap-2 shrink-0">
             <button
-              class="text-[#fabd2f] hover:underline cursor-pointer flex items-center gap-0.5 text-[10px]"
+              class="text-[#fabd2f] hover:underline cursor-pointer flex items-center gap-1 text-[11px] font-semibold"
               on:click={() => viewerMode = 'text'}
-              title="切換為零破圖的純淨結構化原文模式"
+              title="切換為零破圖、排版精美的仿真學術紙本模式"
             >
-              <span class="material-symbols-outlined text-[12px]">article</span>
-              <span>切換原文對照</span>
+              <span class="material-symbols-outlined text-[13px]">menu_book</span>
+              <span>切換紙本原文</span>
             </button>
             <button
-              class="text-[#8ec07c] hover:underline cursor-pointer flex items-center gap-0.5 text-[10px]"
+              class="px-2 py-0.5 bg-[#fe8019] hover:bg-[#fe8019]/90 text-[#1d2021] font-bold rounded text-[10px] flex items-center gap-1 cursor-pointer transition-colors"
               on:click={handleOpenExternal}
-              title="另開原站分頁"
+              title="在獨立瀏覽器分頁開啟（完全無 Akamai 阻擋）"
             >
               <span class="material-symbols-outlined text-[12px]">open_in_new</span>
-              <span>另開原站</span>
+              <span>另開原站分頁</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Akamai / Frame Protection Notice Banner -->
+        <div class="bg-[#282828] border-b border-[#3c3836] px-3.5 py-2 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-[#fabd2f] shrink-0">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-[15px] text-[#fe8019]">shield</span>
+            <span>
+              若下方原站出現 <code class="bg-[#141617] px-1 py-0.5 rounded text-[#fe8019]">Access Denied</code>，係因出版商 (MDPI / Akamai CDN) 啟用了跨站防嵌入 (SAMEORIGIN)。
+            </span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button
+              class="text-[#8ec07c] hover:underline cursor-pointer flex items-center gap-0.5 text-[11px] font-bold"
+              on:click={() => viewerMode = 'text'}
+            >
+              <span>➜ 立即使用【仿真學術紙本模式】（零阻擋・全圖表）</span>
             </button>
           </div>
         </div>
@@ -1061,9 +1232,9 @@
               <span class="material-symbols-outlined text-2xl">picture_as_pdf</span>
             </div>
             <div class="flex flex-col gap-1 max-w-sm">
-              <h4 class="text-sm font-bold text-[#ebdbb2]">尚未設定此文章的原檔 PDF 連結</h4>
+              <h4 class="text-sm font-bold text-[#ebdbb2]">尚未設定此文章的原檔連結</h4>
               <p class="text-xs text-[#a89984] leading-relaxed">
-                您可以切換至【原文對照模式】，或將任何 <code class="text-[#fabd2f]">.pdf</code> 檔案拖曳至此處進行解析。
+                您可以切換至【仿真學術紙本模式】，或拖曳任何 <code class="text-[#fabd2f]">.pdf</code> 檔案至此處。
               </p>
             </div>
             <div class="flex items-center gap-2 mt-1">
@@ -1071,8 +1242,8 @@
                 class="px-3 py-1.5 bg-[#fe8019] text-[#1d2021] font-bold text-xs rounded-lg shadow-sm hover:opacity-90 transition-opacity flex items-center gap-1.5 cursor-pointer"
                 on:click={() => viewerMode = 'text'}
               >
-                <span class="material-symbols-outlined text-[15px]">article</span>
-                切換為結構化原文對照
+                <span class="material-symbols-outlined text-[15px]">menu_book</span>
+                切換為仿真學術紙本
               </button>
               <button
                 class="px-3 py-1.5 bg-[#282828] border border-[#504945] text-[#ebdbb2] text-xs rounded-lg hover:bg-[#32302f] transition-colors flex items-center gap-1.5 cursor-pointer"
@@ -1101,6 +1272,52 @@
     </span>
     <span class="text-[#d5c4a1] shrink-0 hidden sm:inline">
       {viewerMode === 'canvas' ? '⚡ 畫布即時渲染 (零重載翻頁)' : '🌐 瀏覽器內核模式'} · 可隨時拖放 .pdf 比對
-    </span>
   </footer>
+
+  <!-- Figure Lightbox Modal -->
+  {#if activeLightboxImg}
+    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+    <div
+      class="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-fade-in select-none"
+      on:click={closeLightbox}
+    >
+      <div class="absolute top-4 right-4 flex items-center gap-3">
+        <a
+          href={activeLightboxImg}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="p-2 rounded-full bg-[#282828] text-[#ebdbb2] hover:bg-[#3c3836] transition-colors"
+          title="在新分頁開啟原始高解析圖片"
+          on:click|stopPropagation
+        >
+          <span class="material-symbols-outlined text-xl">open_in_new</span>
+        </a>
+        <button
+          class="p-2 rounded-full bg-[#282828] text-[#ebdbb2] hover:bg-[#fb4934] hover:text-white transition-colors cursor-pointer"
+          on:click={closeLightbox}
+          title="關閉預覽 (ESC)"
+        >
+          <span class="material-symbols-outlined text-xl">close</span>
+        </button>
+      </div>
+
+      <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+      <div
+        class="max-w-[92vw] max-h-[85vh] flex flex-col items-center gap-3"
+        on:click|stopPropagation
+      >
+        <img
+          src={activeLightboxImg}
+          alt={activeLightboxCaption}
+          referrerpolicy="no-referrer"
+          class="max-w-full max-h-[78vh] object-contain rounded-lg shadow-2xl border border-[#3c3836]"
+        />
+        {#if activeLightboxCaption}
+          <p class="text-xs font-mono text-[#d5c4a1] bg-[#1d2021]/80 px-4 py-1.5 rounded-full border border-[#3c3836] max-w-xl text-center truncate">
+            {activeLightboxCaption}
+          </p>
+        {/if}
+      </div>
+    </div>
+  {/if}
 </aside>

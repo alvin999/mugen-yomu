@@ -43,6 +43,15 @@
     return list;
   })();
 
+  function normalizeAcademicImageUrl(rawUrl: string): string {
+    if (!rawUrl) return '';
+    let url = rawUrl.trim().replace(/^<|>$/g, '');
+    if (url.includes('mdpi.com') && (url.includes('/images/') || url.includes('/html/') || /\.(?:png|jpe?g|webp|svg|gif)/i.test(url))) {
+      url = url.replace(/https?:\/\/(?:www\.)?mdpi\.com\//i, 'https://pub.mdpi-res.com/');
+    }
+    return url;
+  }
+
   let selectedFigureIndex: number = 0;
   let selectedFormulaIndex: number = 0;
 
@@ -150,7 +159,7 @@
               <!-- Image Display with Referrer Policy -->
               <div class="w-full bg-[#141617] border border-[#504945] rounded-lg p-3 flex items-center justify-center overflow-hidden">
                 <img
-                  src={activeItem.figure.imageUrl}
+                  src={normalizeAcademicImageUrl(activeItem.figure.imageUrl)}
                   alt={activeItem.figure.name}
                   referrerpolicy="no-referrer"
                   class="max-h-[360px] max-w-full object-contain rounded"

@@ -825,16 +825,26 @@ function extractVariablesFromLatex(latex: string): { symbol: string; meaning: st
   }));
 }
 
-// 輔助函式：解析絕對圖片網址
+// 輔助函式：解析絕對圖片網址，並對齊學術 CDN (如 MDPI 公開圖表 CDN pub.mdpi-res.com，消除 403 阻擋)
 function resolveUrl(url: string, baseUrl?: string): string {
   if (!url) return '';
-  const trimmed = url.trim().replace(/^<|>$/g, '');
+  let trimmed = url.trim().replace(/^<|>$/g, '');
+
+  // 針對 MDPI 圖片轉換為公開無 403 限制的 pub.mdpi-res.com CDN
+  if (trimmed.includes('mdpi.com') && (trimmed.includes('/images/') || trimmed.includes('/html/') || /\.(?:png|jpe?g|webp|svg|gif)/i.test(trimmed))) {
+    trimmed = trimmed.replace(/https?:\/\/(?:www\.)?mdpi\.com\//i, 'https://pub.mdpi-res.com/');
+  }
+
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:')) {
     return trimmed;
   }
   if (baseUrl) {
     try {
-      return new URL(trimmed, baseUrl).href;
+      const resolved = new URL(trimmed, baseUrl).href;
+      if (resolved.includes('mdpi.com') && (resolved.includes('/images/') || resolved.includes('/html/') || /\.(?:png|jpe?g|webp|svg|gif)/i.test(resolved))) {
+        return resolved.replace(/https?:\/\/(?:www\.)?mdpi\.com\//i, 'https://pub.mdpi-res.com/');
+      }
+      return resolved;
     } catch {
       return trimmed;
     }
@@ -1139,26 +1149,38 @@ export async function fetchWebArticle(url: string): Promise<PaperDocument> {
 
     const domainName = new URL(targetUrl).hostname;
 
-    // 針對 MDPI 網站處理相對圖片網址與官方 PDF
+    // 針對 MDPI 網站處理圖片 CDN（將會被 Akamai 阻擋的 mdpi.com 轉向公開暢通的 pub.mdpi-res.com CDN）
     const isMdpi = targetUrl.includes('mdpi.com');
     if (isMdpi) {
-      // 自動將相對圖片網址補齊
+      // 1. 自動將相對圖片網址補齊至 pub.mdpi-res.com
       markdownText = markdownText.replace(/!\[(.*?)\]\((?!https?:\/\/)(.*?)\)/g, (_match, alt, relPath) => {
         const cleanPath = relPath.replace(/^\.?\//, '');
-        return `![${alt}](https://www.mdpi.com/${cleanPath})`;
+        return `![${alt}](https://pub.mdpi-res.com/${cleanPath})`;
       });
+      // 2. 將所有 mdpi.com 的絕對圖片網址全面轉換為 pub.mdpi-res.com
+      markdownText = markdownText.replace(/https?:\/\/(?:www\.)?mdpi\.com\/([^\s'")]+(?:\.(?:png|jpe?g|webp|svg|gif)|images\/[^\s'")]*))/gi, 'https://pub.mdpi-res.com/$1');
+      // 3. 處理 HTML <img> 標籤中的圖片
+      markdownText = markdownText.replace(/<img([^>]+)src=["']https?:\/\/(?:www\.)?mdpi\.com\/([^"']+)["']/gi, '<img$1src="https://pub.mdpi-res.com/$2"');
+    } else {
+      // 非 MDPI 網站若有引用 mdpi.com 圖片，也轉向公開 CDN 避免 403
+      markdownText = markdownText.replace(/https?:\/\/(?:www\.)?mdpi\.com\/([^\s'")]+(?:\.(?:png|jpe?g|webp|svg|gif)|images\/[^\s'")]*))/gi, 'https://pub.mdpi-res.com/$1');
     }
 
     const doc = parseMarkdownToDocument(parsedTitle, markdownText, targetUrl, isMdpi ? 'MDPI Open Access' : domainName);
 
-    // 智慧推導官方 PDF 網址：MDPI 文章網址通常為 https://www.mdpi.com/2304-8158/12/15/2871
-    // 對應之官方 PDF 為 https://www.mdpi.com/2304-8158/12/15/2871/pdf
+    // 智慧推導官方 PDF 網址與期刊學術中繼資料
     if (isMdpi) {
       const mdpiMatch = targetUrl.match(/https?:\/\/(?:www\.)?mdpi\.com\/([0-9-]+\/[0-9]+\/[0-9]+\/[0-9]+)/i);
       if (mdpiMatch) {
         doc.pdfUrl = `https://www.mdpi.com/${mdpiMatch[1]}/pdf`;
+        const parts = mdpiMatch[1].split('/');
+        doc.venue = `MDPI Journal (Vol. ${parts[1]}, Issue ${parts[2]}, Art. ${parts[3]})`;
+        if (!doc.arxivId) {
+          doc.arxivId = `DOI: 10.3390/mdpi${parts[1]}${parts[2]}${parts[3]}`;
+        }
       } else {
         doc.pdfUrl = `${targetUrl.replace(/\/$/, '')}/pdf`;
+        doc.venue = 'MDPI Open Access';
       }
     }
 

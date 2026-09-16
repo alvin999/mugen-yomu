@@ -45,6 +45,15 @@
     activeLightboxImg = null;
   }
 
+  function normalizeAcademicImageUrl(rawUrl: string): string {
+    if (!rawUrl) return '';
+    let url = rawUrl.trim().replace(/^<|>$/g, '');
+    if (url.includes('mdpi.com') && (url.includes('/images/') || url.includes('/html/') || /\.(?:png|jpe?g|webp|svg|gif)/i.test(url))) {
+      url = url.replace(/https?:\/\/(?:www\.)?mdpi\.com\//i, 'https://pub.mdpi-res.com/');
+    }
+    return url;
+  }
+
   function extractImageInfo(text: string): { url: string; alt: string } | null {
     if (!text) return null;
     const trimmed = text.trim();
@@ -53,27 +62,27 @@
     const linkedMatch = trimmed.match(/^\[!\[(.*?)\]\((.*?)\)\]\((.*?)\)$/);
     if (linkedMatch) {
       const url = linkedMatch[2].split(' ')[0].replace(/['"]/g, '');
-      return { alt: linkedMatch[1] || '學術圖表', url };
+      return { alt: linkedMatch[1] || '學術圖表', url: normalizeAcademicImageUrl(url) };
     }
 
     // 2. Standard markdown image: ![alt](imgUrl)
     const match = trimmed.match(/^!\[(.*?)\]\((.*?)\)$/);
     if (match) {
       const url = match[2].split(' ')[0].replace(/['"]/g, '');
-      return { alt: match[1] || '學術圖表', url };
+      return { alt: match[1] || '學術圖表', url: normalizeAcademicImageUrl(url) };
     }
 
     // 3. HTML img tag: <img src="url" alt="alt">
     const htmlMatch = trimmed.match(/<img\s+[^>]*src=["'](.*?)["'][^>]*>/i);
     if (htmlMatch) {
       const altMatch = trimmed.match(/alt=["'](.*?)["']/i);
-      return { alt: altMatch ? altMatch[1] : '學術圖表', url: htmlMatch[1] };
+      return { alt: altMatch ? altMatch[1] : '學術圖表', url: normalizeAcademicImageUrl(htmlMatch[1]) };
     }
 
     // 4. Direct image URL
     const urlMatch = trimmed.match(/^(https?:\/\/.*\.(?:png|jpg|jpeg|svg|webp|gif)(?:\?.*)?)$/i);
     if (urlMatch) {
-      return { alt: '學術圖表', url: urlMatch[1] };
+      return { alt: '學術圖表', url: normalizeAcademicImageUrl(urlMatch[1]) };
     }
 
     return null;
@@ -552,15 +561,23 @@
               </div>
 
               <div class="flex items-center gap-2 shrink-0">
-                <!-- Direct jump to original PDF page button -->
-                {#if sec.page || paper?.pdfUrl || paper?.arxivId}
+                <!-- Direct jump to original PDF / web drawer button -->
+                {#if sec.page || paper?.pdfUrl || paper?.arxivId || paper?.type === 'web'}
                   <button
                     class="flex items-center gap-1 bg-[#282828] hover:bg-[#3c3836] border border-[#504945] hover:border-[#fe8019] px-2 py-0.5 rounded text-[11px] font-mono text-[#fabd2f] transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
                     on:click|stopPropagation={() => triggerAction('openOriginalToPage', { page: sec.page || 1, sectionId: sec.id })}
-                    title="在原檔 PDF 檢視器跳至第 {sec.page || 1} 頁對照"
+                    title={paper?.type === 'web'
+                      ? (paper.pdfUrl ? `在原檔抽屜開啟對照 (第 ${sec.page || 1} 頁 / 網頁原文)` : '在原檔抽屜開啟本章節對照')
+                      : `在原檔 PDF 檢視器跳至第 ${sec.page || 1} 頁對照`}
                   >
-                    <span class="material-symbols-outlined text-[13px] text-[#fe8019]">find_in_page</span>
-                    <span>PDF p.{sec.page || 1} ➜</span>
+                    <span class="material-symbols-outlined text-[13px] text-[#fe8019]">
+                      {paper?.type === 'web' ? 'dock_to_left' : 'find_in_page'}
+                    </span>
+                    <span>
+                      {paper?.type === 'web'
+                        ? (paper.pdfUrl ? `原檔 p.${sec.page || 1}` : '原檔抽屜')
+                        : `PDF p.${sec.page || 1}`} ➜
+                    </span>
                   </button>
                 {/if}
 
@@ -825,8 +842,9 @@
                         on:click|stopPropagation={() => openLightbox(fig.imageUrl || '', fig.caption || fig.name)}
                       >
                         <img
-                          src={fig.imageUrl}
+                          src={normalizeAcademicImageUrl(fig.imageUrl)}
                           alt={fig.name}
+                          referrerpolicy="no-referrer"
                           class="max-h-[380px] max-w-full object-contain rounded transition-transform group-hover/fig:scale-[1.01]"
                           loading="lazy"
                         />
