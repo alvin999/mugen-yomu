@@ -88,6 +88,165 @@
     return null;
   }
 
+  export interface NormalizedParagraphItem {
+    type: 'subheading' | 'formula' | 'image' | 'text';
+    text?: string;
+    level?: number;
+    latex?: string;
+    number?: string;
+    url?: string;
+    alt?: string;
+    originalIndex: number;
+  }
+
+  function normalizeParagraphs(paragraphs: string[]): NormalizedParagraphItem[] {
+    if (!paragraphs || paragraphs.length === 0) return [];
+    const items: NormalizedParagraphItem[] = [];
+    let i = 0;
+
+    while (i < paragraphs.length) {
+      const raw = paragraphs[i];
+      const trimmed = (raw || '').trim();
+      if (!trimmed) {
+        i++;
+        continue;
+      }
+
+      // 1. 檢測子標題 (如 #### 2.8.1. ... 或 ### ...)
+      const headingMatch = trimmed.match(/^(#{2,6})\s+(.*)$/);
+      if (headingMatch) {
+        items.push({
+          type: 'subheading',
+          text: headingMatch[2].trim(),
+          level: headingMatch[1].length,
+          originalIndex: i
+        });
+        i++;
+        continue;
+      }
+
+      // 2. 檢測圖片
+      const imgInfo = extractImageInfo(trimmed);
+      if (imgInfo) {
+        items.push({
+          type: 'image',
+          url: imgInfo.url,
+          alt: imgInfo.alt,
+          originalIndex: i
+        });
+        i++;
+        continue;
+      }
+
+      // 3. 檢測跨行 / 連續段落區塊公式
+      // 情況 A：單一段落包含完整 $$ ... $$ [可帶公式編號]
+      const singleBlockMatch = trimmed.match(/^\$\$([\s\S]*?)\$\$(?:\s*(\([0-9a-zA-Z]+\)))?$/);
+      if (singleBlockMatch && singleBlockMatch[1].trim()) {
+        let latex = singleBlockMatch[1].trim();
+        let formulaNum = singleBlockMatch[2] || '';
+        // 檢查下一段是否為中繼空行或公式編號，如 (1)
+        let lookAhead = i + 1;
+        while (lookAhead < paragraphs.length && !paragraphs[lookAhead].trim()) {
+          lookAhead++;
+        }
+        if (!formulaNum && lookAhead < paragraphs.length) {
+          const nextP = paragraphs[lookAhead].trim();
+          const numMatch = nextP.match(/^\(([0-9]+[a-zA-Z]?|[ivx]+)\)$/i) || nextP.match(/^Equation\s*\(([0-9]+)\)/i);
+          if (numMatch) {
+            formulaNum = `(${numMatch[1]})`;
+            i = lookAhead;
+          }
+        }
+        items.push({
+          type: 'formula',
+          latex,
+          number: formulaNum,
+          originalIndex: i
+        });
+        i++;
+        continue;
+      }
+
+      // 情況 B：多行段落切分形式的公式（如 $$ 獨佔一行、公式內容在下一行、$$ 獨佔一行、(1) 獨佔一行）
+      if (trimmed === '$$' || trimmed.startsWith('$$')) {
+        let latexParts: string[] = [];
+        let foundEnd = false;
+        let formulaNum = '';
+        const startIndex = i;
+
+        if (trimmed.length > 2) {
+          latexParts.push(trimmed.slice(2).trim());
+        }
+
+        let j = i + 1;
+        while (j < paragraphs.length) {
+          const nextP = paragraphs[j].trim();
+          if (!nextP) {
+            j++;
+            continue;
+          }
+          if (nextP === '$$' || nextP.endsWith('$$')) {
+            if (nextP.length > 2) {
+              latexParts.push(nextP.slice(0, -2).trim());
+            }
+            foundEnd = true;
+            j++;
+            break;
+          } else {
+            latexParts.push(nextP);
+            j++;
+          }
+        }
+
+        if (foundEnd) {
+          // 檢查後續行是否為公式編號，如 (1)、(2)
+          let lookNum = j;
+          while (lookNum < paragraphs.length && !paragraphs[lookNum].trim()) {
+            lookNum++;
+          }
+          if (lookNum < paragraphs.length) {
+            const numCandidate = paragraphs[lookNum].trim();
+            const numMatch = numCandidate.match(/^\(([0-9]+[a-zA-Z]?|[ivx]+)\)$/i) || numCandidate.match(/^Equation\s*\(([0-9]+)\)/i);
+            if (numMatch) {
+              formulaNum = `(${numMatch[1]})`;
+              j = lookNum + 1; // 消耗編號行
+            }
+          }
+
+          items.push({
+            type: 'formula',
+            latex: latexParts.join(' ').trim(),
+            number: formulaNum,
+            originalIndex: startIndex
+          });
+          i = j;
+          continue;
+        }
+      }
+
+      // 4. 孤立公式編號行如 (1)，若前一項剛好是公式，自動合併
+      const standaloneNumMatch = trimmed.match(/^\(([0-9]+[a-zA-Z]?|[ivx]+)\)$/i);
+      if (standaloneNumMatch && items.length > 0 && items[items.length - 1].type === 'formula') {
+        const prev = items[items.length - 1];
+        if (!prev.number) {
+          prev.number = `(${standaloneNumMatch[1]})`;
+        }
+        i++;
+        continue;
+      }
+
+      // 5. 一般文字段落
+      items.push({
+        type: 'text',
+        text: trimmed,
+        originalIndex: i
+      });
+      i++;
+    }
+
+    return items;
+  }
+
   function extractBlockFormula(para: string): string | null {
     if (!para) return null;
     const trimmed = para.trim();
@@ -592,30 +751,34 @@
 
             <!-- Paragraphs with Inline Bilingual Translation & Figures -->
             <div class="flex flex-col gap-5">
-              {#each sec.paragraphs as para, pIndex}
-                {@const key = `${sec.id}_${pIndex}`}
-                {@const imgInfo = extractImageInfo(para)}
-                {@const formulaLatex = extractBlockFormula(para)}
-
-                {#if imgInfo}
+              {#each normalizeParagraphs(sec.paragraphs) as item, itemIdx}
+                {#if item.type === 'subheading'}
+                  <!-- Academic Subheading (e.g. 2.8.1. Extraction Kinetics Fitting) -->
+                  <div class="mt-4 mb-1 flex items-center gap-2 border-b border-[#3c3836]/60 pb-1.5 pt-1">
+                    <span class="w-1.5 h-3.5 bg-[#fe8019] rounded-xs shrink-0"></span>
+                    <h3 class="font-serif font-bold text-[16px] text-[#ebdbb2] tracking-tight">
+                      {item.text}
+                    </h3>
+                  </div>
+                {:else if item.type === 'image' && item.url}
                   <!-- Inline Markdown Image Figure Card -->
                   <figure class="my-2 p-4 bg-[#1d2021] border border-[#504945] rounded-xl flex flex-col items-center gap-3 shadow-md group/img">
                     <div class="w-full flex items-center justify-between text-xs font-mono text-[#fabd2f] border-b border-[#3c3836] pb-2">
                       <span class="flex items-center gap-1.5 font-bold">
                         <span class="material-symbols-outlined text-[15px] text-[#fe8019]">image</span>
-                        {imgInfo.alt || '論文架構與實驗分析圖表'}
+                        {item.alt || '論文架構與實驗分析圖表'}
                       </span>
                       <div class="flex items-center gap-2 text-[#a89984]">
                         <button
                           class="hover:text-[#fe8019] flex items-center gap-1 text-[11px] cursor-pointer"
-                          on:click|stopPropagation={() => openLightbox(imgInfo.url, imgInfo.alt)}
+                          on:click|stopPropagation={() => openLightbox(item.url || '', item.alt)}
                           title="全螢幕放大檢視"
                         >
                           <span class="material-symbols-outlined text-[13px]">fullscreen</span>
                           <span>放大燈箱</span>
                         </button>
                         <a
-                          href={imgInfo.url}
+                          href={item.url}
                           target="_blank"
                           rel="noopener noreferrer"
                           class="hover:text-[#ebdbb2] flex items-center gap-0.5 text-[11px]"
@@ -629,30 +792,35 @@
                     <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
                     <div
                       class="w-full flex items-center justify-center p-2 rounded bg-[#141617] border border-[#3c3836] overflow-hidden cursor-zoom-in"
-                      on:click|stopPropagation={() => openLightbox(imgInfo.url, imgInfo.alt)}
+                      on:click|stopPropagation={() => openLightbox(item.url || '', item.alt)}
                     >
                       <img
-                        src={imgInfo.url}
-                        alt={imgInfo.alt}
+                        src={item.url}
+                        alt={item.alt || ''}
                         referrerpolicy="no-referrer"
                         class="max-h-[380px] max-w-full object-contain rounded transition-transform group-hover/img:scale-[1.01]"
                         loading="lazy"
                       />
                     </div>
 
-                    {#if imgInfo.alt}
+                    {#if item.alt}
                       <figcaption class="text-xs text-[#a89984] font-serif italic text-center max-w-[90%] leading-relaxed">
-                        {imgInfo.alt}
+                        {item.alt}
                       </figcaption>
                     {/if}
                   </figure>
-                {:else if formulaLatex}
-                  <!-- Inline KaTeX Block Formula Card -->
+                {:else if item.type === 'formula' && item.latex}
+                  <!-- Inline KaTeX Block Formula Card (with formula number) -->
                   <div class="my-3 p-4 bg-[#1d2021] border border-[#504945] rounded-xl flex flex-col items-center justify-center relative shadow-inner group/display-math">
                     <div class="w-full flex items-center justify-between text-xs font-mono text-[#fabd2f] border-b border-[#3c3836]/60 pb-2 mb-2">
                       <span class="flex items-center gap-1.5 font-semibold">
                         <span class="material-symbols-outlined text-[15px] text-[#fe8019]">functions</span>
                         <span>核心方程式推導 (Mathematical Equation)</span>
+                        {#if item.number}
+                          <span class="font-mono text-[#fe8019] bg-[#fe8019]/10 border border-[#fe8019]/30 px-2 py-0.5 rounded font-bold ml-1">
+                            {item.number}
+                          </span>
+                        {/if}
                       </span>
                       <div class="flex items-center gap-2">
                         {#if copyToastText}
@@ -662,7 +830,7 @@
                         {/if}
                         <button
                           class="text-[#a89984] hover:text-[#ebdbb2] text-[11px] flex items-center gap-1 cursor-pointer transition-colors bg-[#282828] border border-[#3c3836] px-2 py-0.5 rounded"
-                          on:click|stopPropagation={() => copyLatex(formulaLatex)}
+                          on:click|stopPropagation={() => copyLatex(item.latex || '')}
                           title="複製 LaTeX 方程式原始碼"
                         >
                           <span class="material-symbols-outlined text-[13px]">content_copy</span>
@@ -670,93 +838,100 @@
                         </button>
                       </div>
                     </div>
-                    <div class="w-full flex items-center justify-center py-2 overflow-x-auto text-[#ebdbb2]">
-                      <div class="text-[19px] px-2 select-text">
-                        {@html renderMath(formulaLatex, true)}
+                    <div class="w-full flex items-center justify-between py-2 overflow-x-auto text-[#ebdbb2] px-2">
+                      <div class="text-[19px] px-2 select-text mx-auto">
+                        {@html renderMath(item.latex, true)}
                       </div>
+                      {#if item.number}
+                        <span class="font-mono text-[#fabd2f] font-semibold text-sm select-none shrink-0 pl-3">
+                          {item.number}
+                        </span>
+                      {/if}
                     </div>
                   </div>
-                {:else}
+                {:else if item.type === 'text' && item.text}
+                  {@const pIndex = item.originalIndex}
+                  {@const key = `${sec.id}_${pIndex}`}
+                  {@const para = item.text}
                   <div class="flex flex-col gap-2 group/para relative">
                     <!-- English paragraph with inline KaTeX math and typography -->
                     <p class="font-serif text-[17px] text-[#ebdbb2]/95 leading-[33px] text-justify w-full tracking-[0.01em]">
                       {@html formatParagraphWithMath(para)}
                     </p>
 
-
-                  <!-- Inline Translated Card with Enhanced Typography & Typewriter Stream -->
-                  {#if showTranslationMap[key]}
-                    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-                    <div
-                      class="mt-1 p-4 bg-[#1d2021] border-l-4 border-[#fabd2f] rounded-r-xl flex flex-col gap-2 shadow-lg text-[#ebdbb2] animate-fade-in cursor-default"
-                      on:click={() => { if (isTypingMap[key]) isTypingMap[key] = false; }}
-                      title={isTypingMap[key] ? "點擊卡片可立即跳過打字機動畫完整顯現" : ""}
-                    >
-                      <div class="flex items-center justify-between text-[11px] font-mono text-[#a89984] border-b border-[#3c3836]/60 pb-2">
-                        <span class="flex items-center gap-1.5 text-[#fabd2f] font-semibold">
-                          {#if isTypingMap[key]}
-                            <span class="material-symbols-outlined text-[15px] animate-spin text-[#fe8019]">sync</span>
-                            <span>繁體中文精讀對照 · 實時生成中...</span>
-                          {:else}
-                            <span class="material-symbols-outlined text-[15px]">translate</span>
-                            <span>繁體中文精讀對照</span>
-                          {/if}
-                        </span>
-                        <div class="flex items-center gap-2">
-                          {#if translationNoticeMap[key]}
-                            <span class="text-[#fabd2f] bg-[#fabd2f]/10 border border-[#fabd2f]/40 px-2 py-0.5 rounded text-[10px] flex items-center gap-1 font-sans">
-                              <span class="material-symbols-outlined text-[12px] text-[#fabd2f]">bolt</span>
-                              <span>{translationNoticeMap[key]}</span>
-                            </span>
-                          {/if}
-                          {#if translationSourceMap[key]}
-                            <span class="text-[#b8bb26] bg-[#282828] px-2 py-0.5 rounded border border-[#3c3836] text-[10px]">
-                              {translationSourceMap[key]}
-                            </span>
-                          {/if}
-                          <button
-                            class="hover:text-[#fe8019] text-[#a89984] text-[11px] cursor-pointer flex items-center gap-0.5 transition-colors"
-                            on:click|stopPropagation={() => showTranslationMap[key] = false}
-                            title="收起雙語對照"
-                          >
-                            <span class="material-symbols-outlined text-[13px]">expand_less</span>
-                            <span>收起</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      <!-- Paragraph Content with Blinking Typewriter Cursor -->
-                      <p class="pt-1 select-text text-justify font-sans text-[15px] text-[#ebdbb2]/95 leading-[1.95] tracking-[0.035em] font-normal min-h-[32px]">
-                        {#if !paragraphTranslations[key] && isTypingMap[key]}
-                          <span class="text-[#a89984] italic font-mono text-xs flex items-center gap-2 py-1">
-                            <span class="material-symbols-outlined text-[15px] animate-spin text-[#fe8019]">hourglass_top</span>
-                            <span>正在連線模型解析學術語意與術語對齊，即將逐字生成...</span>
+                    <!-- Inline Translated Card with Enhanced Typography & Typewriter Stream -->
+                    {#if showTranslationMap[key]}
+                      <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+                      <div
+                        class="mt-1 p-4 bg-[#1d2021] border-l-4 border-[#fabd2f] rounded-r-xl flex flex-col gap-2 shadow-lg text-[#ebdbb2] animate-fade-in cursor-default"
+                        on:click={() => { if (isTypingMap[key]) isTypingMap[key] = false; }}
+                        title={isTypingMap[key] ? "點擊卡片可立即跳過打字機動畫完整顯現" : ""}
+                      >
+                        <div class="flex items-center justify-between text-[11px] font-mono text-[#a89984] border-b border-[#3c3836]/60 pb-2">
+                          <span class="flex items-center gap-1.5 text-[#fabd2f] font-semibold">
+                            {#if isTypingMap[key]}
+                              <span class="material-symbols-outlined text-[15px] animate-spin text-[#fe8019]">sync</span>
+                              <span>繁體中文精讀對照 · 實時生成中...</span>
+                            {:else}
+                              <span class="material-symbols-outlined text-[15px]">translate</span>
+                              <span>繁體中文精讀對照</span>
+                            {/if}
                           </span>
-                        {:else}
-                          {paragraphTranslations[key]}
-                        {/if}
-                        {#if isTypingMap[key]}
-                          <span class="inline-block w-2 h-4 bg-[#fabd2f] ml-1 animate-pulse align-middle select-none shadow-[0_0_8px_#fabd2f]"></span>
-                        {/if}
-                      </p>
-
-                      {#if (paragraphTranslations[key]?.startsWith('⚠️') || paragraphTranslations[key]?.startsWith('翻譯連線異常')) && !isTypingMap[key]}
-                        <div class="mt-2 pt-2 border-t border-[#3c3836] flex items-center justify-between gap-2">
-                          <button
-                            class="px-2.5 py-1 bg-[#fe8019] hover:bg-[#fe8019]/90 text-[#1d2021] font-bold rounded text-[11px] flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
-                            on:click|stopPropagation={() => toggleParagraphTranslation(sec.id, pIndex, para, true)}
-                          >
-                            <span class="material-symbols-outlined text-[13px]">sync</span>
-                            <span>重試此段翻譯</span>
-                          </button>
-                          <span class="text-[#a89984] text-[10px] font-mono">若頻率受限可於頂部 BYOK 切換模型</span>
+                          <div class="flex items-center gap-2">
+                            {#if translationNoticeMap[key]}
+                              <span class="text-[#fabd2f] bg-[#fabd2f]/10 border border-[#fabd2f]/40 px-2 py-0.5 rounded text-[10px] flex items-center gap-1 font-sans">
+                                <span class="material-symbols-outlined text-[12px] text-[#fabd2f]">bolt</span>
+                                <span>{translationNoticeMap[key]}</span>
+                              </span>
+                            {/if}
+                            {#if translationSourceMap[key]}
+                              <span class="text-[#b8bb26] bg-[#282828] px-2 py-0.5 rounded border border-[#3c3836] text-[10px]">
+                                {translationSourceMap[key]}
+                              </span>
+                            {/if}
+                            <button
+                              class="hover:text-[#fe8019] text-[#a89984] text-[11px] cursor-pointer flex items-center gap-0.5 transition-colors"
+                              on:click|stopPropagation={() => showTranslationMap[key] = false}
+                              title="收起雙語對照"
+                            >
+                              <span class="material-symbols-outlined text-[13px]">expand_less</span>
+                              <span>收起</span>
+                            </button>
+                          </div>
                         </div>
-                      {/if}
-                    </div>
-                  {/if}
-                </div>
-              {/if}
-            {/each}
+
+                        <!-- Paragraph Content with Blinking Typewriter Cursor -->
+                        <p class="pt-1 select-text text-justify font-sans text-[15px] text-[#ebdbb2]/95 leading-[1.95] tracking-[0.035em] font-normal min-h-[32px]">
+                          {#if !paragraphTranslations[key] && isTypingMap[key]}
+                            <span class="text-[#a89984] italic font-mono text-xs flex items-center gap-2 py-1">
+                              <span class="material-symbols-outlined text-[15px] animate-spin text-[#fe8019]">hourglass_top</span>
+                              <span>正在連線模型解析學術語意與術語對齊，即將逐字生成...</span>
+                            </span>
+                          {:else}
+                            {paragraphTranslations[key]}
+                          {/if}
+                          {#if isTypingMap[key]}
+                            <span class="inline-block w-2 h-4 bg-[#fabd2f] ml-1 animate-pulse align-middle select-none shadow-[0_0_8px_#fabd2f]"></span>
+                          {/if}
+                        </p>
+
+                        {#if (paragraphTranslations[key]?.startsWith('⚠️') || paragraphTranslations[key]?.startsWith('翻譯連線異常')) && !isTypingMap[key]}
+                          <div class="mt-2 pt-2 border-t border-[#3c3836] flex items-center justify-between gap-2">
+                            <button
+                              class="px-2.5 py-1 bg-[#fe8019] hover:bg-[#fe8019]/90 text-[#1d2021] font-bold rounded text-[11px] flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                              on:click|stopPropagation={() => toggleParagraphTranslation(sec.id, pIndex, para, true)}
+                            >
+                              <span class="material-symbols-outlined text-[13px]">sync</span>
+                              <span>重試此段翻譯</span>
+                            </button>
+                            <span class="text-[#a89984] text-[10px] font-mono">若頻率受限可於頂部 BYOK 切換模型</span>
+                          </div>
+                        {/if}
+                      </div>
+                    {/if}
+                  </div>
+                {/if}
+              {/each}
             </div>
 
             <!-- SVO Sentence Highlight (Always rendered when present to guarantee Zero CLS) -->

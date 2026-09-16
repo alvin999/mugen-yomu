@@ -935,14 +935,18 @@ export function parseMarkdownToDocument(
         formulaLatex = latexParts.join(' ').trim();
       }
 
-      // 檢查下一行是否為公式編號，如 (1)、(2)、Equation (1)
+      // 檢查後續行是否為公式編號，如 (1)、(2)、Equation (1)，智慧略過中繼空行
       let formulaNumber = '';
-      if (i < lines.length) {
-        const nextLine = lines[i].trim();
+      let lookAhead = i;
+      while (lookAhead < lines.length && !lines[lookAhead].trim()) {
+        lookAhead++;
+      }
+      if (lookAhead < lines.length) {
+        const nextLine = lines[lookAhead].trim();
         const numMatch = nextLine.match(/^\(([0-9]+[a-zA-Z]?|[ivx]+)\)$/i) || nextLine.match(/^Equation\s*\(([0-9]+)\)/i);
         if (numMatch) {
           formulaNumber = `(${numMatch[1]})`;
-          i++; // 消耗此編號行
+          i = lookAhead + 1; // 消耗中繼空行與公式編號行，避免 (1) 掉入後續正文
         }
       }
 
@@ -963,10 +967,12 @@ export function parseMarkdownToDocument(
       if (currentSection) {
         if (!currentSection.formulas) currentSection.formulas = [];
         currentSection.formulas.push(formulaItem);
-        // 同時以標準區塊公式語法放入 paragraphs
-        currentSection.paragraphs.push(`$$\n${formulaLatex}\n$$`);
+        // 同時以標準區塊公式語法放入 paragraphs (包含公式編號)
+        const formulaBlock = formulaNumber ? `$$\n${formulaLatex}\n$$ ${formulaNumber}` : `$$\n${formulaLatex}\n$$`;
+        currentSection.paragraphs.push(formulaBlock);
       } else {
-        abstractParagraphs.push(`$$\n${formulaLatex}\n$$`);
+        const formulaBlock = formulaNumber ? `$$\n${formulaLatex}\n$$ ${formulaNumber}` : `$$\n${formulaLatex}\n$$`;
+        abstractParagraphs.push(formulaBlock);
       }
       continue;
     }
@@ -1053,6 +1059,32 @@ export function parseMarkdownToDocument(
       isRead: false,
       paragraphs: lines.filter(l => l.trim().length > 0)
     });
+  }
+
+  // 智慧圖表關聯與 Dashboard 載入 (Smart Figure Injection)
+  // 若正文段落提及 Figure X，而該章節無圖表，自動將對應之學術圖表注入該章節，讓讀者在 Dashboard 直覺閱讀
+  if (allFigures.length > 0) {
+    for (const sec of sections) {
+      if (!sec.figures) sec.figures = [];
+      const secText = (sec.paragraphs || []).join(' ');
+      for (const fig of allFigures) {
+        // 從 fig.figureNumber 或 fig.name 提取編號，如 Figure 1, Fig 1, Figure A1
+        const figNumMatch = fig.figureNumber.match(/Figure\s*([0-9A-Za-z]+)/i) || fig.name.match(/Figure\s*([0-9A-Za-z]+)/i);
+        if (figNumMatch) {
+          const num = figNumMatch[1];
+          // 支援匹配 "Figure 1", "Fig. 1", "Figure 1A", "Figure 1,"
+          const pattern = new RegExp(`(?:Figure|Fig\\.?)\\s*${num}\\b`, 'i');
+          if (pattern.test(secText) && !sec.figures.some(f => f.imageUrl === fig.imageUrl)) {
+            sec.figures.push(fig);
+            // 找到第一次提及該圖表的段落，在下方自動注入 Markdown 圖片
+            const mentionIdx = sec.paragraphs.findIndex(p => pattern.test(p));
+            if (mentionIdx !== -1 && !sec.paragraphs.some(p => p.includes(fig.imageUrl))) {
+              sec.paragraphs.splice(mentionIdx + 1, 0, `![${fig.name}](${fig.imageUrl})`);
+            }
+          }
+        }
+      }
+    }
   }
 
   const generatedId = `custom_${Date.now()}`;

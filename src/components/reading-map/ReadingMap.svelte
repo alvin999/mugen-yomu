@@ -1,9 +1,10 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import type { ChapterSection } from '../../stores/documentStore';
+  import type { ChapterSection, PaperDocument, FigureItem } from '../../stores/documentStore';
   import { calculateReadingStats } from '../../stores/readingStore';
 
   export let sections: ChapterSection[] = [];
+  export let paper: PaperDocument | null = null;
   export let activeSectionId: string = '3.2.1';
   export let arxivId: string | undefined = undefined;
   export let sourceUrl: string | undefined = undefined;
@@ -11,6 +12,47 @@
   const dispatch = createEventDispatcher();
 
   let searchQuery: string = '';
+
+  function normalizeAcademicImageUrl(rawUrl: string): string {
+    if (!rawUrl) return '';
+    let url = rawUrl.trim().replace(/^<|>$/g, '');
+    if (url.includes('mdpi.com') && (url.includes('/images/') || url.includes('/html/') || /\.(?:png|jpe?g|webp|svg|gif)/i.test(url))) {
+      url = url.replace(/https?:\/\/(?:www\.)?mdpi\.com\//i, 'https://pub.mdpi-res.com/');
+    }
+    return url;
+  }
+
+  // 聚合當前文獻的所有圖表 (Figures Dashboard)
+  $: allPaperFigures = (() => {
+    const list: FigureItem[] = [];
+    const seenUrls = new Set<string>();
+
+    if (paper?.figureList) {
+      for (const f of paper.figureList) {
+        if (!seenUrls.has(f.imageUrl)) {
+          seenUrls.add(f.imageUrl);
+          list.push({ ...f, imageUrl: normalizeAcademicImageUrl(f.imageUrl) });
+        }
+      }
+    }
+
+    function extractFromSecs(secs: ChapterSection[]) {
+      for (const sec of secs) {
+        if (sec.figures) {
+          for (const f of sec.figures) {
+            if (!seenUrls.has(f.imageUrl)) {
+              seenUrls.add(f.imageUrl);
+              list.push({ ...f, imageUrl: normalizeAcademicImageUrl(f.imageUrl) });
+            }
+          }
+        }
+        if (sec.children) extractFromSecs(sec.children);
+      }
+    }
+    extractFromSecs(sections);
+
+    return list;
+  })();
 
   $: readingStats = calculateReadingStats(sections);
   $: deepCoveragePercent = readingStats.deepCoveragePercent;
@@ -313,45 +355,85 @@
       {/each}
     </div>
 
-    <!-- Figures & Equations Quick-Deck -->
+    <!-- Figures & Equations Dashboard Deck -->
     <div class="flex flex-col gap-2 pt-2 border-t border-[#3c3836]">
       <div class="flex items-center justify-between px-1">
-        <span class="font-mono text-[10px] uppercase tracking-wider text-[#a89984]">關鍵圖表與推導索引</span>
-        <span class="font-mono text-[10px] text-[#fabd2f] hover:underline cursor-pointer">All</span>
+        <span class="font-mono text-[10px] uppercase tracking-wider text-[#a89984] flex items-center gap-1">
+          <span class="material-symbols-outlined text-[12px] text-[#fe8019]">photo_library</span>
+          <span>文獻圖表看板</span>
+          {#if allPaperFigures.length > 0}
+            <span class="text-[#b8bb26] font-bold font-mono">({allPaperFigures.length})</span>
+          {/if}
+        </span>
+        <button
+          type="button"
+          class="font-mono text-[10px] text-[#fabd2f] hover:text-[#fe8019] hover:underline cursor-pointer flex items-center gap-0.5 bg-transparent border-0 p-0"
+          on:click={() => dispatch('openFiguresStudio')}
+          title="切換至全景圖表推導工作室"
+        >
+          <span>Studio ➜</span>
+        </button>
       </div>
 
-      <!-- Mini Figure Card -->
-      <button
-        type="button"
-        class="w-full text-left bg-[#282828] border border-[#3c3836] p-2 rounded-lg hover:bg-[#32302f] hover:border-[#504945] transition-colors cursor-pointer flex gap-2 group"
-        on:click={() => selectFigure(firstFigure?.id || 'fig1')}
-      >
-        <div class="w-12 h-14 bg-[#1d2021] border border-[#3c3836] rounded shrink-0 overflow-hidden relative flex items-center justify-center p-1">
-          {#if firstFigure?.imageUrl}
-            <img
-              src={firstFigure.imageUrl}
-              alt={firstFigure.name}
-              referrerpolicy="no-referrer"
-              class="w-full h-full object-contain"
-              loading="lazy"
-            />
-          {:else}
-            <svg class="w-full h-full text-[#fabd2f] opacity-80 group-hover:opacity-100 transition-opacity" viewBox="0 0 40 50">
-              <rect fill="currentColor" fill-opacity="0.2" height="8" rx="2" stroke="currentColor" stroke-width="1.2" width="30" x="5" y="4"></rect>
-              <rect fill="currentColor" fill-opacity="0.4" height="12" rx="2" stroke="currentColor" stroke-width="1.2" width="30" x="5" y="16"></rect>
-              <rect fill="currentColor" fill-opacity="0.2" height="14" rx="2" stroke="currentColor" stroke-width="1.2" width="30" x="5" y="32"></rect>
-              <path d="M 20 12 L 20 16 M 20 28 L 20 32" stroke="currentColor" stroke-width="1.2"></path>
-            </svg>
-          {/if}
-          <span class="absolute bottom-0.5 right-0.5 font-mono text-[8px] bg-[#1d2021] border border-[#504945] px-0.5 rounded text-[#a89984]">
-            {firstFigure?.figureNumber?.replace(/Figure\s*/i, 'Fig ') || 'Fig 1'}
-          </span>
+      <!-- Figures Gallery Strip (Directly load and showcase all figures in Dashboard) -->
+      {#if allPaperFigures.length > 0}
+        <div class="flex items-center gap-1.5 overflow-x-auto pb-1 px-0.5 scrollbar-thin scrollbar-thumb-[#3c3836]">
+          {#each allPaperFigures as fig, fIndex}
+            <button
+              type="button"
+              class="w-14 h-16 bg-[#141617] hover:bg-[#282828] border border-[#3c3836] hover:border-[#fe8019] rounded shrink-0 overflow-hidden relative flex flex-col items-center justify-between p-1 transition-all cursor-pointer group shadow-xs hover:scale-105 active:scale-95"
+              on:click={() => dispatch('selectFigure', { figId: fig.id, imageUrl: fig.imageUrl, name: fig.name })}
+              title={`${fig.figureNumber || `Figure ${fIndex + 1}`}: ${fig.name}`}
+            >
+              <div class="w-full flex-1 flex items-center justify-center overflow-hidden">
+                <img
+                  src={fig.imageUrl}
+                  alt={fig.name}
+                  referrerpolicy="no-referrer"
+                  class="max-w-full max-h-full object-contain"
+                  loading="lazy"
+                />
+              </div>
+              <span class="font-mono text-[8px] text-[#fabd2f] group-hover:text-[#fe8019] truncate w-full text-center mt-0.5 font-bold">
+                {fig.figureNumber?.replace(/Figure\s*/i, 'F') || `F${fIndex + 1}`}
+              </span>
+            </button>
+          {/each}
         </div>
-        <div class="flex flex-col justify-center min-w-0">
-          <span class="text-xs text-[#ebdbb2] font-medium truncate">{firstFigure?.name || 'The Triad Workspace'}</span>
-          <span class="font-mono text-[10px] text-[#a89984] truncate">{firstFigure?.caption || '三欄工作台架構與推導'}</span>
-        </div>
-      </button>
+      {:else}
+        <!-- Fallback Mini Figure Card -->
+        <button
+          type="button"
+          class="w-full text-left bg-[#282828] border border-[#3c3836] p-2 rounded-lg hover:bg-[#32302f] hover:border-[#504945] transition-colors cursor-pointer flex gap-2 group"
+          on:click={() => selectFigure(firstFigure?.id || 'fig1')}
+        >
+          <div class="w-12 h-14 bg-[#1d2021] border border-[#3c3836] rounded shrink-0 overflow-hidden relative flex items-center justify-center p-1">
+            {#if firstFigure?.imageUrl}
+              <img
+                src={firstFigure.imageUrl}
+                alt={firstFigure.name}
+                referrerpolicy="no-referrer"
+                class="w-full h-full object-contain"
+                loading="lazy"
+              />
+            {:else}
+              <svg class="w-full h-full text-[#fabd2f] opacity-80 group-hover:opacity-100 transition-opacity" viewBox="0 0 40 50">
+                <rect fill="currentColor" fill-opacity="0.2" height="8" rx="2" stroke="currentColor" stroke-width="1.2" width="30" x="5" y="4"></rect>
+                <rect fill="currentColor" fill-opacity="0.4" height="12" rx="2" stroke="currentColor" stroke-width="1.2" width="30" x="5" y="16"></rect>
+                <rect fill="currentColor" fill-opacity="0.2" height="14" rx="2" stroke="currentColor" stroke-width="1.2" width="30" x="5" y="32"></rect>
+                <path d="M 20 12 L 20 16 M 20 28 L 20 32" stroke="currentColor" stroke-width="1.2"></path>
+              </svg>
+            {/if}
+            <span class="absolute bottom-0.5 right-0.5 font-mono text-[8px] bg-[#1d2021] border border-[#504945] px-0.5 rounded text-[#a89984]">
+              {firstFigure?.figureNumber?.replace(/Figure\s*/i, 'Fig ') || 'Fig 1'}
+            </span>
+          </div>
+          <div class="flex flex-col justify-center min-w-0">
+            <span class="text-xs text-[#ebdbb2] font-medium truncate">{firstFigure?.name || '文獻圖表載入中'}</span>
+            <span class="font-mono text-[10px] text-[#a89984] truncate">{firstFigure?.caption || '學術文獻結構圖表'}</span>
+          </div>
+        </button>
+      {/if}
 
       <!-- Mini Equation Card -->
       <button
@@ -361,7 +443,7 @@
       >
         <div class="flex items-center justify-between text-[#a89984]">
           <span class="font-mono text-[10px] text-[#fabd2f] font-semibold">{firstFormula?.number || 'Eq. (1)'}</span>
-          <span class="font-mono text-[10px] truncate max-w-[120px]">{firstFormula?.name || 'Efficiency Model'}</span>
+          <span class="font-mono text-[10px] truncate max-w-[120px]">{firstFormula?.name || '核心推導公式'}</span>
         </div>
         <div class="font-mono text-[#ebdbb2] bg-[#1d2021] border border-[#3c3836] px-1.5 py-1 rounded tracking-tight text-[10px] truncate">
           {firstFormula?.latexText || 'η = (C · (1 + γ)) / (ln(τ + 1) · √Ω)'}

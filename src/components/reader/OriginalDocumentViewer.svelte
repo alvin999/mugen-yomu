@@ -127,6 +127,165 @@
     return null;
   }
 
+  export interface NormalizedParagraphItem {
+    type: 'subheading' | 'formula' | 'image' | 'text';
+    text?: string;
+    level?: number;
+    latex?: string;
+    number?: string;
+    url?: string;
+    alt?: string;
+    originalIndex: number;
+  }
+
+  function normalizeParagraphs(paragraphs: string[]): NormalizedParagraphItem[] {
+    if (!paragraphs || paragraphs.length === 0) return [];
+    const items: NormalizedParagraphItem[] = [];
+    let i = 0;
+
+    while (i < paragraphs.length) {
+      const raw = paragraphs[i];
+      const trimmed = (raw || '').trim();
+      if (!trimmed) {
+        i++;
+        continue;
+      }
+
+      // 1. 檢測子標題 (如 #### 2.8.1. ... 或 ### ...)
+      const headingMatch = trimmed.match(/^(#{2,6})\s+(.*)$/);
+      if (headingMatch) {
+        items.push({
+          type: 'subheading',
+          text: headingMatch[2].trim(),
+          level: headingMatch[1].length,
+          originalIndex: i
+        });
+        i++;
+        continue;
+      }
+
+      // 2. 檢測圖片
+      const imgInfo = extractImageInfo(trimmed);
+      if (imgInfo) {
+        items.push({
+          type: 'image',
+          url: imgInfo.url,
+          alt: imgInfo.alt,
+          originalIndex: i
+        });
+        i++;
+        continue;
+      }
+
+      // 3. 檢測跨行 / 連續段落區塊公式
+      // 情況 A：單一段落包含完整 $$ ... $$ [可帶公式編號]
+      const singleBlockMatch = trimmed.match(/^\$\$([\s\S]*?)\$\$(?:\s*(\([0-9a-zA-Z]+\)))?$/);
+      if (singleBlockMatch && singleBlockMatch[1].trim()) {
+        let latex = singleBlockMatch[1].trim();
+        let formulaNum = singleBlockMatch[2] || '';
+        // 檢查下一段是否為中繼空行或公式編號，如 (1)
+        let lookAhead = i + 1;
+        while (lookAhead < paragraphs.length && !paragraphs[lookAhead].trim()) {
+          lookAhead++;
+        }
+        if (!formulaNum && lookAhead < paragraphs.length) {
+          const nextP = paragraphs[lookAhead].trim();
+          const numMatch = nextP.match(/^\(([0-9]+[a-zA-Z]?|[ivx]+)\)$/i) || nextP.match(/^Equation\s*\(([0-9]+)\)/i);
+          if (numMatch) {
+            formulaNum = `(${numMatch[1]})`;
+            i = lookAhead;
+          }
+        }
+        items.push({
+          type: 'formula',
+          latex,
+          number: formulaNum,
+          originalIndex: i
+        });
+        i++;
+        continue;
+      }
+
+      // 情況 B：多行段落切分形式的公式（如 $$ 獨佔一行、公式內容在下一行、$$ 獨佔一行、(1) 獨佔一行）
+      if (trimmed === '$$' || trimmed.startsWith('$$')) {
+        let latexParts: string[] = [];
+        let foundEnd = false;
+        let formulaNum = '';
+        const startIndex = i;
+
+        if (trimmed.length > 2) {
+          latexParts.push(trimmed.slice(2).trim());
+        }
+
+        let j = i + 1;
+        while (j < paragraphs.length) {
+          const nextP = paragraphs[j].trim();
+          if (!nextP) {
+            j++;
+            continue;
+          }
+          if (nextP === '$$' || nextP.endsWith('$$')) {
+            if (nextP.length > 2) {
+              latexParts.push(nextP.slice(0, -2).trim());
+            }
+            foundEnd = true;
+            j++;
+            break;
+          } else {
+            latexParts.push(nextP);
+            j++;
+          }
+        }
+
+        if (foundEnd) {
+          // 檢查後續行是否為公式編號，如 (1)、(2)
+          let lookNum = j;
+          while (lookNum < paragraphs.length && !paragraphs[lookNum].trim()) {
+            lookNum++;
+          }
+          if (lookNum < paragraphs.length) {
+            const numCandidate = paragraphs[lookNum].trim();
+            const numMatch = numCandidate.match(/^\(([0-9]+[a-zA-Z]?|[ivx]+)\)$/i) || numCandidate.match(/^Equation\s*\(([0-9]+)\)/i);
+            if (numMatch) {
+              formulaNum = `(${numMatch[1]})`;
+              j = lookNum + 1; // 消耗編號行
+            }
+          }
+
+          items.push({
+            type: 'formula',
+            latex: latexParts.join(' ').trim(),
+            number: formulaNum,
+            originalIndex: startIndex
+          });
+          i = j;
+          continue;
+        }
+      }
+
+      // 4. 孤立公式編號行如 (1)，若前一項剛好是公式，自動合併
+      const standaloneNumMatch = trimmed.match(/^\(([0-9]+[a-zA-Z]?|[ivx]+)\)$/i);
+      if (standaloneNumMatch && items.length > 0 && items[items.length - 1].type === 'formula') {
+        const prev = items[items.length - 1];
+        if (!prev.number) {
+          prev.number = `(${standaloneNumMatch[1]})`;
+        }
+        i++;
+        continue;
+      }
+
+      // 5. 一般文字段落
+      items.push({
+        type: 'text',
+        text: trimmed,
+        originalIndex: i
+      });
+      i++;
+    }
+
+    return items;
+  }
+
   function extractBlockFormula(para: string): string | null {
     if (!para) return null;
     const trimmed = para.trim();
@@ -1077,10 +1236,16 @@
 
                   <!-- Paragraphs & Inline Figures / Math -->
                   <div class="flex flex-col gap-3">
-                    {#each sec.paragraphs as para, pIndex}
-                      {@const imgInfo = extractImageInfo(para)}
-                      {@const formulaLatex = extractBlockFormula(para)}
-                      {#if imgInfo}
+                    {#each normalizeParagraphs(sec.paragraphs) as item, itemIdx}
+                      {#if item.type === 'subheading'}
+                        <!-- Academic Subheading -->
+                        <div class="mt-3 mb-1 pt-1 pb-1 border-b border-current/20 flex items-center gap-1.5">
+                          <span class="w-1 h-3 bg-[#fe8019] rounded-xs shrink-0"></span>
+                          <h3 class="font-serif font-bold text-sm sm:text-base {paperTheme === 'parchment' ? 'text-[#1c1b1a]' : 'text-[#fbf1c7]'}">
+                            {item.text}
+                          </h3>
+                        </div>
+                      {:else if item.type === 'image' && item.url}
                         <!-- Academic Figure Card -->
                         <figure class="my-4 p-4 rounded-lg flex flex-col items-center gap-2 border {
                           paperTheme === 'parchment'
@@ -1090,11 +1255,11 @@
                           <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
                           <div
                             class="w-full flex items-center justify-center p-2 rounded cursor-zoom-in group"
-                            on:click|stopPropagation={() => openLightbox(imgInfo.url, imgInfo.alt)}
+                            on:click|stopPropagation={() => openLightbox(item.url || '', item.alt)}
                           >
                             <img
-                              src={imgInfo.url}
-                              alt={imgInfo.alt}
+                              src={item.url}
+                              alt={item.alt || ''}
                               referrerpolicy="no-referrer"
                               class="max-h-[380px] max-w-full rounded object-contain shadow-xs transition-transform group-hover:scale-[1.01]"
                               loading="lazy"
@@ -1104,30 +1269,35 @@
                             paperTheme === 'parchment' ? 'text-[#57606a]' : 'text-[#a89984]'
                           }">
                             <strong class="font-mono {paperTheme === 'parchment' ? 'text-[#1c1b1a]' : 'text-[#ebdbb2]'}">
-                              Figure {sIndex + 1}.{pIndex + 1}
+                              Figure {sIndex + 1}.{itemIdx + 1}
                             </strong>
-                            <span class="ml-1">{imgInfo.alt}</span>
+                            <span class="ml-1">{item.alt || '學術圖表'}</span>
                           </figcaption>
                         </figure>
-                      {:else if formulaLatex}
+                      {:else if item.type === 'formula' && item.latex}
                         <!-- Mathematical Expression -->
-                        <div class="my-3 py-2 px-4 rounded flex items-center justify-center border {
+                        <div class="my-3 py-2 px-4 rounded flex items-center justify-between border {
                           paperTheme === 'parchment'
                             ? 'bg-[#f7f4ed] border-[#e2ded6]'
                             : 'bg-[#141617] border-[#3c3836]'
                         }">
-                          <div class="overflow-x-auto text-center py-1 max-w-full">
-                            {@html renderMath(formulaLatex, true)}
+                          <div class="overflow-x-auto text-center py-1 max-w-full mx-auto">
+                            {@html renderMath(item.latex, true)}
                           </div>
+                          {#if item.number}
+                            <span class="font-mono text-xs font-semibold shrink-0 pl-3 {paperTheme === 'parchment' ? 'text-[#b57614]' : 'text-[#fabd2f]'}">
+                              {item.number}
+                            </span>
+                          {/if}
                         </div>
-                      {:else}
+                      {:else if item.type === 'text' && item.text}
                         <!-- Standard Academic Paragraph -->
                         <p class="font-serif leading-[1.85] text-justify tracking-normal {
                           paperFontSize === 'large' ? 'text-[16.5px]' : 'text-[14.5px]'
                         } {
                           paperTheme === 'parchment' ? 'text-[#24292f]' : 'text-[#d5c4a1]'
                         }">
-                          {@html formatParagraphWithMath(para)}
+                          {@html formatParagraphWithMath(item.text)}
                         </p>
                       {/if}
                     {/each}

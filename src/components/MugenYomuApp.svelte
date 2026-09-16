@@ -389,8 +389,13 @@
     savePaperReadingState(activePaper.id, stateMap);
   }
 
-  function handleSelectFigure(event: CustomEvent<{ figId: string }>) {
-    readingMode = 'figures';
+  function handleSelectFigure(event: CustomEvent<{ figId: string; imageUrl?: string; name?: string }>) {
+    const { imageUrl, name } = event.detail;
+    if (imageUrl && readerRef && (readerRef as any).openLightbox) {
+      (readerRef as any).openLightbox(imageUrl, name || '學術圖表預覽');
+    } else {
+      readingMode = 'figures';
+    }
   }
 
   function handleSectionsAligned(event: CustomEvent<{ sections: ChapterSection[] }>) {
@@ -874,12 +879,14 @@
           {#if readingMode !== 'zen'}
             <ReadingMap
               sections={activePaper?.sections || []}
+              paper={activePaper}
               {activeSectionId}
               arxivId={activePaper?.arxivId}
               sourceUrl={activePaper?.sourceUrl}
               on:selectSection={handleSelectSection}
               on:selectFigure={handleSelectFigure}
               on:selectEquation={handleSelectEquation}
+              on:openFiguresStudio={() => readingMode = 'figures'}
               on:toggleSectionRead={handleToggleSectionRead}
               on:resetProgress={handleResetProgress}
             />
