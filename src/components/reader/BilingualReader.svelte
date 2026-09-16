@@ -685,6 +685,7 @@
 
 <svelte:window on:keydown={(e) => { if (e.key === 'Escape' && activeLightboxImg) closeLightbox(); }} />
 
+<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
 <main
   bind:this={scrollContainer}
   on:scroll={handleContainerScroll}
@@ -790,62 +791,137 @@
         {#each allSections as sec (sec.id)}
           {@const isFocused = sec.id === activeSectionId}
           {@const hasRead = sec.isRead || (sec.progress && sec.progress > 0)}
+          {@const normalizedParas = normalizeParagraphs(sec.paragraphs)}
+          {@const textParas = normalizedParas.filter(p => p.type === 'text' && p.text && p.text.trim().length > 0)}
+          {@const totalTextParas = textParas.length}
+          {@const hasDirectContent = totalTextParas > 0 || (sec.figures && sec.figures.length > 0) || (sec.formulas && sec.formulas.length > 0) || (sec.svoSentence && readingMode !== 'zen')}
+          {@const isPureHeading = !hasDirectContent}
 
-          <!-- SECTION WRAPPER (Visual Hierarchy: Reading = Focus Lens Pulse, Read = Secondary Dim, Unread = Darkest) -->
-          <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-          <section
-            id={`sec-${sec.id}`}
-            class="flex flex-col gap-3 transition-[background-color,border-color,box-shadow,opacity] duration-300 rounded-xl p-4 sm:p-5 relative {
-              isFocused
-                ? 'bg-[#32302f] border border-[#fe8019]/60 shadow-[0_4px_24px_rgba(0,0,0,0.4)] opacity-100'
-                : hasRead
-                  ? 'bg-[#282828]/45 hover:bg-[#282828] border border-[#3c3836]/40 opacity-75 hover:opacity-95'
-                  : 'bg-[#1d2021]/30 hover:bg-[#282828]/30 border border-[#3c3836]/20 opacity-35 hover:opacity-65'
-            }"
-            on:click={() => handleSectionClick(sec.id)}
-          >
-            <!-- Focus Lens Indicator Bar (Only pulses when actively reading; completely hidden and no pulse when not focused) -->
-            <div class="absolute -left-1 top-4 bottom-4 w-1.5 bg-[#fe8019] rounded-full transition-opacity duration-300 {isFocused ? 'focus-lens-bar opacity-100' : 'opacity-0 pointer-events-none'}"></div>
+          {#if isPureHeading}
+            <!-- PURE SECTION / CHAPTER HEADING DIVIDER (e.g. 2. Materials and Methods) -->
+            <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+            <header
+              id={`sec-${sec.id}`}
+              class="mt-8 mb-2 pt-6 pb-4 border-b-2 border-[#fe8019]/40 flex flex-col gap-2 relative transition-all duration-300 cursor-pointer group/chapter {
+                isFocused
+                  ? 'bg-[#32302f]/50 -mx-3 sm:-mx-4 px-3 sm:px-4 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.3)]'
+                  : 'hover:border-[#fe8019]/70'
+              }"
+              on:click={() => handleSectionClick(sec.id)}
+            >
+              <!-- Focus Lens Indicator Bar on left -->
+              <div class="absolute -left-1 top-4 bottom-4 w-1.5 bg-[#fe8019] rounded-full transition-opacity duration-300 {isFocused ? 'focus-lens-bar opacity-100' : 'opacity-0 pointer-events-none'}"></div>
 
-            <div class="flex items-center justify-between gap-2">
-              <div class="flex items-baseline gap-2.5 min-w-0">
-                <span class="font-mono text-[#fe8019] font-bold {sec.level === 1 ? 'text-lg' : 'text-sm'} shrink-0">
-                  {sec.title.split(' ')[0] || sec.id}
-                </span>
-                <h2 class="{sec.level === 1 ? 'text-xl' : 'text-base'} text-[#ebdbb2] tracking-tight font-bold {sec.level === 1 ? 'font-serif' : 'font-sans'} truncate">
-                  {sec.title.replace(/^[0-9.]+\s*/, '')}
-                </h2>
+              <div class="flex items-center justify-between gap-3">
+                <div class="flex items-baseline gap-3 min-w-0">
+                  <span class="font-mono {sec.level === 1 ? 'text-base font-bold bg-[#fe8019] text-[#1d2021] px-2.5 py-0.5 rounded shadow-sm' : 'text-sm font-bold text-[#fabd2f] bg-[#282828] border border-[#504945] px-2 py-0.5 rounded'} shrink-0">
+                    § {sec.title.split(' ')[0] || sec.id}
+                  </span>
+                  <h2 class="{sec.level === 1 ? 'text-2xl sm:text-[26px] font-serif font-bold text-[#ebdbb2]' : 'text-lg sm:text-xl font-bold text-[#ebdbb2]'} tracking-tight truncate group-hover/chapter:text-[#fe8019] transition-colors">
+                    {sec.title.replace(/^[0-9.]+\s*/, '')}
+                  </h2>
+                </div>
+
+                <div class="flex items-center gap-2 shrink-0">
+                  <!-- Direct jump to original PDF / web drawer button -->
+                  {#if sec.page || paper?.pdfUrl || paper?.arxivId || paper?.type === 'web'}
+                    <button
+                      class="flex items-center gap-1 bg-[#282828] hover:bg-[#3c3836] border border-[#504945] hover:border-[#fe8019] px-2.5 py-1 rounded text-xs font-mono text-[#fabd2f] transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
+                      on:click|stopPropagation={() => triggerAction('openOriginalToPage', { page: sec.page || 1, sectionId: sec.id })}
+                      title={paper?.type === 'web'
+                        ? (paper.pdfUrl ? `在原檔抽屜開啟對照 (第 ${sec.page || 1} 頁 / 網頁原文)` : '在原檔抽屜開啟本章節對照')
+                        : `在原檔 PDF 檢視器跳至第 ${sec.page || 1} 頁對照`}
+                    >
+                      <span class="material-symbols-outlined text-[13px] text-[#fe8019]">
+                        {paper?.type === 'web' ? 'dock_to_left' : 'find_in_page'}
+                      </span>
+                      <span>
+                        {paper?.type === 'web'
+                          ? (paper.pdfUrl ? `原檔 p.${sec.page || 1}` : '原檔抽屜')
+                          : `PDF p.${sec.page || 1}`} ➜
+                      </span>
+                    </button>
+                  {/if}
+
+                  {#if isFocused}
+                    <div class="flex items-center gap-1 bg-[#fe8019]/15 border border-[#fe8019]/50 px-2 py-0.5 rounded-full text-[#fe8019]">
+                      <span class="material-symbols-outlined text-[13px]">center_focus_strong</span>
+                      <span class="font-mono text-[9px] font-semibold uppercase hidden sm:inline">Chapter Active</span>
+                    </div>
+                  {/if}
+                </div>
               </div>
 
-              <div class="flex items-center gap-2 shrink-0">
-                <!-- Direct jump to original PDF / web drawer button -->
-                {#if sec.page || paper?.pdfUrl || paper?.arxivId || paper?.type === 'web'}
-                  <button
-                    class="flex items-center gap-1 bg-[#282828] hover:bg-[#3c3836] border border-[#504945] hover:border-[#fe8019] px-2 py-0.5 rounded text-[11px] font-mono text-[#fabd2f] transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
-                    on:click|stopPropagation={() => triggerAction('openOriginalToPage', { page: sec.page || 1, sectionId: sec.id })}
-                    title={paper?.type === 'web'
-                      ? (paper.pdfUrl ? `在原檔抽屜開啟對照 (第 ${sec.page || 1} 頁 / 網頁原文)` : '在原檔抽屜開啟本章節對照')
-                      : `在原檔 PDF 檢視器跳至第 ${sec.page || 1} 頁對照`}
-                  >
-                    <span class="material-symbols-outlined text-[13px] text-[#fe8019]">
-                      {paper?.type === 'web' ? 'dock_to_left' : 'find_in_page'}
-                    </span>
-                    <span>
-                      {paper?.type === 'web'
-                        ? (paper.pdfUrl ? `原檔 p.${sec.page || 1}` : '原檔抽屜')
-                        : `PDF p.${sec.page || 1}`} ➜
-                    </span>
-                  </button>
-                {/if}
+              <!-- Chapter Guidance / Subsections Guide (if any) -->
+              {#if sec.children && sec.children.length > 0}
+                <div class="flex items-center gap-2 text-xs text-[#a89984] font-mono mt-0.5 pl-1">
+                  <span class="flex items-center gap-1 text-[#fabd2f]">
+                    <span class="material-symbols-outlined text-[13px]">subdirectory_arrow_right</span>
+                    <span>包含 {sec.children.length} 個子小節</span>
+                  </span>
+                  <span class="text-[#504945]">·</span>
+                  <span class="text-[#d5c4a1] truncate">
+                    {sec.children.map((c: any) => (c.title || '').split(' ')[0]).filter(Boolean).join(', ')}
+                  </span>
+                </div>
+              {/if}
+            </header>
+          {:else}
+            <!-- REGULAR CONTENT SECTION CARD -->
+            <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+            <section
+              id={`sec-${sec.id}`}
+              class="flex flex-col gap-3 transition-[background-color,border-color,box-shadow,opacity] duration-300 rounded-xl p-4 sm:p-5 relative {
+                isFocused
+                  ? 'bg-[#32302f] border border-[#fe8019]/60 shadow-[0_4px_24px_rgba(0,0,0,0.4)] opacity-100'
+                  : hasRead
+                    ? 'bg-[#282828]/45 hover:bg-[#282828] border border-[#3c3836]/40 opacity-75 hover:opacity-95'
+                    : 'bg-[#1d2021]/30 hover:bg-[#282828]/30 border border-[#3c3836]/20 opacity-35 hover:opacity-65'
+              }"
+              on:click={() => handleSectionClick(sec.id)}
+            >
+              <!-- Focus Lens Indicator Bar (Only pulses when actively reading; completely hidden and no pulse when not focused) -->
+              <div class="absolute -left-1 top-4 bottom-4 w-1.5 bg-[#fe8019] rounded-full transition-opacity duration-300 {isFocused ? 'focus-lens-bar opacity-100' : 'opacity-0 pointer-events-none'}"></div>
 
-                {#if isFocused}
-                  <div class="flex items-center gap-1 bg-[#fe8019]/15 border border-[#fe8019]/50 px-2 py-0.5 rounded-full text-[#fe8019]">
-                    <span class="material-symbols-outlined text-[13px]">center_focus_strong</span>
-                    <span class="font-mono text-[9px] font-semibold uppercase hidden sm:inline">Focus Lens Active</span>
-                  </div>
-                {/if}
+              <div class="flex items-center justify-between gap-2 pb-2 mb-0.5 border-b border-[#3c3836]/60">
+                <div class="flex items-baseline gap-2.5 min-w-0">
+                  <span class="font-mono text-sm font-bold {sec.level === 1 ? 'text-[#fe8019]' : 'text-[#fabd2f] bg-[#282828] border border-[#504945]/70 px-2 py-0.5 rounded'} shrink-0">
+                    {sec.title.split(' ')[0] || sec.id}
+                  </span>
+                  <h3 class="{sec.level === 1 ? 'text-2xl font-serif text-[#ebdbb2]' : 'text-lg sm:text-[19px] font-serif font-bold text-[#fbf1c7]'} tracking-tight truncate">
+                    {sec.title.replace(/^[0-9.]+\s*/, '')}
+                  </h3>
+                </div>
+
+                <div class="flex items-center gap-2 shrink-0">
+                  <!-- Direct jump to original PDF / web drawer button -->
+                  {#if sec.page || paper?.pdfUrl || paper?.arxivId || paper?.type === 'web'}
+                    <button
+                      class="flex items-center gap-1 bg-[#282828] hover:bg-[#3c3836] border border-[#504945] hover:border-[#fe8019] px-2 py-0.5 rounded text-[11px] font-mono text-[#fabd2f] transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
+                      on:click|stopPropagation={() => triggerAction('openOriginalToPage', { page: sec.page || 1, sectionId: sec.id })}
+                      title={paper?.type === 'web'
+                        ? (paper.pdfUrl ? `在原檔抽屜開啟對照 (第 ${sec.page || 1} 頁 / 網頁原文)` : '在原檔抽屜開啟本章節對照')
+                        : `在原檔 PDF 檢視器跳至第 ${sec.page || 1} 頁對照`}
+                    >
+                      <span class="material-symbols-outlined text-[13px] text-[#fe8019]">
+                        {paper?.type === 'web' ? 'dock_to_left' : 'find_in_page'}
+                      </span>
+                      <span>
+                        {paper?.type === 'web'
+                          ? (paper.pdfUrl ? `原檔 p.${sec.page || 1}` : '原檔抽屜')
+                          : `PDF p.${sec.page || 1}`} ➜
+                      </span>
+                    </button>
+                  {/if}
+
+                  {#if isFocused}
+                    <div class="flex items-center gap-1 bg-[#fe8019]/15 border border-[#fe8019]/50 px-2 py-0.5 rounded-full text-[#fe8019]">
+                      <span class="material-symbols-outlined text-[13px]">center_focus_strong</span>
+                      <span class="font-mono text-[9px] font-semibold uppercase hidden sm:inline">Focus Lens Active</span>
+                    </div>
+                  {/if}
+                </div>
               </div>
-            </div>
 
             <!-- Paragraphs with Inline Bilingual Translation & Figures -->
             <div class="flex flex-col gap-5">
@@ -955,7 +1031,7 @@
                   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
                   <div
                     id={`para-${key}`}
-                    class="flex flex-col gap-2 group/para relative rounded-lg p-2.5 transition-all duration-200 {isParaFocused ? 'bg-[#32302f]/90 border-l-4 border-[#fe8019] shadow-sm' : 'hover:bg-[#282828]/50'}"
+                    class="flex flex-col gap-2 group/para relative rounded-lg p-2.5 transition-all duration-200 {isParaFocused ? (totalTextParas === 1 ? 'bg-[#32302f]/80 shadow-xs' : 'bg-[#32302f] ring-1 ring-[#fe8019]/50 shadow-sm') : 'hover:bg-[#282828]/50'}"
                     data-para-key={key}
                     data-para-text={para}
                     data-sec-id={sec.id}
@@ -1209,84 +1285,87 @@
               {/each}
             {/if}
 
-            <!-- Inline Semantic Action Toolbar (In Zen mode, only retains Bilingual Translation) -->
-            <div class="mt-2 flex flex-wrap items-center gap-2 rounded-lg p-1.5 transition-all duration-200 {isFocused ? 'bg-[#282828] border border-[#3c3836] shadow-sm opacity-100' : 'bg-[#1d2021]/50 border border-[#3c3836]/30 opacity-60 hover:opacity-100'}">
-              {#if readingMode !== 'zen'}
-                <button
-                  class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#fabd2f] border border-[#fabd2f]/30 px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
-                  disabled={loadingIntuitionId === sec.id}
-                  on:click|stopPropagation={() => triggerCognitiveAction('showIntuition', sec)}
-                  title="深度生成或檢視本節白話科學直覺"
-                >
-                  {#if loadingIntuitionId === sec.id}
-                    <span class="material-symbols-outlined text-[14px] text-[#fabd2f] animate-spin">sync</span>
-                    <span>直覺推導中...</span>
-                  {:else}
-                    <span class="material-symbols-outlined text-[14px] text-[#fabd2f]">lightbulb</span>
-                    <span>白話科學直覺</span>
-                  {/if}
-                </button>
+              {#if totalTextParas > 0}
+                <!-- Inline Semantic Action Toolbar (In Zen mode, only retains Bilingual Translation) -->
+                <div class="mt-2 flex flex-wrap items-center gap-2 rounded-lg p-1.5 transition-all duration-200 {isFocused ? 'bg-[#282828] border border-[#3c3836] shadow-sm opacity-100' : 'bg-[#1d2021]/50 border border-[#3c3836]/30 opacity-60 hover:opacity-100'}">
+                  {#if readingMode !== 'zen'}
+                    <button
+                      class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#fabd2f] border border-[#fabd2f]/30 px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
+                      disabled={loadingIntuitionId === sec.id}
+                      on:click|stopPropagation={() => triggerCognitiveAction('showIntuition', sec)}
+                      title="深度生成或檢視本節白話科學直覺"
+                    >
+                      {#if loadingIntuitionId === sec.id}
+                        <span class="material-symbols-outlined text-[14px] text-[#fabd2f] animate-spin">sync</span>
+                        <span>直覺推導中...</span>
+                      {:else}
+                        <span class="material-symbols-outlined text-[14px] text-[#fabd2f]">lightbulb</span>
+                        <span>白話科學直覺</span>
+                      {/if}
+                    </button>
 
-                <button
-                  class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#8ec07c] border border-[#8ec07c]/30 px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
-                  disabled={loadingSyntaxId === sec.id}
-                  on:click|stopPropagation={() => triggerCognitiveAction('showSyntax', sec)}
-                  title="可先在內文反白長難句，或點擊由 AI 自動拆解本節代表句"
-                >
-                  {#if loadingSyntaxId === sec.id}
-                    <span class="material-symbols-outlined text-[14px] text-[#8ec07c] animate-spin">sync</span>
-                    <span>句構拆解中...</span>
-                  {:else}
-                    <span class="material-symbols-outlined text-[14px] text-[#8ec07c]">account_tree</span>
-                    <span>句構拆解</span>
-                  {/if}
-                </button>
+                    <button
+                      class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#8ec07c] border border-[#8ec07c]/30 px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
+                      disabled={loadingSyntaxId === sec.id}
+                      on:click|stopPropagation={() => triggerCognitiveAction('showSyntax', sec)}
+                      title="可先在內文反白長難句，或點擊由 AI 自動拆解本節代表句"
+                    >
+                      {#if loadingSyntaxId === sec.id}
+                        <span class="material-symbols-outlined text-[14px] text-[#8ec07c] animate-spin">sync</span>
+                        <span>句構拆解中...</span>
+                      {:else}
+                        <span class="material-symbols-outlined text-[14px] text-[#8ec07c]">account_tree</span>
+                        <span>句構拆解</span>
+                      {/if}
+                    </button>
 
-                <button
-                  class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#ebdbb2] border border-[#504945] px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
-                  disabled={loadingTerminologyId === sec.id}
-                  on:click|stopPropagation={() => triggerCognitiveAction('showTerminology', sec)}
-                  title="萃取並對齊本節關鍵學術術語與台灣繁體名詞"
-                >
-                  {#if loadingTerminologyId === sec.id}
-                    <span class="material-symbols-outlined text-[14px] text-[#fe8019] animate-spin">sync</span>
-                    <span>術語對齊中...</span>
-                  {:else}
-                    <span class="material-symbols-outlined text-[14px] text-[#fe8019]">menu_book</span>
-                    <span>學術術語對齊</span>
+                    <button
+                      class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#ebdbb2] border border-[#504945] px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
+                      disabled={loadingTerminologyId === sec.id}
+                      on:click|stopPropagation={() => triggerCognitiveAction('showTerminology', sec)}
+                      title="萃取並對齊本節關鍵學術術語與台灣繁體名詞"
+                    >
+                      {#if loadingTerminologyId === sec.id}
+                        <span class="material-symbols-outlined text-[14px] text-[#fe8019] animate-spin">sync</span>
+                        <span>術語對齊中...</span>
+                      {:else}
+                        <span class="material-symbols-outlined text-[14px] text-[#fe8019]">menu_book</span>
+                        <span>學術術語對齊</span>
+                      {/if}
+                    </button>
                   {/if}
-                </button>
+
+                  <button
+                    class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#fabd2f] border border-[#fabd2f]/40 px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
+                    disabled={isSectionTranslating}
+                    on:click|stopPropagation={() => translateEntireSection(sec)}
+                    title="依序佇列展開當前章節所有段落的繁體中文對照翻譯（防 429 節流保護）"
+                  >
+                    {#if isSectionTranslating}
+                      <span class="material-symbols-outlined text-[14px] text-[#fe8019] animate-spin">sync</span>
+                      <span>佇列翻譯中...</span>
+                    {:else}
+                      <span class="material-symbols-outlined text-[14px] text-[#fabd2f]">translate</span>
+                      <span>本節雙語對照</span>
+                    {/if}
+                  </button>
+
+                  {#if readingMode !== 'zen'}
+                    <div class="h-4 w-px bg-[#504945] mx-0.5"></div>
+
+                    <button
+                      class="flex items-center gap-1.5 hover:bg-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] px-2 py-1 rounded text-xs transition-colors"
+                      on:click|stopPropagation={() => triggerAction('addNote', sec.title)}
+                    >
+                      <span class="material-symbols-outlined text-[14px]">push_pin</span>
+                      <span>標註精讀筆記</span>
+                    </button>
+                  {/if}
+                </div>
               {/if}
 
-              <button
-                class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#fabd2f] border border-[#fabd2f]/40 px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
-                disabled={isSectionTranslating}
-                on:click|stopPropagation={() => translateEntireSection(sec)}
-                title="依序佇列展開當前章節所有段落的繁體中文對照翻譯（防 429 節流保護）"
-              >
-                {#if isSectionTranslating}
-                  <span class="material-symbols-outlined text-[14px] text-[#fe8019] animate-spin">sync</span>
-                  <span>佇列翻譯中...</span>
-                {:else}
-                  <span class="material-symbols-outlined text-[14px] text-[#fabd2f]">translate</span>
-                  <span>本節雙語對照</span>
-                {/if}
-              </button>
-
-              {#if readingMode !== 'zen'}
-                <div class="h-4 w-px bg-[#504945] mx-0.5"></div>
-
-                <button
-                  class="flex items-center gap-1.5 hover:bg-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] px-2 py-1 rounded text-xs transition-colors"
-                  on:click|stopPropagation={() => triggerAction('addNote', sec.title)}
-                >
-                  <span class="material-symbols-outlined text-[14px]">push_pin</span>
-                  <span>標註精讀筆記</span>
-                </button>
-              {/if}
-            </div>
-
-          </section>
+            </section>
+          {/if}
         {/each}
       </div>
     {/if}
