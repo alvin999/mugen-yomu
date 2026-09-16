@@ -64,6 +64,31 @@
     dispatch('selectEquation', { eqId });
   }
 
+  // 取得當前文獻的第一個圖表與公式
+  $: firstFigure = (() => {
+    for (const sec of sections) {
+      if (sec.figures && sec.figures.length > 0) return sec.figures[0];
+      if (sec.children) {
+        for (const sub of sec.children) {
+          if (sub.figures && sub.figures.length > 0) return sub.figures[0];
+        }
+      }
+    }
+    return null;
+  })();
+
+  $: firstFormula = (() => {
+    for (const sec of sections) {
+      if (sec.formulas && sec.formulas.length > 0) return sec.formulas[0];
+      if (sec.children) {
+        for (const sub of sec.children) {
+          if (sub.formulas && sub.formulas.length > 0) return sub.formulas[0];
+        }
+      }
+    }
+    return null;
+  })();
+
   let collapsedSections: Record<string, boolean> = {};
 
   function toggleSectionCollapse(id: string, e: MouseEvent) {
@@ -299,20 +324,32 @@
       <button
         type="button"
         class="w-full text-left bg-[#282828] border border-[#3c3836] p-2 rounded-lg hover:bg-[#32302f] hover:border-[#504945] transition-colors cursor-pointer flex gap-2 group"
-        on:click={() => selectFigure('fig1')}
+        on:click={() => selectFigure(firstFigure?.id || 'fig1')}
       >
         <div class="w-12 h-14 bg-[#1d2021] border border-[#3c3836] rounded shrink-0 overflow-hidden relative flex items-center justify-center p-1">
-          <svg class="w-full h-full text-[#fabd2f] opacity-80 group-hover:opacity-100 transition-opacity" viewBox="0 0 40 50">
-            <rect fill="currentColor" fill-opacity="0.2" height="8" rx="2" stroke="currentColor" stroke-width="1.2" width="30" x="5" y="4"></rect>
-            <rect fill="currentColor" fill-opacity="0.4" height="12" rx="2" stroke="currentColor" stroke-width="1.2" width="30" x="5" y="16"></rect>
-            <rect fill="currentColor" fill-opacity="0.2" height="14" rx="2" stroke="currentColor" stroke-width="1.2" width="30" x="5" y="32"></rect>
-            <path d="M 20 12 L 20 16 M 20 28 L 20 32" stroke="currentColor" stroke-width="1.2"></path>
-          </svg>
-          <span class="absolute bottom-0.5 right-0.5 font-mono text-[8px] bg-[#1d2021] border border-[#504945] px-0.5 rounded text-[#a89984]">Fig 1</span>
+          {#if firstFigure?.imageUrl}
+            <img
+              src={firstFigure.imageUrl}
+              alt={firstFigure.name}
+              referrerpolicy="no-referrer"
+              class="w-full h-full object-contain"
+              loading="lazy"
+            />
+          {:else}
+            <svg class="w-full h-full text-[#fabd2f] opacity-80 group-hover:opacity-100 transition-opacity" viewBox="0 0 40 50">
+              <rect fill="currentColor" fill-opacity="0.2" height="8" rx="2" stroke="currentColor" stroke-width="1.2" width="30" x="5" y="4"></rect>
+              <rect fill="currentColor" fill-opacity="0.4" height="12" rx="2" stroke="currentColor" stroke-width="1.2" width="30" x="5" y="16"></rect>
+              <rect fill="currentColor" fill-opacity="0.2" height="14" rx="2" stroke="currentColor" stroke-width="1.2" width="30" x="5" y="32"></rect>
+              <path d="M 20 12 L 20 16 M 20 28 L 20 32" stroke="currentColor" stroke-width="1.2"></path>
+            </svg>
+          {/if}
+          <span class="absolute bottom-0.5 right-0.5 font-mono text-[8px] bg-[#1d2021] border border-[#504945] px-0.5 rounded text-[#a89984]">
+            {firstFigure?.figureNumber?.replace(/Figure\s*/i, 'Fig ') || 'Fig 1'}
+          </span>
         </div>
         <div class="flex flex-col justify-center min-w-0">
-          <span class="text-xs text-[#ebdbb2] font-medium truncate">The Triad Workspace</span>
-          <span class="font-mono text-[10px] text-[#a89984] truncate">三欄工作台架構與推導</span>
+          <span class="text-xs text-[#ebdbb2] font-medium truncate">{firstFigure?.name || 'The Triad Workspace'}</span>
+          <span class="font-mono text-[10px] text-[#a89984] truncate">{firstFigure?.caption || '三欄工作台架構與推導'}</span>
         </div>
       </button>
 
@@ -320,14 +357,14 @@
       <button
         type="button"
         class="w-full text-left bg-[#282828] border border-[#3c3836] border-l-4 border-l-[#fabd2f] p-2 rounded-lg hover:bg-[#32302f] transition-colors cursor-pointer flex flex-col gap-1"
-        on:click={() => selectEquation('eq_efficiency')}
+        on:click={() => selectEquation(firstFormula?.id || 'eq_efficiency')}
       >
         <div class="flex items-center justify-between text-[#a89984]">
-          <span class="font-mono text-[10px] text-[#fabd2f] font-semibold">Eq. (1)</span>
-          <span class="font-mono text-[10px]">Efficiency Model</span>
+          <span class="font-mono text-[10px] text-[#fabd2f] font-semibold">{firstFormula?.number || 'Eq. (1)'}</span>
+          <span class="font-mono text-[10px] truncate max-w-[120px]">{firstFormula?.name || 'Efficiency Model'}</span>
         </div>
         <div class="font-mono text-[#ebdbb2] bg-[#1d2021] border border-[#3c3836] px-1.5 py-1 rounded tracking-tight text-[10px] truncate">
-          η = (C · (1 + γ)) / (ln(τ + 1) · √Ω)
+          {firstFormula?.latexText || 'η = (C · (1 + γ)) / (ln(τ + 1) · √Ω)'}
         </div>
       </button>
     </div>
