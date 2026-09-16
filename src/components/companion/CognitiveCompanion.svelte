@@ -295,7 +295,7 @@
             </div>
           </div>
           <button
-            class="w-full flex items-center justify-center gap-1.5 bg-[#32302f] hover:bg-[#fabd2f] text-[#fabd2f] hover:text-[#1d2021] border border-[#fabd2f]/40 px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer shadow-sm"
+            class="w-full flex items-center justify-center gap-1.5 bg-[#32302f] hover:bg-[#3c3836] text-[#fabd2f] hover:text-[#fabd2f] border border-[#fabd2f]/40 hover:border-[#fabd2f]/70 px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer shadow-sm"
             disabled={isGeneratingIntuition}
             on:click={() => dispatch('triggerGenerate', { type: 'intuition' })}
           >
@@ -429,7 +429,7 @@
             </div>
           </div>
           <button
-            class="w-full flex items-center justify-center gap-1.5 bg-[#32302f] hover:bg-[#83a598] text-[#83a598] hover:text-[#1d2021] border border-[#83a598]/40 px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer shadow-sm"
+            class="w-full flex items-center justify-center gap-1.5 bg-[#32302f] hover:bg-[#3c3836] text-[#83a598] hover:text-[#83a598] border border-[#83a598]/40 hover:border-[#83a598]/70 px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer shadow-sm"
             disabled={isGeneratingTerminology}
             on:click={() => dispatch('triggerGenerate', { type: 'terminology' })}
           >
@@ -479,7 +479,7 @@
       {:else}
         <p class="text-xs text-[#a89984]">尚未萃取本節專有名詞字典。</p>
         <button
-          class="flex items-center justify-center gap-1.5 bg-[#32302f] hover:bg-[#83a598] text-[#83a598] hover:text-[#1d2021] border border-[#83a598]/30 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+          class="flex items-center justify-center gap-1.5 bg-[#32302f] hover:bg-[#3c3836] text-[#83a598] hover:text-[#83a598] border border-[#83a598]/30 hover:border-[#83a598]/60 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
           disabled={isGeneratingTerminology}
           on:click={() => dispatch('triggerGenerate', { type: 'terminology' })}
         >

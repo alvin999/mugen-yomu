@@ -108,11 +108,36 @@
       .replace(/'/g, '&#039;');
   }
 
+  // Markdown 超連結與巢狀引註解析器：支援 [text](url) 與 [[1](url)]
+  function parseLinksAndText(rawText: string): string {
+    if (!rawText) return '';
+    const linkRegex = /(?<!!)\[([^\[\]]+)\]\(((?:https?:\/\/|#)[^\s'")]+)\)/g;
+    let last = 0;
+    let m: RegExpExecArray | null;
+    const res: string[] = [];
+
+    while ((m = linkRegex.exec(rawText)) !== null) {
+      if (m.index > last) {
+        res.push(escapeHtml(rawText.slice(last, m.index)));
+      }
+      const anchor = escapeHtml(m[1]);
+      const url = m[2].replace(/"/g, '&quot;');
+      res.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center text-[#8ec07c] hover:text-[#b8bb26] underline decoration-[#8ec07c]/40 hover:decoration-[#b8bb26] transition-colors font-medium px-0.5 rounded hover:bg-[#8ec07c]/10 cursor-pointer" title="${url}">${anchor}</a>`);
+      last = linkRegex.lastIndex;
+    }
+
+    if (last < rawText.length) {
+      res.push(escapeHtml(rawText.slice(last)));
+    }
+
+    return res.join('');
+  }
+
   function formatParagraphWithMath(text: string): string {
     if (!text) return '';
-    // 若段落無任何 $ 符號，直接快速跳過以維護極致效能
+    // 若段落無任何 $ 符號，仍進行超連結與引註解析
     if (!text.includes('$')) {
-      return escapeHtml(text);
+      return parseLinksAndText(text);
     }
 
     const parts: string[] = [];
@@ -122,7 +147,7 @@
 
     while ((match = regex.exec(text)) !== null) {
       if (match.index > lastIndex) {
-        parts.push(escapeHtml(text.slice(lastIndex, match.index)));
+        parts.push(parseLinksAndText(text.slice(lastIndex, match.index)));
       }
       const math = match[1].trim();
       const rendered = renderMath(math, false);
@@ -131,26 +156,43 @@
     }
 
     if (lastIndex < text.length) {
-      parts.push(escapeHtml(text.slice(lastIndex)));
+      parts.push(parseLinksAndText(text.slice(lastIndex)));
     }
 
     return parts.join('');
   }
 
+  function sanitizeLatex(latex: string): string {
+    if (!latex) return '';
+    return latex
+      // 1. 消除空白的上下標：_{}, ^{}, _{ }, ^{ }
+      .replace(/_\{(\s*)\}/g, '')
+      .replace(/\^\{(\s*)\}/g, '')
+      // 2. 消除空下標空上標組合：_{}^{}, ^{}_{}
+      .replace(/_\{(\s*)\}\^\{(\s*)\}/g, '')
+      .replace(/\^\{(\s*)\}_\{(\s*)\}/g, '')
+      // 3. 修正化學式中常出現的雙層上下標（如 ^{+}_{}^{} 轉為 ^{+}）
+      .replace(/\^\{([^}]+)\}_\{(\s*)\}\^\{(\s*)\}/g, '^{$1}')
+      .replace(/_\{([^}]+)\}\^\{(\s*)\}_\{(\s*)\}/g, '_{$1}')
+      // 4. 消除連續重複上標 / 下標
+      .replace(/\^\{([^}]+)\}\s*\^\{([^}]*)\}/g, (_m, g1, g2) => g2.trim() ? `^{${g1} ${g2}}` : `^{${g1}}`)
+      .replace(/_\{([^}]+)\}\s*_\{([^}]*)\}/g, (_m, g1, g2) => g2.trim() ? `_{${g1} ${g2}}` : `_{${g1}}`)
+      // 5. 容錯 \left\{ 與 \right\}
+      .replace(/\\left\{/g, '\\left\\{')
+      .replace(/\\right\}/g, '\\right\\}');
+  }
+
   function renderMath(latex: string, displayMode: boolean = false): string {
     if (!latex) return '';
     try {
-      // 容錯清洗常用語法瑕疵
-      const cleanLatex = latex
-        .replace(/\\left\{/g, '\\left\\{')
-        .replace(/\\right\}/g, '\\right\\}');
+      const cleanLatex = sanitizeLatex(latex);
       return katex.renderToString(cleanLatex, {
         displayMode,
         throwOnError: false
       });
     } catch (err) {
       console.warn('KaTeX rendering error:', err);
-      return `<span class="text-[#fb4934] font-mono">${latex}</span>`;
+      return `<span class="text-[#fb4934] font-mono">${escapeHtml(latex)}</span>`;
     }
   }
 

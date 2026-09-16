@@ -15,7 +15,7 @@
     const list: { figure: FigureItem; sectionId?: string; sectionTitle?: string }[] = [];
     if (paper?.figureList && paper.figureList.length > 0) {
       for (const fig of paper.figureList) {
-        const sec = allSections.find(s => s.figures?.some(f => f.id === fig.id || f.imageUrl === fig.imageUrl));
+        const sec = allSections.find(s => s.figures?.some((f: FigureItem) => f.id === fig.id || f.imageUrl === fig.imageUrl));
         list.push({ figure: fig, sectionId: sec?.id, sectionTitle: sec?.title });
       }
       return list;
@@ -57,10 +57,26 @@
     selectedFormulaIndex = 0;
   }
 
+  function sanitizeLatex(latex: string): string {
+    if (!latex) return '';
+    return latex
+      .replace(/_\{(\s*)\}/g, '')
+      .replace(/\^\{(\s*)\}/g, '')
+      .replace(/_\{(\s*)\}\^\{(\s*)\}/g, '')
+      .replace(/\^\{(\s*)\}_\{(\s*)\}/g, '')
+      .replace(/\^\{([^}]+)\}_\{(\s*)\}\^\{(\s*)\}/g, '^{$1}')
+      .replace(/_\{([^}]+)\}\^\{(\s*)\}_\{(\s*)\}/g, '_{$1}')
+      .replace(/\^\{([^}]+)\}\s*\^\{([^}]*)\}/g, (_m, g1, g2) => g2.trim() ? `^{${g1} ${g2}}` : `^{${g1}}`)
+      .replace(/_\{([^}]+)\}\s*_\{([^}]*)\}/g, (_m, g1, g2) => g2.trim() ? `_{${g1} ${g2}}` : `_{${g1}}`)
+      .replace(/\\left\{/g, '\\left\\{')
+      .replace(/\\right\}/g, '\\right\\}');
+  }
+
   function renderMath(latex: string, displayMode: boolean = false): string {
     if (!latex) return '';
     try {
-      return katex.renderToString(latex, {
+      const cleanLatex = sanitizeLatex(latex);
+      return katex.renderToString(cleanLatex, {
         displayMode,
         throwOnError: false
       });
@@ -115,7 +131,7 @@
         <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
           {#if dynamicFigures[selectedFigureIndex]}
             {@const activeItem = dynamicFigures[selectedFigureIndex]}
-            <div class="bg-[#282828] border border-[#3c3836] p-4 rounded-xl flex flex-col gap-3 shadow-md">
+            <figure class="bg-[#282828] border border-[#3c3836] p-4 rounded-xl flex flex-col gap-3 shadow-md m-0">
               <div class="flex items-center justify-between border-b border-[#3c3836] pb-2">
                 <span class="font-mono text-xs text-[#fabd2f] font-bold truncate max-w-[320px]">
                   {activeItem.figure.figureNumber ? `${activeItem.figure.figureNumber}: ` : ''}{activeItem.figure.name}
@@ -147,7 +163,7 @@
                   {activeItem.figure.caption}
                 </figcaption>
               {/if}
-            </div>
+            </figure>
           {/if}
         </div>
 

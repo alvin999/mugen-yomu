@@ -539,13 +539,11 @@ html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="text-[#fb4934]"] {
 }
 
 /* Inverted / Contrast button text */
-html[data-theme]:not([data-theme="gruvbox-dark"]) .text-\[\#1d2021\],
-html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="text-[#1d2021]"] {
+html[data-theme]:not([data-theme="gruvbox-dark"]) .text-\[\#1d2021\] {
   color: var(--bg-gutter) !important;
 }
 
-html[data-theme]:not([data-theme="gruvbox-dark"]) .text-\[\#282828\],
-html[data-theme]:not([data-theme="gruvbox-dark"]) [class*="text-[#282828]"] {
+html[data-theme]:not([data-theme="gruvbox-dark"]) .text-\[\#282828\] {
   color: var(--bg-main) !important;
 }
 
@@ -648,6 +646,10 @@ html[data-theme]:not([data-theme="gruvbox-dark"]) .hover\:text-\[\#fe8019\]:hove
 
 html[data-theme]:not([data-theme="gruvbox-dark"]) .hover\:text-\[\#fb4934\]:hover {
   color: var(--color-red) !important;
+}
+
+html[data-theme]:not([data-theme="gruvbox-dark"]) .hover\:text-\[\#1d2021\]:hover {
+  color: var(--bg-gutter) !important;
 }
 
 html[data-theme]:not([data-theme="gruvbox-dark"]) .hover\:border-\[\#fe8019\]:hover {
