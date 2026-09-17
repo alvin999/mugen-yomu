@@ -70,6 +70,7 @@
     activeLightboxImg = null;
   }
 
+
   function normalizeAcademicImageUrl(rawUrl: string): string {
     if (!rawUrl) return '';
     let url = rawUrl.trim().replace(/^<|>$/g, '');
@@ -472,19 +473,299 @@
     };
   });
 
-  export function scrollToTarget(targetId: string) {
+  export function scrollToTarget(targetId: string, sectionId?: string, formulaNumber?: string) {
     if (typeof document === 'undefined') return;
-    const cleanId = targetId.startsWith('sec-') || targetId.startsWith('eq-') || targetId.startsWith('fig-')
-      ? targetId
-      : `sec-${targetId}`;
-    const el = document.getElementById(cleanId);
-    if (el) {
-      isProgrammaticScrolling = true;
-      if (scrollTimeout) clearTimeout(scrollTimeout);
-      scrollTimeout = setTimeout(() => {
-        isProgrammaticScrolling = false;
-      }, 500);
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    const findElement = (): HTMLElement | null => {
+      // 1. 若提供了公式編號 (例如 "(1)" 或 "1")，優先精準尋找對應編號的公式卡片
+      const cleanNum = formulaNumber ? formulaNumber.replace(/[^0-9a-zA-Z]/g, '') : '';
+      const secIdToSearch = sectionId || (targetId.startsWith('sec-') ? targetId.replace(/^sec-/, '') : activeSectionId);
+
+      if (cleanNum && secIdToSearch) {
+        const secEl = document.getElementById('sec-' + secIdToSearch);
+        if (secEl) {
+          const matchByNum = secEl.querySelector(`[data-equation-number="${cleanNum}"]`) ||
+                             secEl.querySelector(`[data-raw-number="${formulaNumber}"]`);
+          if (matchByNum) return matchByNum as HTMLElement;
+
+          // 模糊比對包含該編號的公式卡片
+          const inlineCards = secEl.querySelectorAll('.group\\/display-math');
+          for (const card of inlineCards) {
+            if (card.textContent && card.textContent.includes(`(${cleanNum})`)) {
+              return card as HTMLElement;
+            }
+          }
+        }
+      }
+
+      // 2. 完全匹配 ID
+      let el = document.getElementById(targetId);
+      if (el) return el;
+
+      // 3. 若指定了章節 sectionId，優先在該章節內尋找公式或卡片
+      const isFormulaTarget = targetId.startsWith('eq-') || targetId.includes('formula') || targetId.includes('eq');
+      if (secIdToSearch) {
+        const secEl = document.getElementById('sec-' + secIdToSearch);
+        if (secEl) {
+          const childMatch = secEl.querySelector(`[id="${targetId}"]`) ||
+                             secEl.querySelector(`[id="eq-${targetId}"]`) ||
+                             secEl.querySelector(`[data-formula-id="${targetId}"]`);
+          if (childMatch) return childMatch as HTMLElement;
+
+          if (isFormulaTarget) {
+            const inlineFormula = secEl.querySelector('.group\\/display-math') ||
+                                  secEl.querySelector('[id^="eq-"]') ||
+                                  secEl.querySelector('.katex-display');
+            if (inlineFormula) return inlineFormula as HTMLElement;
+          } else {
+            return secEl;
+          }
+        }
+      }
+
+      // 4. 若為公式跳轉，全域依據公式編號尋找
+      if (cleanNum) {
+        const globalMatch = document.querySelector(`[data-equation-number="${cleanNum}"]`);
+        if (globalMatch) return globalMatch as HTMLElement;
+      }
+
+      // 5. 若為公式跳轉但目標章節無公式，全域搜尋真正包含公式的卡片 (例如 § 2.8 的 Equation 3)
+      if (isFormulaTarget) {
+        const globalFormula = document.querySelector('.group\\/display-math') ||
+                              document.querySelector('.katex-display');
+        if (globalFormula) return globalFormula as HTMLElement;
+      }
+
+      // 6. 嘗試前綴變形
+      const cleanId = targetId.startsWith('sec-') || targetId.startsWith('eq-') || targetId.startsWith('fig-')
+        ? targetId
+        : `sec-${targetId}`;
+      el = document.getElementById(cleanId);
+      if (el) return el;
+
+      const rawId = targetId.replace(/^(?:eq|sec|fig)-/, '');
+      el = document.getElementById(rawId) ||
+           document.getElementById('eq-' + rawId) ||
+           document.getElementById('sec-' + rawId);
+      if (el) return el;
+
+      // 7. 全頁模糊搜尋
+      return (document.querySelector(`[id*="${rawId}"]`) as HTMLElement) || null;
+    };
+
+    const doScrollAndHighlight = (): boolean => {
+      const el = findElement();
+      if (el) {
+        isProgrammaticScrolling = true;
+        if (scrollTimeout) clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+          isProgrammaticScrolling = false;
+        }, 500);
+
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('formula-target-highlight');
+        setTimeout(() => {
+          el.classList.remove('formula-target-highlight');
+        }, 3200);
+        return true;
+      }
+      return false;
+    };
+
+    if (!doScrollAndHighlight()) {
+      setTimeout(() => {
+        if (!doScrollAndHighlight()) {
+          setTimeout(doScrollAndHighlight, 250);
+        }
+      }, 100);
+    }
+  }
+
+  // 取得經過去重、過濾正文已重複公式、並校正歷史遺留錯誤公式的章節專屬公式清單
+  function getDeduplicatedFormulas(sec: ChapterSection): FormulaItem[] {
+    if (!sec.formulas || sec.formulas.length === 0) return [];
+
+    // 若當前章節正文完全沒有數學算式，檢查公式是否屬於別的章節
+    const hasMathInSec = sec.paragraphs && sec.paragraphs.some(p => p && p.includes('$$'));
+
+    const seenLatex = new Set<string>();
+    const seenNames = new Set<string>();
+    const result: FormulaItem[] = [];
+
+    // 收集該章節正文段落中已渲染之公式 LaTeX，避免在章節底部重複渲染
+    const bodyFormulas = new Set<string>();
+    // 收集該章節正文中已渲染的公式編號 (例如 "1", "(1)")
+    const bodyFormulaNums = new Set<string>();
+    if (sec.paragraphs) {
+      for (const p of sec.paragraphs) {
+        if (p && p.includes('$$')) {
+          const match = p.match(/\$\$([\s\S]*?)\$\$/);
+          if (match && match[1]) {
+            bodyFormulas.add(match[1].trim().replace(/\s+/g, ''));
+          }
+          const numMatch = p.match(/\$\$[\s\S]*?\$\$(?:\s*(\([0-9a-zA-Z.-]+\)))?/);
+          if (numMatch && numMatch[1]) {
+            bodyFormulaNums.add(numMatch[1].replace(/[^0-9a-zA-Z]/g, ''));
+          }
+        }
+      }
+    }
+
+    const isMLPaper = /transformer|attention|neural|deep learning|resnet|machine learning|reinforcement|language model|convolution/i.test(paper?.title || '');
+
+    for (const f of sec.formulas) {
+      if (!f || !f.latexText) continue;
+      const normalizedLatex = f.latexText.trim().replace(/\s+/g, '');
+
+      // 檢查此公式是否真屬於本章節：若指定了 sectionId 且明確不等於 sec.id，且本章節無此數學內容，則排除！
+      if (f.sectionId && f.sectionId !== sec.id && !hasMathInSec) {
+        continue;
+      }
+
+      // 若公式名稱/出處寫著其他章節 (如 2.8)，但當前為第 1 章 (1. Introduction) 且正文無公式，排除！
+      if (f.sectionTitle && !f.sectionTitle.includes(sec.title) && !sec.title.includes(f.sectionTitle) && !hasMathInSec) {
+        continue;
+      }
+
+      // 徹底過濾虛假/捏造之機器學習損失函數 (如 \min_\theta, \min_{\theta}, \mathcal{L}_{total}, \mathbb{E}, \Omega(\theta))
+      const combinedInfo = `${f.latexText} ${f.name || ''} ${JSON.stringify(f.variables || [])}`;
+      const isFabricatedML = /\\min[\s_{]|\\mathcal\{L\}|\\mathbb\{E\}|\\Omega\s*\(|\\ell\s*\(|f_\\theta|綜合損失|正則化懲罰|模型參數權重/i.test(combinedInfo);
+      if (isFabricatedML && !isMLPaper) {
+        continue;
+      }
+
+      // 1. 若該公式已經在正文段落中出現過 (依據 LaTeX 或公式編號)，絕對不要在章節底部再次重複展示！
+      if (bodyFormulas.has(normalizedLatex)) continue;
+      if (f.number) {
+        const cleanFNum = f.number.replace(/[^0-9a-zA-Z]/g, '');
+        if (cleanFNum && bodyFormulaNums.has(cleanFNum)) {
+          continue;
+        }
+      }
+
+      // 2. 公式去重 (相同算式或相同名稱在同一章節只保留一項)
+      if (seenLatex.has(normalizedLatex) || (f.name && seenNames.has(f.name))) {
+        continue;
+      }
+      seenLatex.add(normalizedLatex);
+      if (f.name) seenNames.add(f.name);
+
+      result.push(f);
+    }
+    return result;
+  }
+
+  // 點擊章節底部公式卡片時，平滑跳轉至真實所屬章節與正文對應位置並發光高亮
+  function jumpToFormulaLocation(formula: FormulaItem, sec: ChapterSection) {
+    if (typeof document === 'undefined') return;
+
+    // 1. 尋找該公式真實所屬的章節 ID (例如 § 2.8)
+    let realSecId = formula.sectionId;
+    if (paper?.sections) {
+      const flat = flattenSections(paper.sections);
+      // 優先依據 sectionId 匹配
+      if (!realSecId || realSecId === sec.id) {
+        // 若當前章節正文沒有公式，嘗試依據 sectionTitle 或正文內容尋找真正包含公式的章節
+        if (formula.sectionTitle) {
+          const matchedByTitle = flat.find(s => 
+            formula.sectionTitle?.includes(s.title) || 
+            s.title.includes(formula.sectionTitle || '') ||
+            (formula.sectionTitle.includes('2.8') && s.title.includes('2.8'))
+          );
+          if (matchedByTitle) realSecId = matchedByTitle.id;
+        }
+
+        // 若依然未找到，在全論文中搜尋真正包含 $$ 的章節
+        if (!realSecId || realSecId === sec.id) {
+          const matchedByContent = flat.find(s => 
+            s.paragraphs && s.paragraphs.some(p => p.includes('$$') || (formula.number && p.includes(formula.number)))
+          );
+          if (matchedByContent) realSecId = matchedByContent.id;
+        }
+      }
+    }
+
+    const finalSecId = realSecId || sec.id;
+
+    // 2. 若真實章節不是當前章節，通知外層切換焦點章節
+    if (finalSecId && finalSecId !== activeSectionId) {
+      activeSectionId = finalSecId;
+      dispatch('selectSection', { sectionId: finalSecId });
+    }
+
+    // 3. 延遲執行滾動定位以確保章節展開並渲染完畢
+    setTimeout(() => {
+      scrollToFormulaInPage(formula, finalSecId);
+    }, 150);
+  }
+
+  function scrollToFormulaInPage(formula: FormulaItem, targetSecId?: string) {
+    if (typeof document === 'undefined') return;
+
+    const findAndHighlight = () => {
+      // 1. 優先在目標章節容器中尋找
+      if (targetSecId) {
+        const secEl = document.getElementById('sec-' + targetSecId);
+        if (secEl) {
+          // A. 尋找匹配公式編號 (例如 (3)) 的內聯卡片
+          const inlineCards = secEl.querySelectorAll('.group\\/display-math');
+          for (const card of inlineCards) {
+            if (formula.number && card.textContent && card.textContent.includes(formula.number)) {
+              card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              card.classList.add('formula-target-highlight');
+              setTimeout(() => card.classList.remove('formula-target-highlight'), 3200);
+              showToast(`✨ 已定位至 ${formula.number} 原文對應方程式`);
+              return true;
+            }
+          }
+
+          // B. 尋找包含 $$ 的正文段落
+          const mathParas = secEl.querySelectorAll('[id^="para-"]');
+          for (const p of mathParas) {
+            if (p.textContent && p.textContent.includes('$$')) {
+              p.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              p.classList.add('formula-target-highlight');
+              setTimeout(() => p.classList.remove('formula-target-highlight'), 3200);
+              showToast(`✨ 已定位至原文方程式段落`);
+              return true;
+            }
+          }
+
+          // C. 尋找章節內第一道公式卡片
+          if (inlineCards.length > 0) {
+            const firstCard = inlineCards[0] as HTMLElement;
+            firstCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            firstCard.classList.add('formula-target-highlight');
+            setTimeout(() => firstCard.classList.remove('formula-target-highlight'), 3200);
+            showToast(`✨ 已定位至該章節核心方程式`);
+            return true;
+          }
+
+          // D. 若該章節內真無公式卡片，滾動至章節頂部
+          secEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          secEl.classList.add('formula-target-highlight');
+          setTimeout(() => secEl.classList.remove('formula-target-highlight'), 3200);
+          showToast(`✨ 已定位至章節標題`);
+          return true;
+        }
+      }
+
+      // 2. 全域尋找公式卡片
+      const allInlineCards = document.querySelectorAll('.group\\/display-math');
+      for (const card of allInlineCards) {
+        if (formula.number && card.textContent && card.textContent.includes(formula.number)) {
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          card.classList.add('formula-target-highlight');
+          setTimeout(() => card.classList.remove('formula-target-highlight'), 3200);
+          showToast(`✨ 已定位至原文方程式 ${formula.number}`);
+          return true;
+        }
+      }
+      return false;
+    };
+
+    if (!findAndHighlight()) {
+      setTimeout(findAndHighlight, 200);
     }
   }
 
@@ -1069,8 +1350,14 @@
                     {/if}
                   </figure>
                 {:else if item.type === 'formula' && item.latex}
-                  <!-- Inline KaTeX Block Formula Card (with formula number) -->
-                  <div class="my-3 p-4 bg-[#1d2021] border border-[#504945] rounded-xl flex flex-col items-center justify-center relative shadow-inner group/display-math">
+                  <!-- Inline KaTeX Block Formula Card (with formula number and unique jumpable target ID) -->
+                  <div
+                    id={`eq-${sec.id}-${item.originalIndex}`}
+                    data-equation-number={item.number ? item.number.replace(/[^0-9a-zA-Z]/g, '') : ''}
+                    data-raw-number={item.number || ''}
+                    data-formula-latex={item.latex || ''}
+                    class="my-3 p-4 bg-[#1d2021] border border-[#504945] rounded-xl flex flex-col items-center justify-center relative shadow-inner group/display-math transition-all duration-300"
+                  >
                     <div class="w-full flex items-center justify-between text-xs font-mono text-[#fabd2f] border-b border-[#3c3836]/60 pb-2 mb-2">
                       <span class="flex items-center gap-1.5 font-semibold">
                         <span class="material-symbols-outlined text-[15px] text-[#fe8019]">functions</span>
@@ -1352,36 +1639,62 @@
               </div>
             {/if}
 
-            <!-- Formulas Sandbox (If present) -->
-            {#if sec.formulas && sec.formulas.length > 0}
-              {#each sec.formulas as formula}
-                <div id={`eq-${formula.id}`} class="my-5 bg-[#1d2021] border border-[#504945] p-5 rounded-xl flex flex-col items-center justify-center relative shadow-inner">
-                  <span class="absolute right-4 top-3 font-mono text-xs text-[#a89984] select-none">{formula.number}</span>
-                  
-                  <span class="font-mono text-xs text-[#fabd2f] font-semibold mb-2 flex items-center gap-1.5">
-                    <span class="material-symbols-outlined text-[14px]">functions</span>
-                    {formula.name}
-                  </span>
+            <!-- Formulas Sandbox (經去重與校正，不重複渲染正文已有公式，支援點擊直接跳轉) -->
+            {#if getDeduplicatedFormulas(sec).length > 0}
+              {#each getDeduplicatedFormulas(sec) as formula}
+                <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+                <div
+                  id={`eq-${formula.id}`}
+                  class="my-5 bg-[#1d2021] border border-[#504945] hover:border-[#fe8019] p-5 rounded-xl flex flex-col items-center justify-center relative shadow-inner cursor-pointer transition-all duration-200 group/form-card"
+                  on:click={() => jumpToFormulaLocation(formula, sec)}
+                  title="點擊定位跳轉至原文對應位置"
+                >
+                  <!-- Card Header: Name, Number & Jump Button -->
+                  <div class="w-full flex items-center justify-between text-xs font-mono border-b border-[#3c3836]/70 pb-2 mb-3">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span class="text-[#fabd2f] font-semibold flex items-center gap-1 truncate">
+                        <span class="material-symbols-outlined text-[15px] text-[#fe8019]">functions</span>
+                        <span>{formula.name}</span>
+                      </span>
+                      {#if formula.number}
+                        <span class="text-[#fe8019] bg-[#fe8019]/10 border border-[#fe8019]/30 px-1.5 py-0.2 rounded font-bold shrink-0">
+                          {formula.number}
+                        </span>
+                      {/if}
+                    </div>
+
+                    <button
+                      type="button"
+                      class="text-[#8ec07c] hover:text-[#1d2021] bg-[#282828] hover:bg-[#8ec07c] border border-[#3c3836] hover:border-[#8ec07c] px-2 py-0.5 rounded text-[11px] flex items-center gap-1 transition-colors cursor-pointer shrink-0 font-medium"
+                      on:click|stopPropagation={() => jumpToFormulaLocation(formula, sec)}
+                      title="跳轉定位至本章節原文段落"
+                    >
+                      <span class="material-symbols-outlined text-[13px]">my_location</span>
+                      <span>跳轉至原文對應位置</span>
+                    </button>
+                  </div>
 
                   <!-- Formula Display Rendered via KaTeX -->
                   <div class="w-full flex items-center justify-center py-3 overflow-x-auto text-[#ebdbb2]">
-                    <div class="katex-display-container text-[20px] text-[#ebdbb2] px-2 select-none">
+                    <div class="katex-display-container text-[20px] text-[#ebdbb2] px-2 select-none group-hover/form-card:scale-[1.01] transition-transform">
                       {@html renderMath(formula.latexText, true)}
                     </div>
                   </div>
 
                   <!-- Variables Hover Explanations with KaTeX Symbols -->
-                  <div class="flex flex-wrap items-center justify-center gap-2 mt-3 pt-3 border-t border-[#3c3836] w-full">
-                    {#each formula.variables as v}
-                      <span class="font-mono text-xs bg-[#282828] border border-[#3c3836] hover:border-[#504945] px-2.5 py-1 rounded-md flex items-center gap-1.5 shadow-sm transition-colors">
-                        <span class="inline-flex items-center text-sm" style="color: {v.color}">
-                          {@html renderMath(v.symbol, false)}
+                  {#if formula.variables && formula.variables.length > 0}
+                    <div class="flex flex-wrap items-center justify-center gap-2 mt-3 pt-3 border-t border-[#3c3836] w-full">
+                      {#each formula.variables as v}
+                        <span class="font-mono text-xs bg-[#282828] border border-[#3c3836] hover:border-[#504945] px-2.5 py-1 rounded-md flex items-center gap-1.5 shadow-sm transition-colors">
+                          <span class="inline-flex items-center text-sm" style="color: {v.color}">
+                            {@html renderMath(v.symbol, false)}
+                          </span>
+                          <span class="text-[#a89984]">:</span>
+                          <span class="text-[#d5c4a1]">{v.meaning}</span>
                         </span>
-                        <span class="text-[#a89984]">:</span>
-                        <span class="text-[#d5c4a1]">{v.meaning}</span>
-                      </span>
-                    {/each}
-                  </div>
+                      {/each}
+                    </div>
+                  {/if}
                 </div>
               {/each}
             {/if}
@@ -1572,5 +1885,36 @@
   .animate-saccadic-scan {
     position: absolute;
     animation: saccadicScan linear infinite;
+  }
+
+  /* 核心目標函數與公式跳轉高亮脈衝動畫 */
+  :global(.formula-target-highlight) {
+    animation: formulaGlowPulse 2.8s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    border-color: #fe8019 !important;
+    box-shadow: 0 0 35px rgba(254, 128, 25, 0.85), inset 0 0 15px rgba(254, 128, 25, 0.25) !important;
+    outline: 2px solid #fe8019 !important;
+    z-index: 30;
+  }
+
+  @keyframes formulaGlowPulse {
+    0% {
+      transform: scale(1);
+      box-shadow: 0 0 0 rgba(254, 128, 25, 0);
+    }
+    15% {
+      transform: scale(1.025);
+      box-shadow: 0 0 45px rgba(254, 128, 25, 1), inset 0 0 20px rgba(254, 128, 25, 0.35);
+    }
+    35% {
+      transform: scale(1);
+      box-shadow: 0 0 30px rgba(254, 128, 25, 0.8);
+    }
+    65% {
+      box-shadow: 0 0 25px rgba(254, 128, 25, 0.6);
+    }
+    100% {
+      transform: scale(1);
+      box-shadow: 0 0 0 rgba(254, 128, 25, 0);
+    }
   }
 </style>

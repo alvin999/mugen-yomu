@@ -17,6 +17,7 @@ test-e2e.mjs
 test-groq-flow.mjs
 current_app_screen.png
 *.log
+scratch/
 
 # Local Development Checklists & Private Notes
 CHECKLIST.md

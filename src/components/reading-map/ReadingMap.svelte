@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import type { ChapterSection, PaperDocument, FigureItem } from '../../stores/documentStore';
+  import type { ChapterSection, PaperDocument, FigureItem, FormulaItem } from '../../stores/documentStore';
   import { calculateReadingStats } from '../../stores/readingStore';
 
   export let sections: ChapterSection[] = [];
@@ -102,11 +102,11 @@
     dispatch('selectFigure', { figId });
   }
 
-  function selectEquation(eqId: string) {
-    dispatch('selectEquation', { eqId });
+  function selectEquation(eqId: string, sectionId?: string, formulaNumber?: string) {
+    dispatch('selectEquation', { eqId, sectionId, formulaNumber });
   }
 
-  // 取得當前文獻的第一個圖表與公式
+  // 取得當前文獻的第一個圖表
   $: firstFigure = (() => {
     for (const sec of sections) {
       if (sec.figures && sec.figures.length > 0) return sec.figures[0];
@@ -119,17 +119,126 @@
     return null;
   })();
 
-  $: firstFormula = (() => {
-    for (const sec of sections) {
-      if (sec.formulas && sec.formulas.length > 0) return sec.formulas[0];
-      if (sec.children) {
-        for (const sub of sec.children) {
-          if (sub.formulas && sub.formulas.length > 0) return sub.formulas[0];
+  export interface DashboardFormulaItem {
+    formula: FormulaItem;
+    sectionId: string;
+    sectionTitle: string;
+    page?: string;
+    sourceContextSnippet?: string;
+  }
+
+  // 聚合當前文獻的所有函數公式並記錄章節出處 (Provenance Tracking)
+  $: allPaperFormulas = (() => {
+    const list: DashboardFormulaItem[] = [];
+    const seenLatex = new Set<string>();
+    const isMLPaper = /transformer|attention|neural|deep learning|resnet|machine learning|reinforcement|language model|convolution/i.test(paper?.title || '');
+
+    function extractFromSecs(secs: ChapterSection[]) {
+      for (const sec of secs) {
+        // 1. 已結構化之 formulas (嚴格過濾非 ML 論文中的偽造損失函數)
+        if (sec.formulas) {
+          for (const f of sec.formulas) {
+            if (!f || !f.latexText) continue;
+            const combined = `${f.latexText} ${f.name || ''} ${JSON.stringify(f.variables || [])}`;
+            const isFabricatedML = /\\min[\s_{]|\\mathcal\{L\}|\\mathbb\{E\}|\\Omega\s*\(|\\ell\s*\(|f_\\theta|綜合損失|正則化懲罰|模型參數權重/i.test(combined);
+            if (isFabricatedML && !isMLPaper) continue;
+
+            const norm = f.latexText.trim().replace(/\s+/g, '');
+            if (!seenLatex.has(norm)) {
+              seenLatex.add(norm);
+              const resolvedSecId = f.sectionId || sec.id || 'sec_root';
+              const resolvedSecTitle = f.sectionTitle || sec.title || (paper?.title ? `§ ${paper.title.slice(0, 16)}...` : '文獻主體章節');
+              const resolvedPage = f.page || (sec.page ? `p. ${sec.page}` : undefined);
+              list.push({
+                formula: f,
+                sectionId: resolvedSecId,
+                sectionTitle: resolvedSecTitle,
+                page: resolvedPage,
+                sourceContextSnippet: f.sourceContextSnippet
+              });
+            }
+          }
         }
+
+        // 2. 段落中內嵌之區塊公式 ($$ ... $$)
+        if (sec.paragraphs) {
+          const secPage = sec.page ? `p. ${sec.page}` : undefined;
+          const cleanSecTitle = (sec.title || '').replace(/^§\s*/, '').trim();
+          const secPrefix = cleanSecTitle.split(' ')[0] || '';
+
+          for (let i = 0; i < sec.paragraphs.length; i++) {
+            const p = sec.paragraphs[i];
+            if (!p || !p.includes('$$')) continue;
+            const blockMatch = p.match(/\$\$([\s\S]*?)\$\$(\s*\(([0-9a-zA-Z.-]+)\))?/);
+            if (blockMatch && blockMatch[1].trim()) {
+              const rawLatex = blockMatch[1].trim();
+              const norm = rawLatex.replace(/\s+/g, '');
+              if (!seenLatex.has(norm)) {
+                seenLatex.add(norm);
+                let formulaNum = blockMatch[3] ? `(${blockMatch[3]})` : '';
+                if (!formulaNum && i + 1 < sec.paragraphs.length) {
+                  const nextP = sec.paragraphs[i + 1].trim();
+                  const numMatch = nextP.match(/^\(([0-9a-zA-Z.-]+)\)$/);
+                  if (numMatch) formulaNum = `(${numMatch[1]})`;
+                }
+                if (!formulaNum) formulaNum = `(${list.length + 1})`;
+
+                const nameNum = formulaNum.replace(/[()]/g, '');
+                const formulaName = secPrefix ? `§ ${secPrefix} 方程式 ${nameNum}` : `核心方程式 ${nameNum}`;
+                const lhs = rawLatex.split(/[\s=:]+/)[0]?.replace(/[\\{}]/g, '').trim() || 'y';
+
+                list.push({
+                  formula: {
+                    id: `sec_${sec.id}_eq_${list.length + 1}`,
+                    number: formulaNum,
+                    name: formulaName,
+                    latexText: rawLatex,
+                    page: secPage,
+                    sectionId: sec.id,
+                    sectionTitle: sec.title,
+                    sourceContextSnippet: p.replace(/\$\$/g, '').slice(0, 160),
+                    variables: [
+                      { symbol: lhs, meaning: '核心目標物理量 / 狀態指標', color: '#fe8019' },
+                      { symbol: 'm_\\Sigma / t', meaning: '控制變因 / 累積質量與時間', color: '#fabd2f' }
+                    ]
+                  },
+                  sectionId: sec.id,
+                  sectionTitle: sec.title,
+                  page: secPage,
+                  sourceContextSnippet: p.replace(/\$\$/g, '').slice(0, 160)
+                });
+              }
+            }
+          }
+        }
+
+        if (sec.children) extractFromSecs(sec.children);
       }
     }
-    return null;
+
+    extractFromSecs(sections);
+    return list;
   })();
+
+  let activeFormulaIndex: number = 0;
+  $: if (activeFormulaIndex >= allPaperFormulas.length && allPaperFormulas.length > 0) {
+    activeFormulaIndex = 0;
+  }
+  $: currentDashboardFormula = allPaperFormulas[activeFormulaIndex] || null;
+
+  function nextFormula(e: MouseEvent) {
+    e.stopPropagation();
+    if (allPaperFormulas.length > 0) {
+      activeFormulaIndex = (activeFormulaIndex + 1) % allPaperFormulas.length;
+    }
+  }
+
+  function prevFormula(e: MouseEvent) {
+    e.stopPropagation();
+    if (allPaperFormulas.length > 0) {
+      activeFormulaIndex = (activeFormulaIndex - 1 + allPaperFormulas.length) % allPaperFormulas.length;
+    }
+  }
 
   let collapsedSections: Record<string, boolean> = {};
 
@@ -435,20 +544,146 @@
         </button>
       {/if}
 
-      <!-- Mini Equation Card -->
-      <button
-        type="button"
-        class="w-full text-left bg-[#282828] border border-[#3c3836] border-l-4 border-l-[#fabd2f] p-2 rounded-lg hover:bg-[#32302f] transition-colors cursor-pointer flex flex-col gap-1"
-        on:click={() => selectEquation(firstFormula?.id || 'eq_efficiency')}
-      >
-        <div class="flex items-center justify-between text-[#a89984]">
-          <span class="font-mono text-[10px] text-[#fabd2f] font-semibold">{firstFormula?.number || 'Eq. (1)'}</span>
-          <span class="font-mono text-[10px] truncate max-w-[120px]">{firstFormula?.name || '核心推導公式'}</span>
+      <!-- Mini Equation & Provenance Dashboard Card -->
+      {#if currentDashboardFormula}
+        <!-- Formula Provenance Pills Strip: 一眼掌握全篇論文所有函數出處 -->
+        {#if allPaperFormulas.length > 0}
+          <div class="flex items-center gap-1 overflow-x-auto pb-1 px-0.5 scrollbar-thin scrollbar-thumb-[#3c3836]">
+            {#each allPaperFormulas as item, fIdx}
+              <button
+                type="button"
+                class="font-mono text-[9px] px-2 py-0.5 rounded-full border transition-all shrink-0 flex items-center gap-1 cursor-pointer {
+                  activeFormulaIndex === fIdx
+                    ? 'bg-[#fe8019]/20 border-[#fe8019] text-[#fe8019] font-bold shadow-xs'
+                    : 'bg-[#141617] border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] hover:border-[#504945]'
+                }"
+                on:click={() => {
+                  activeFormulaIndex = fIdx;
+                  selectEquation(item.formula.id, item.sectionId, item.formula.number);
+                }}
+                title={`${item.formula.number || `Eq ${fIdx + 1}`}: ${item.formula.name} (出處: § ${item.sectionTitle})`}
+              >
+                <span class="material-symbols-outlined text-[10px] text-[#fe8019]">functions</span>
+                <span>{item.formula.number || `Eq ${fIdx + 1}`}</span>
+                <span class="opacity-70">·</span>
+                <span class="truncate max-w-[80px]">§ {item.sectionTitle.replace(/^§\s*/, '').split(' ')[0]}</span>
+              </button>
+            {/each}
+          </div>
+        {/if}
+
+        <div class="w-full bg-[#282828] border border-[#3c3836] border-l-4 border-l-[#fabd2f] p-2.5 rounded-lg hover:border-[#504945] transition-colors flex flex-col gap-2 shadow-sm">
+          <!-- Top Row: Equation Number, Name & Navigation -->
+          <div class="flex items-center justify-between text-[#a89984]">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="font-mono text-[10px] bg-[#fabd2f]/15 border border-[#fabd2f]/40 text-[#fabd2f] px-1.5 py-0.2 rounded font-bold shrink-0">
+                {currentDashboardFormula.formula.number || 'Eq. (1)'}
+              </span>
+              <span class="font-mono text-[11px] text-[#ebdbb2] font-semibold truncate max-w-[140px]">{currentDashboardFormula.formula.name}</span>
+            </div>
+            {#if allPaperFormulas.length > 1}
+              <div class="flex items-center gap-1 shrink-0">
+                <span class="font-mono text-[9px] text-[#a89984]">{activeFormulaIndex + 1}/{allPaperFormulas.length}</span>
+                <button
+                  type="button"
+                  class="text-[#a89984] hover:text-[#fe8019] p-0.5 rounded hover:bg-[#3c3836] transition-colors"
+                  on:click={prevFormula}
+                  title="上一條公式"
+                >
+                  <span class="material-symbols-outlined text-[12px]">chevron_left</span>
+                </button>
+                <button
+                  type="button"
+                  class="text-[#a89984] hover:text-[#fe8019] p-0.5 rounded hover:bg-[#3c3836] transition-colors"
+                  on:click={nextFormula}
+                  title="下一條公式"
+                >
+                  <span class="material-symbols-outlined text-[12px]">chevron_right</span>
+                </button>
+              </div>
+            {/if}
+          </div>
+
+          <!-- Provenance Badge: 清楚標註函數是從哪裡來的 (章節出處與頁碼) -->
+          <div class="flex items-center justify-between gap-1 text-[9px] font-mono bg-[#141617] border border-[#3c3836] px-2 py-1 rounded text-[#8ec07c]">
+            <div class="flex items-center gap-1.5 truncate max-w-[190px]" title="文獻出處：§ {currentDashboardFormula.sectionTitle} {currentDashboardFormula.page ? `(${currentDashboardFormula.page})` : ''}">
+              <span class="material-symbols-outlined text-[12px] text-[#fe8019] shrink-0">pin_drop</span>
+              <span class="text-[#fe8019] font-bold shrink-0">出處:</span>
+              <span class="text-[#ebdbb2] font-medium truncate">§ {currentDashboardFormula.sectionTitle.replace(/^§\s*/, '')}</span>
+            </div>
+            {#if currentDashboardFormula.page}
+              <span class="text-[#a89984] bg-[#282828] border border-[#3c3836] px-1 py-0.2 rounded text-[8px] shrink-0">{currentDashboardFormula.page}</span>
+            {/if}
+          </div>
+
+          <!-- Formula Math Expression Display & Direct Target Jump -->
+          <button
+            type="button"
+            class="w-full text-left font-mono text-[#ebdbb2] bg-[#1d2021] hover:bg-[#181a1b] border border-[#3c3836] hover:border-[#fe8019]/60 px-2 py-1.5 rounded tracking-tight text-[10px] truncate cursor-pointer transition-colors shadow-xs"
+            on:click={() => {
+              if (currentDashboardFormula) {
+                selectEquation(currentDashboardFormula.formula.id, currentDashboardFormula.sectionId, currentDashboardFormula.formula.number);
+              }
+            }}
+            title="點擊定位跳轉至原文對應公式"
+          >
+            {currentDashboardFormula.formula.latexText}
+          </button>
+
+          <!-- Source Context Snippet (原文引述脈絡線索) -->
+          {#if currentDashboardFormula.sourceContextSnippet}
+            <div class="text-[9px] text-[#a89984] italic truncate px-1 border-l-2 border-[#fe8019]/70 bg-[#1d2021]/50 py-0.5 rounded-r" title="原文引述：{currentDashboardFormula.sourceContextSnippet}">
+              <span class="text-[#fe8019] font-normal mr-1">[引述]:</span>“{currentDashboardFormula.sourceContextSnippet}”
+            </div>
+          {/if}
+
+          <!-- Bottom Actions: Jump To Section & Open Studio -->
+          <div class="flex items-center justify-between pt-1 border-t border-[#3c3836]/60">
+            <button
+              type="button"
+              class="font-mono text-[9px] text-[#a89984] hover:text-[#fabd2f] flex items-center gap-0.5 transition-colors cursor-pointer"
+              on:click={() => dispatch('openFiguresStudio')}
+              title="前往 Formula Lab 深入推導與證明"
+            >
+              <span class="material-symbols-outlined text-[11px]">schema</span>
+              <span>推導工作室</span>
+            </button>
+            <button
+              type="button"
+              class="font-mono text-[9px] text-[#8ec07c] hover:text-[#b8bb26] flex items-center gap-0.5 transition-colors cursor-pointer font-semibold"
+              on:click={() => {
+                if (currentDashboardFormula) {
+                  selectSection(currentDashboardFormula.sectionId);
+                  selectEquation(currentDashboardFormula.formula.id, currentDashboardFormula.sectionId, currentDashboardFormula.formula.number);
+                }
+              }}
+              title="跳轉並在原文中精確定位此公式"
+            >
+              <span class="material-symbols-outlined text-[11px]">my_location</span>
+              <span>定位原文出處 ➜</span>
+            </button>
+          </div>
         </div>
-        <div class="font-mono text-[#ebdbb2] bg-[#1d2021] border border-[#3c3836] px-1.5 py-1 rounded tracking-tight text-[10px] truncate">
-          {firstFormula?.latexText || 'η = (C · (1 + γ)) / (ln(τ + 1) · √Ω)'}
-        </div>
-      </button>
+      {:else}
+        <!-- Fallback Mini Card when no formula extracted yet -->
+        <button
+          type="button"
+          class="w-full text-left bg-[#282828] border border-[#3c3836] border-l-4 border-l-[#fabd2f] p-2 rounded-lg hover:bg-[#32302f] transition-colors cursor-pointer flex flex-col gap-1"
+          on:click={() => selectEquation('eq_efficiency')}
+        >
+          <div class="flex items-center justify-between text-[#a89984]">
+            <div class="flex items-center gap-1.5">
+              <span class="font-mono text-[9px] bg-[#fabd2f]/15 border border-[#fabd2f]/40 text-[#fabd2f] px-1 py-0.2 rounded font-bold">PREVIEW</span>
+              <span class="font-mono text-[10px] text-[#fabd2f] font-semibold">Eq. (1)</span>
+            </div>
+            <span class="font-mono text-[10px] truncate max-w-[120px]">核心推導公式</span>
+          </div>
+          <div class="font-mono text-[#ebdbb2] bg-[#1d2021] border border-[#3c3836] px-1.5 py-1 rounded tracking-tight text-[10px] truncate">
+            η = (C · (1 + γ)) / (ln(τ + 1) · √Ω)
+          </div>
+          <span class="font-mono text-[9px] text-[#8ec07c]">出處: 範例展示 (Attention § 3.2.1)</span>
+        </button>
+      {/if}
     </div>
   </div>
 

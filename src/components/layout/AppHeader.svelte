@@ -159,8 +159,10 @@
       </button>
 
       <button
+        id="btn-nav-figures"
         class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 {readingMode === 'figures' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
         on:click={() => setMode('figures')}
+        title="圖表與公式推導工作室"
       >
         <span class="material-symbols-outlined text-[13px]">schema</span>
         <span>圖表推導</span>

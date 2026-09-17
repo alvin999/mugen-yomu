@@ -206,7 +206,7 @@ export function calculateReadingStats(sections: any[]): ReadingStatsResult {
   let skimChars = 0;
 
   for (const s of targetList) {
-    const paras = (s.paragraphs || []).filter(p => p && p.trim().length > 0);
+    const paras = (s.paragraphs || []).filter((p: string) => p && p.trim().length > 0);
     let textLen = paras.join(' ').length;
     if (textLen === 0) {
       const figCount = (s.figures || []).length;

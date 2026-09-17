@@ -28,6 +28,9 @@ export interface FormulaItem {
   latexText: string;
   page?: string;
   variables: { symbol: string; meaning: string; color: string }[];
+  sectionId?: string;
+  sectionTitle?: string;
+  sourceContextSnippet?: string;
 }
 
 export interface FigureItem {
@@ -188,6 +191,9 @@ export const userManualDocument: PaperDocument = {
               name: 'Cognitive Reading & Cache Efficiency Model',
               latexText: '\\eta_{\\text{reading}} = \\frac{C_{\\text{comp}} \\cdot (1 + \\gamma_{\\text{cache}})}{\\ln(\\tau_{\\text{lat}} + 1) \\cdot \\sqrt{\\Omega_{\\text{svo}}}}',
               page: 'p. 3',
+              sectionId: '3.2',
+              sectionTitle: '3.2 Cognitive Load Reduction via SVO Parsing & Caching',
+              sourceContextSnippet: 'We formulate the cognitive reading efficiency as a function of contextual comprehension, cache retrieval, and syntactic sentence complexity.',
               variables: [
                 { symbol: '\\eta_{\\text{reading}}', meaning: '綜合精讀效能指標 (Cognitive Efficiency)', color: '#fe8019' },
                 { symbol: 'C_{\\text{comp}}', meaning: '原文脈絡理解深度 (0~100%)', color: '#b8bb26' },
@@ -480,6 +486,9 @@ export const attentionPaper: PaperDocument = {
                   name: 'Scaled Dot-Product Attention',
                   latexText: '\\mathrm{Attention}(Q,K,V) = \\mathrm{softmax}\\left(\\frac{QK^T}{\\sqrt{d_k}}\\right) V',
                   page: 'p. 4',
+                  sectionId: '3.2.1',
+                  sectionTitle: '3.2.1 Scaled Dot-Product Attention',
+                  sourceContextSnippet: 'We call our particular attention "Scaled Dot-Product Attention". The input consists of queries and keys of dimension d_k, and values of dimension d_v.',
                   variables: [
                     { symbol: 'Q', meaning: '查詢向量 (Query)', color: '#fe8019' },
                     { symbol: 'K', meaning: '鍵值 (Key)', color: '#fabd2f' },
@@ -507,6 +516,9 @@ export const attentionPaper: PaperDocument = {
                   name: 'Multi-Head Attention',
                   latexText: '\\mathrm{MultiHead}(Q,K,V) = \\mathrm{Concat}(\\mathrm{head}_1, ..., \\mathrm{head}_h) W^O',
                   page: 'p. 5',
+                  sectionId: '3.2.2',
+                  sectionTitle: '3.2.2 Multi-Head Attention',
+                  sourceContextSnippet: 'Instead of performing a single attention function with d_model-dimensional keys, values and queries, we found it beneficial to linearly project the queries, keys and values h times...',
                   variables: [
                     { symbol: 'h', meaning: '多頭數量 (通常為 8)', color: '#fe8019' },
                     { symbol: '\\mathrm{head}_i', meaning: '第 i 個子空間注意力頭', color: '#8ec07c' },
@@ -668,6 +680,9 @@ export const resnetPaper: PaperDocument = {
           name: 'Residual Block Formulation',
           latexText: 'y = F(x, {W_i}) + x',
           page: 'p. 3',
+          sectionId: '2',
+          sectionTitle: '2. Deep Residual Learning',
+          sourceContextSnippet: 'Instead of hoping each few stacked layers directly fit a desired underlying mapping H(x), we explicitly let these layers fit a residual mapping F(x) := H(x) - x.',
           variables: [
             { symbol: 'x', meaning: '殘差塊輸入特徵向量', color: '#fe8019' },
             { symbol: 'F(x)', meaning: '待學習的殘差映射 (Residual)', color: '#fabd2f' },
@@ -762,7 +777,10 @@ export const anthropicCircuitsWeb: PaperDocument = {
           number: '(1)',
           name: 'QK & OV Circuit Decomposition',
           latexText: 'W_{QK} = W_Q^T W_K, \\quad W_{OV} = W_O W_V',
-          page: 'Web Section 2.1',
+          page: 'Web § 2.1',
+          sectionId: '2',
+          sectionTitle: '2. Residual Stream as a Communication Channel',
+          sourceContextSnippet: 'A fundamental conceptual shift in our framework is viewing the residual stream not merely as a feature representation, but as a linear communication bus.',
           variables: [
             { symbol: 'W_{QK}', meaning: '決定「注意誰」的雙線性注意力矩陣', color: '#fe8019' },
             { symbol: 'W_{OV}', meaning: '決定「搬運什麼內容」的資訊傳遞矩陣', color: '#fabd2f' }
@@ -955,6 +973,15 @@ export function parseMarkdownToDocument(
         formulaNumber = `(${formulaCounter++})`;
       }
 
+      // 擷取前文作為來源引述脈絡
+      let contextSnippet = '';
+      if (currentSection && currentSection.paragraphs.length > 0) {
+        const lastNonFormula = [...currentSection.paragraphs].reverse().find(p => !p.trim().startsWith('$$'));
+        if (lastNonFormula) {
+          contextSnippet = lastNonFormula.replace(/\n+/g, ' ').trim().slice(0, 140);
+        }
+      }
+
       // 建立 FormulaItem
       const formulaItem: FormulaItem = {
         id: `eq_${currentSection ? currentSection.id : 'root'}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -962,7 +989,10 @@ export function parseMarkdownToDocument(
         name: `公式 ${formulaNumber}`,
         latexText: formulaLatex,
         page: `p. ${currentSection ? currentSection.page || 1 : 1}`,
-        variables: extractVariablesFromLatex(formulaLatex)
+        variables: extractVariablesFromLatex(formulaLatex),
+        sectionId: currentSection?.id,
+        sectionTitle: currentSection?.title,
+        sourceContextSnippet: contextSnippet
       };
 
       if (currentSection) {
@@ -1070,16 +1100,16 @@ export function parseMarkdownToDocument(
       const secText = (sec.paragraphs || []).join(' ');
       for (const fig of allFigures) {
         // 從 fig.figureNumber 或 fig.name 提取編號，如 Figure 1, Fig 1, Figure A1
-        const figNumMatch = fig.figureNumber.match(/Figure\s*([0-9A-Za-z]+)/i) || fig.name.match(/Figure\s*([0-9A-Za-z]+)/i);
+        const figNumMatch = (fig.figureNumber ? fig.figureNumber.match(/Figure\s*([0-9A-Za-z]+)/i) : null) || fig.name.match(/Figure\s*([0-9A-Za-z]+)/i);
         if (figNumMatch) {
           const num = figNumMatch[1];
           // 支援匹配 "Figure 1", "Fig. 1", "Figure 1A", "Figure 1,"
           const pattern = new RegExp(`(?:Figure|Fig\\.?)\\s*${num}\\b`, 'i');
-          if (pattern.test(secText) && !sec.figures.some(f => f.imageUrl === fig.imageUrl)) {
+          if (pattern.test(secText) && fig.imageUrl && !sec.figures.some(f => f.imageUrl === fig.imageUrl)) {
             sec.figures.push(fig);
             // 找到第一次提及該圖表的段落，在下方自動注入 Markdown 圖片
             const mentionIdx = sec.paragraphs.findIndex(p => pattern.test(p));
-            if (mentionIdx !== -1 && !sec.paragraphs.some(p => p.includes(fig.imageUrl))) {
+            if (mentionIdx !== -1 && !sec.paragraphs.some(p => fig.imageUrl && p.includes(fig.imageUrl))) {
               sec.paragraphs.splice(mentionIdx + 1, 0, `![${fig.name}](${fig.imageUrl})`);
             }
           }
@@ -1315,6 +1345,60 @@ export async function fetchArxivDocument(input: string): Promise<PaperDocument> 
 const STORAGE_KEY_PAPERS = 'mugen_paper_library_v3';
 const STORAGE_KEY_ACTIVE_ID = 'mugen_active_paper_id_v3';
 
+/**
+ * 清洗文獻資料：自動過濾歷史遺留或捏造之非本篇主題機器學習損失函數 (Self-Healing)
+ */
+export function sanitizePaperData(paper: PaperDocument): boolean {
+  if (!paper || !paper.sections) return false;
+  const isMLPaper = /transformer|attention|neural|deep learning|resnet|machine learning|reinforcement|language model|convolution/i.test(paper.title || '');
+  let modified = false;
+
+  const isFabricatedML = (latexText: string, name?: string, vars?: any[]): boolean => {
+    if (isMLPaper) return false;
+    const combined = `${latexText} ${name || ''} ${JSON.stringify(vars || [])}`;
+    // 檢測機器學習損失函數與目標函數特徵
+    const mlPatterns = [
+      /\\min[\s_{]/,
+      /\\mathcal\{L\}/,
+      /\\mathbb\{E\}/,
+      /\\Omega\s*\(/,
+      /\\ell\s*\(/,
+      /f_\\theta/,
+      /綜合損失/,
+      /正則化懲罰/,
+      /模型參數權重/
+    ];
+    return mlPatterns.some(p => p.test(combined));
+  };
+
+  const cleanSection = (sec: ChapterSection) => {
+    if (sec.formulas && sec.formulas.length > 0) {
+      const originalLen = sec.formulas.length;
+      sec.formulas = sec.formulas.filter(f => {
+        if (!f || !f.latexText) return false;
+        if (isFabricatedML(f.latexText, f.name, f.variables)) {
+          return false;
+        }
+        return true;
+      });
+      if (sec.formulas.length !== originalLen) {
+        modified = true;
+      }
+    }
+    if (sec.children && sec.children.length > 0) {
+      for (const child of sec.children) {
+        cleanSection(child);
+      }
+    }
+  };
+
+  for (const sec of paper.sections) {
+    cleanSection(sec);
+  }
+
+  return modified;
+}
+
 export function getInitialLibrary(): PaperDocument[] {
   const defaults = [userManualDocument, attentionPaper, resnetPaper, anthropicCircuitsWeb];
 
@@ -1327,10 +1411,16 @@ export function getInitialLibrary(): PaperDocument[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
+        let hasSanitized = false;
+        for (const p of parsed) {
+          if (sanitizePaperData(p)) {
+            hasSanitized = true;
+          }
+        }
         // Ensure userManualDocument is present if missing from older storage
         const hasManual = parsed.some((p: any) => p.id === userManualDocument.id);
-        if (!hasManual) {
-          const updated = [userManualDocument, ...parsed];
+        if (!hasManual || hasSanitized) {
+          const updated = hasManual ? parsed : [userManualDocument, ...parsed];
           saveLibraryToStorage(updated);
           return updated;
         }
