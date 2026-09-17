@@ -24,11 +24,13 @@
   } from '../stores/documentStore';
   import {
     flattenSections,
+    calculateReadingStats,
     loadPaperReadingState,
     savePaperReadingState,
     clearPaperReadingState,
     applyProgressToSections
   } from '../stores/readingStore';
+  import { flowStore } from '../stores/flowStore';
   import { getCacheStats, getStorageEstimate, type CacheStats } from '../services/cacheService';
   import {
     formatModelDisplayName,
@@ -136,6 +138,10 @@
       activeSectionId = targetSec.id;
       activeContextText = `§ ${targetSec.title}`;
     }
+
+    // 初始化本篇閱讀心流速率遙測
+    const stats = calculateReadingStats(activePaper.sections);
+    flowStore.initForPaper(paper.id, stats.totalWords, paper.readingSpeedWpm || 260);
   }
 
   function saveNotes(notes: Array<{ title: string; text: string; time: string }>) {
@@ -263,6 +269,22 @@
       setPaper(found);
       currentMainView = 'workspace';
     }
+  }
+
+  function handleUpdateCitationGraph(e: CustomEvent<{ paperId: string; citationGraph: any }>) {
+    const { paperId, citationGraph } = e.detail;
+    if (!paperId || !citationGraph) return;
+
+    if (activePaper && (activePaper.id === paperId || activePaper.id.includes(paperId))) {
+      activePaper.citationGraph = citationGraph;
+      activePaper = { ...activePaper };
+    }
+
+    paperLibrary = paperLibrary.map(p =>
+      (p.id === paperId || p.id.includes(paperId)) ? { ...p, citationGraph } : p
+    );
+    saveLibraryToStorage(paperLibrary);
+    refreshCacheStats();
   }
 
   function handleSplitMouseDown(e: MouseEvent) {
@@ -826,6 +848,7 @@
           paper={activePaper}
           on:backToWorkspace={() => currentMainView = 'workspace'}
           on:loadPaper={handleLoadPaperFromCitation}
+          on:updateCitationGraph={handleUpdateCitationGraph}
         />
       {:else}
         <!-- Density & Flow Ribbon -->

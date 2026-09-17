@@ -2,11 +2,17 @@
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import {
     getCitationGraphForPaper,
+    isPresetCitationPaper,
+    hasCustomCitationGraph,
     type CitationNode,
     type CitationEdge,
     type CitationGraphData,
     type CitationCategory
   } from '../../services/citationService';
+  import {
+    analyzePaperCitationsWithCache,
+    type CitationAnalysisStatus
+  } from '../../services/citationAnalysisService';
   import type { PaperDocument } from '../../stores/documentStore';
   import { currentTheme, getCurrentThemeMeta } from '../../stores/themeStore';
 
@@ -59,9 +65,49 @@
   let animationFrameId: number | null = null;
   let simAlpha: number = 1.0;
 
+  // 動態引文分析狀態
+  let isAnalyzing: boolean = false;
+  let analysisStatus: CitationAnalysisStatus | null = null;
+  let analysisError: string | null = null;
+  let dismissedBanner: boolean = false;
+
+  $: isPreset = isPresetCitationPaper(paper || {});
+  $: isAnalyzed = hasCustomCitationGraph(paper || {});
+  $: showUnanalyzedBanner = Boolean(paper && !isPreset && !isAnalyzed && !isAnalyzing && !dismissedBanner);
+
   // 當 paper 變更時重置圖譜資料
   $: rawGraph = getCitationGraphForPaper(paper || {});
   $: initGraphData(rawGraph);
+
+  async function handleStartAnalysis(forceRefresh: boolean = false) {
+    if (!paper || isAnalyzing) return;
+    isAnalyzing = true;
+    analysisError = null;
+    dismissedBanner = true;
+
+    try {
+      const newGraph = await analyzePaperCitationsWithCache(
+        paper,
+        (status) => {
+          analysisStatus = status;
+        },
+        forceRefresh
+      );
+
+      paper.citationGraph = newGraph;
+      initGraphData(newGraph);
+
+      dispatch('updateCitationGraph', {
+        paperId: paper.id,
+        citationGraph: newGraph
+      });
+    } catch (err: any) {
+      console.error('動態引文拓撲分析失敗:', err);
+      analysisError = err?.message || '引文分析遭遇異常，請檢查網路連線或 API 金鑰設定';
+    } finally {
+      isAnalyzing = false;
+    }
+  }
 
   // 選中的節點物件
   $: selectedNode = simNodes.find(n => n.id === selectedNodeId) || simNodes.find(n => n.category === 'core') || simNodes[0] || null;
@@ -573,8 +619,42 @@
       </div>
     </div>
 
-    <!-- Right: Search Input & Zoom Controls -->
+    <!-- Right: Search Input, AI Dynamic Analysis & Zoom Controls -->
     <div class="flex items-center gap-2">
+      <!-- AI Topology Analysis Button -->
+      {#if isAnalyzing}
+        <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#fabd2f]/15 border border-[#fabd2f]/50 text-[#fabd2f] text-xs font-mono shadow-sm animate-pulse">
+          <span class="material-symbols-outlined text-[14px] animate-spin">sync</span>
+          <span class="truncate max-w-[150px]">{analysisStatus?.message || 'AI 拓撲剖析中...'}</span>
+        </div>
+      {:else if isAnalyzed}
+        <div class="flex items-center gap-1 bg-[#282828] border border-[#3c3836] p-0.5 rounded-lg">
+          <span class="flex items-center gap-1 px-2 py-1 text-[11px] font-mono text-[#b8bb26] font-semibold">
+            <span class="material-symbols-outlined text-[13px]">verified</span>
+            <span>已由 AI 深度分析</span>
+          </span>
+          <button
+            class="flex items-center gap-1 px-2 py-1 rounded text-xs font-mono text-[#a89984] hover:text-[#fe8019] hover:bg-[#32302f] transition-colors cursor-pointer"
+            on:click={() => handleStartAnalysis(true)}
+            title="重新調用 OpenAlex 與 AI 伴讀推導最新拓撲"
+          >
+            <span class="material-symbols-outlined text-[13px]">refresh</span>
+            <span>重跑</span>
+          </button>
+        </div>
+      {:else}
+        <button
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#fe8019] hover:bg-[#d65d0e] text-[#141617] font-bold text-xs font-mono transition-all shadow-md hover:shadow-lg cursor-pointer"
+          on:click={() => handleStartAnalysis(false)}
+          title="透過 OpenAlex 學術檢索與 AI 伴讀推導真實星系圖譜"
+        >
+          <span class="material-symbols-outlined text-[15px]">psychology</span>
+          <span>⚡ AI 引文動態剖析</span>
+        </button>
+      {/if}
+
+      <div class="h-4 w-px bg-[#3c3836]"></div>
+
       <div class="relative">
         <span class="material-symbols-outlined absolute left-2 top-1.5 text-[15px] text-[#a89984]">search</span>
         <input
@@ -622,6 +702,74 @@
 
   <!-- ==================== MAIN SVG CANVAS & DOSSIER SPLIT ==================== -->
   <div class="flex-1 relative overflow-hidden flex">
+
+    <!-- Unanalyzed Paper Guidance Hero Banner -->
+    {#if showUnanalyzedBanner}
+      <div class="absolute inset-x-0 top-5 z-20 flex justify-center pointer-events-none px-4">
+        <div class="pointer-events-auto max-w-xl bg-[#1d2021]/95 backdrop-blur-md border border-[#fe8019]/40 rounded-2xl p-4 shadow-2xl flex flex-col gap-3 animate-fade-in">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex items-start gap-3">
+              <div class="w-9 h-9 rounded-xl bg-[#fe8019]/20 border border-[#fe8019]/60 flex items-center justify-center text-[#fe8019] shrink-0 mt-0.5">
+                <span class="material-symbols-outlined text-[20px]">hub</span>
+              </div>
+              <div class="flex flex-col">
+                <h4 class="text-xs font-bold text-[#ebdbb2] font-mono leading-snug">
+                  ✦ 探索《{paper?.title || '此篇文獻'}》真實學術星系圖譜
+                </h4>
+                <p class="text-[11px] text-[#a89984] leading-relaxed mt-1">
+                  當前畫面為初始備援結構。啟動動態分析後，系統將自動向 <span class="text-[#fabd2f] font-semibold">OpenAlex 學術庫</span> 檢索前置文獻與引用數據，並由 <span class="text-[#fe8019] font-semibold">AI 伴讀引擎</span> 為您精準剖析各篇論文的理論承接關係與核心突破。
+                </p>
+              </div>
+            </div>
+            <button
+              class="text-[#a89984] hover:text-[#ebdbb2] p-1 rounded hover:bg-[#282828] transition-colors shrink-0"
+              on:click={() => dismissedBanner = true}
+              title="關閉提示"
+            >
+              <span class="material-symbols-outlined text-[16px]">close</span>
+            </button>
+          </div>
+
+          <div class="flex items-center justify-end gap-2 pt-2 border-t border-[#3c3836]">
+            <button
+              class="px-3 py-1.5 rounded-lg text-xs font-mono text-[#a89984] hover:text-[#ebdbb2] transition-colors"
+              on:click={() => dismissedBanner = true}
+            >
+              暫以預設備援瀏覽
+            </button>
+            <button
+              class="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#fe8019] hover:bg-[#d65d0e] text-[#141617] text-xs font-bold font-mono transition-all shadow-md hover:shadow-lg cursor-pointer"
+              on:click={() => handleStartAnalysis(false)}
+            >
+              <span class="material-symbols-outlined text-[15px]">psychology</span>
+              <span>⚡ 立即啟動 AI 深度引文分析</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    {/if}
+
+    <!-- Dynamic Analysis Loading Floating HUD -->
+    {#if isAnalyzing}
+      <div class="absolute bottom-12 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-5 py-3 rounded-2xl bg-[#1d2021]/95 backdrop-blur-md border border-[#fabd2f]/60 shadow-2xl text-xs font-mono text-[#ebdbb2] animate-fade-in">
+        <div class="w-5 h-5 border-2 border-[#fabd2f] border-t-transparent rounded-full animate-spin shrink-0"></div>
+        <div class="flex flex-col">
+          <span class="font-bold text-[#fabd2f] text-xs">{analysisStatus?.message || '正在進行學術引文拓撲分析...'}</span>
+          {#if analysisStatus?.details}
+            <span class="text-[10px] text-[#a89984] mt-0.5">{analysisStatus.details}</span>
+          {/if}
+        </div>
+      </div>
+    {/if}
+
+    <!-- Analysis Error Banner -->
+    {#if analysisError}
+      <div class="absolute bottom-12 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#282828] border border-[#cc241d] text-xs text-[#ebdbb2] shadow-2xl animate-fade-in">
+        <span class="material-symbols-outlined text-[17px] text-[#fb4934]">error</span>
+        <span class="text-[11px] font-mono">{analysisError}</span>
+        <button class="ml-2 px-2 py-0.5 rounded bg-[#3c3836] text-[10px] text-[#ebdbb2] hover:bg-[#504945]" on:click={() => analysisError = null}>關閉</button>
+      </div>
+    {/if}
     
     <!-- SVG Interactive Graph Area -->
     <!-- svelte-ignore a11y_no_static_element_interactions a11y_no_noninteractive_element_interactions -->

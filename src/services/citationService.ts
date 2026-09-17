@@ -392,6 +392,33 @@ export const userManualCitationGraph: CitationGraphData = {
   ]
 };
 
+export function isPresetCitationPaper(paper?: { id?: string; title?: string; arxivId?: string }): boolean {
+  if (!paper) return false;
+  const id = paper.id || '';
+  const title = (paper.title || '').toLowerCase();
+  const arxiv = (paper.arxivId || '').toLowerCase();
+
+  return (
+    id === 'mugen_yomu_user_manual' ||
+    title.includes('operating manual') ||
+    title.includes('mugen yomu') ||
+    id.includes('1706') ||
+    title.includes('attention is all you need') ||
+    arxiv.includes('1706.03762') ||
+    id.includes('1512') ||
+    title.includes('deep residual') ||
+    title.includes('resnet') ||
+    arxiv.includes('1512.03385') ||
+    id.includes('circuit') ||
+    title.includes('transformer circuits') ||
+    title.includes('mathematical framework')
+  );
+}
+
+export function hasCustomCitationGraph(paper?: { citationGraph?: CitationGraphData }): boolean {
+  return Boolean(paper?.citationGraph && paper.citationGraph.nodes && paper.citationGraph.nodes.length > 0);
+}
+
 // -------------------------------------------------------------
 // 圖譜檢索與動態合成工廠函式
 // -------------------------------------------------------------
