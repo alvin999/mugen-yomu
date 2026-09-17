@@ -3,6 +3,62 @@
  * Supports Gruvbox Dark (Default), Gruvbox Soft Dark, Catppuccin, Tokyo Night, IntelliJ, Nord, Dracula, One Dark, Solarized, GitHub Dark, Gruvbox Light
  */
 
+/* 0. Global Reset, Base & Typography Tokens */
+:root {
+  /* Typography */
+  --font-serif: "Source Serif 4", Georgia, serif;
+  --font-mono: "JetBrains Mono", Consolas, monospace;
+  --font-sans: "Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  /* Radii */
+  --radius-sm: 0.125rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-full: 9999px;
+}
+
+/* Global Reset & Base */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-main);
+  color: var(--fg-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  height: 100vh;
+}
+
+::selection {
+  background-color: rgba(254, 128, 25, 0.3);
+  color: var(--color-yellow);
+}
+
+/* Base Scrollbar Customization */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-gutter);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-rule);
+  border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-orange);
+}
+
 /* 1. Theme Token Definitions */
 
 /* 1.1 Gruvbox Dark (Default Fallback) */
@@ -690,8 +746,43 @@ html[data-theme]:not([data-theme="gruvbox-dark"]) ::-webkit-scrollbar-thumb:hove
   background: var(--color-orange) !important;
 }
 
-/* Focus lens glow dynamic update */
+/* 2.7 Focus Lens & Paragraph Highlight Animations */
+@keyframes pulse-lens {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 12px rgba(254, 128, 25, 0.65);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 4px rgba(254, 128, 25, 0.35);
+  }
+}
+
+.focus-lens-bar {
+  animation: pulse-lens 3s infinite ease-in-out;
+}
+
+/* Focus lens glow dynamic update for non-gruvbox-dark themes */
 html[data-theme]:not([data-theme="gruvbox-dark"]) .focus-lens-bar {
   background-color: var(--color-orange) !important;
   box-shadow: 0 0 12px color-mix(in srgb, var(--color-orange) 65%, transparent) !important;
 }
+
+/* Paragraph Focus Lens & Evidence Anchor Pulse */
+@keyframes para-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 2px #fe8019, 0 0 20px rgba(254, 128, 25, 0.45);
+    background-color: rgba(254, 128, 25, 0.14);
+  }
+  50% {
+    box-shadow: 0 0 0 2px #fabd2f, 0 0 12px rgba(250, 189, 47, 0.3);
+    background-color: rgba(254, 128, 25, 0.06);
+  }
+}
+
+.para-pulse-highlight {
+  animation: para-pulse 1.2s ease-in-out infinite;
+  border-radius: 8px !important;
+  transition: all 0.3s ease;
+}
+
