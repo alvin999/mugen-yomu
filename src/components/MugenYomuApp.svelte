@@ -25,6 +25,7 @@
   import {
     flattenSections,
     calculateReadingStats,
+    synchronizeHeadingProgress,
     loadPaperReadingState,
     savePaperReadingState,
     clearPaperReadingState,
@@ -177,7 +178,8 @@
       });
     }
 
-    activePaper.sections = updateRecursive(activePaper.sections);
+    const updated = updateRecursive(activePaper.sections);
+    activePaper.sections = synchronizeHeadingProgress(updated);
     activePaper = { ...activePaper };
 
     // 同步儲存至 LocalStorage
@@ -234,7 +236,44 @@
     const target = allSecs.find(s => s.id === id);
     if (target) {
       const nextRead = !target.isRead;
-      updateSectionState(id, { isRead: nextRead, progress: nextRead ? 100 : 0 });
+      // 若為純大標題或具備子章節，連帶將所屬子章節一同切換
+      const prefixMatch = (target.title || '').trim().match(/^([0-9]+)\.?\s+/);
+      const mainNum = prefixMatch ? prefixMatch[1] : null;
+
+      function toggleSubsections(secs: ChapterSection[]): ChapterSection[] {
+        return secs.map(s => {
+          let matches = s.id === id;
+          if (target.children && target.children.length > 0) {
+            if (target.children.some((c: ChapterSection) => c.id === s.id)) matches = true;
+          } else if (mainNum && s.title.trim().startsWith(`${mainNum}.`)) {
+            matches = true;
+          }
+          if (matches) {
+            return {
+              ...s,
+              isRead: nextRead,
+              progress: nextRead ? 100 : 0,
+              children: s.children ? toggleSubsections(s.children) : undefined
+            };
+          }
+          return {
+            ...s,
+            children: s.children ? toggleSubsections(s.children) : undefined
+          };
+        });
+      }
+
+      const toggled = toggleSubsections(activePaper.sections);
+      activePaper.sections = synchronizeHeadingProgress(toggled);
+      activePaper = { ...activePaper };
+
+      // 同步保存
+      const flattened = flattenSections(activePaper.sections);
+      const stateMap: Record<string, any> = {};
+      for (const item of flattened) {
+        stateMap[item.id] = { isRead: item.isRead, progress: item.progress, lastUpdated: Date.now() };
+      }
+      savePaperReadingState(activePaper.id, stateMap);
     }
   }
 
@@ -348,6 +387,78 @@
     }
   }
 
+  // 當使用者滾動或互動閱讀了細部小段落時，更新章節的小段落已讀集合與進度百分比
+  function handleParagraphsRead(e: CustomEvent<{ paragraphs: Array<{ sectionId: string; paraIndex: number; words: number }> }>) {
+    const { paragraphs } = e.detail || {};
+    if (!activePaper || !paragraphs || paragraphs.length === 0) return;
+
+    // 依 sectionId 分組收集小段落索引
+    const grouped: Record<string, number[]> = {};
+    for (const p of paragraphs) {
+      if (!grouped[p.sectionId]) grouped[p.sectionId] = [];
+      if (!grouped[p.sectionId].includes(p.paraIndex)) {
+        grouped[p.sectionId].push(p.paraIndex);
+      }
+    }
+
+    let hasChange = false;
+    function updateSectionParas(secs: ChapterSection[]): ChapterSection[] {
+      return secs.map(s => {
+        let readIndices = [...(s.readParaIndices || [])];
+        let changed = false;
+
+        if (grouped[s.id]) {
+          for (const idx of grouped[s.id]) {
+            if (!readIndices.includes(idx)) {
+              readIndices.push(idx);
+              changed = true;
+              hasChange = true;
+            }
+          }
+        }
+
+        let progress = s.progress;
+        let isRead = s.isRead;
+        const totalParas = s.paragraphs?.length || 0;
+
+        if (changed && totalParas > 0) {
+          // 精確小段落閱讀進度比例
+          progress = Math.min(100, Math.round((readIndices.length / totalParas) * 100));
+          if (progress >= 100) {
+            isRead = true;
+          }
+        }
+
+        return {
+          ...s,
+          readParaIndices: readIndices,
+          progress,
+          isRead,
+          children: s.children ? updateSectionParas(s.children) : undefined
+        };
+      });
+    }
+
+    const updated = updateSectionParas(activePaper.sections);
+    if (hasChange) {
+      activePaper.sections = synchronizeHeadingProgress(updated);
+      activePaper = { ...activePaper };
+
+      // 持久化儲存小段落進度狀態
+      const flattened = flattenSections(activePaper.sections);
+      const stateMap: Record<string, any> = {};
+      for (const item of flattened) {
+        stateMap[item.id] = {
+          isRead: item.isRead,
+          progress: item.progress,
+          readParaIndices: item.readParaIndices || [],
+          lastUpdated: Date.now()
+        };
+      }
+      savePaperReadingState(activePaper.id, stateMap);
+    }
+  }
+
   // 當使用者滾動滑過前面的章節時，自動將已讀過的章節標記為已研讀
   function handleSectionsPassed(e: CustomEvent<{ readSectionIds: string[]; currentSectionId: string }>) {
     const { readSectionIds } = e.detail || {};
@@ -374,14 +485,19 @@
 
     const updated = updatePassed(activePaper.sections);
     if (hasChange) {
-      activePaper.sections = updated;
+      activePaper.sections = synchronizeHeadingProgress(updated);
       activePaper = { ...activePaper };
 
       // 持久化儲存
       const flattened = flattenSections(activePaper.sections);
       const stateMap: Record<string, any> = {};
       for (const item of flattened) {
-        stateMap[item.id] = { isRead: item.isRead, progress: item.progress, lastUpdated: Date.now() };
+        stateMap[item.id] = {
+          isRead: item.isRead,
+          progress: item.progress,
+          readParaIndices: item.readParaIndices || [],
+          lastUpdated: Date.now()
+        };
       }
       savePaperReadingState(activePaper.id, stateMap);
     }
@@ -409,7 +525,12 @@
     const flattened = flattenSections(activePaper.sections);
     const stateMap: Record<string, any> = {};
     for (const item of flattened) {
-      stateMap[item.id] = { isRead: true, progress: 100, lastUpdated: Date.now() };
+      stateMap[item.id] = {
+        isRead: true,
+        progress: 100,
+        readParaIndices: item.readParaIndices || [],
+        lastUpdated: Date.now()
+      };
     }
     savePaperReadingState(activePaper.id, stateMap);
   }
@@ -733,6 +854,16 @@
     }
   }
 
+  function handleSaveNote(e: CustomEvent<{ title: string; text: string }>) {
+    const newNote = {
+      title: e.detail.title,
+      text: e.detail.text,
+      time: new Date().toLocaleTimeString()
+    };
+    saveNotes([newNote, ...capturedNotes]);
+    refreshCacheStats();
+  }
+
   function handleParagraphFocused(e: CustomEvent<{ sectionId: string; paragraphIndex: number; paragraphKey: string; text: string; selectedText: string }>) {
     const { sectionId, paragraphKey, text, selectedText } = e.detail;
     activeParagraphText = text;
@@ -910,6 +1041,7 @@
               on:sectionSkimmed={handleSectionSkimmed}
               on:sectionInteracted={handleSectionInteracted}
               on:sectionsPassed={handleSectionsPassed}
+              on:paragraphsRead={handleParagraphsRead}
               on:reachedBottom={handleReachedBottom}
             />
           </div>
@@ -923,6 +1055,7 @@
               readingMode = 'bilingual';
               handleSelectSection(e);
             }}
+            on:saveNote={handleSaveNote}
           />
         </div>
       {:else}
@@ -972,6 +1105,7 @@
               on:sectionSkimmed={handleSectionSkimmed}
               on:sectionInteracted={handleSectionInteracted}
               on:sectionsPassed={handleSectionsPassed}
+              on:paragraphsRead={handleParagraphsRead}
               on:reachedBottom={handleReachedBottom}
             />
           </div>

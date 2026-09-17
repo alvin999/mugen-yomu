@@ -61,6 +61,7 @@ let sessionWordsRead = 0;
 let currentWpm = 260;
 let averageWpm = 260;
 let lastActivityTime = Date.now();
+let lastScrollActivityTime = 0;
 let isPaused = false;
 
 let windowHistory: WindowEntry[] = [];
@@ -203,22 +204,30 @@ function startTimer() {
     // 累加有效閱讀秒數
     activeSeconds += 1;
 
-    // 清理滑動視窗（保留過去 45 秒內的記錄）
-    const windowCutoff = now - 45000;
+    // 清理滑動視窗（由 25 秒縮短為 8 秒，確保高速滾動數據及時釋放，不再卡速）
+    const windowCutoff = now - 8000;
     windowHistory = windowHistory.filter(e => e.timestamp >= windowCutoff);
 
     // 計算滑動視窗字數與速率
     const windowWords = windowHistory.reduce((acc, cur) => acc + cur.words, 0);
-    const windowDurationSec = Math.max(5, (now - (windowHistory[0]?.timestamp || now)) / 1000);
+    const timeSinceLastScroll = now - lastScrollActivityTime;
 
-    if (windowWords > 0) {
-      const rawWindowWpm = Math.round((windowWords / windowDurationSec) * 60);
-      // EMA 指數移動平均平滑化 (alpha = 0.22)
-      currentWpm = Math.round(currentWpm * 0.78 + rawWindowWpm * 0.22);
-      currentWpm = Math.max(50, Math.min(650, currentWpm));
+    if (timeSinceLastScroll > 1200 && currentWpm > baselineWpm) {
+      // 讀者停止滾動後，速率靈敏平滑回落至沉浸心流區間 (2~3 秒內自然下降)
+      currentWpm = Math.round(currentWpm * 0.72 + baselineWpm * 0.28);
+    } else if (windowWords > 0 && windowHistory.length >= 2) {
+      const timeSpanSec = Math.max(3, (windowHistory[windowHistory.length - 1].timestamp - windowHistory[0].timestamp) / 1000);
+      const rawWindowWpm = Math.round((windowWords / timeSpanSec) * 60);
+      // EMA 指數移動平均平滑化 (alpha = 0.3)
+      currentWpm = Math.round(currentWpm * 0.7 + rawWindowWpm * 0.3);
+      currentWpm = Math.max(50, Math.min(500, currentWpm));
+    } else if (windowWords > 0) {
+      const elapsed = Math.max(2, (now - windowHistory[0].timestamp) / 1000);
+      const singleWpm = Math.round((windowWords / elapsed) * 60);
+      currentWpm = Math.round(currentWpm * 0.8 + Math.min(480, Math.max(120, singleWpm)) * 0.2);
     } else {
-      // 緩慢衰減至基準/思辨速率
-      currentWpm = Math.round(currentWpm * 0.95 + baselineWpm * 0.05);
+      // 無新字數時，自然回歸至基準/思辨速率
+      currentWpm = Math.round(currentWpm * 0.88 + baselineWpm * 0.12);
     }
 
     // 更新本次 Session 平均 WPM
@@ -312,8 +321,24 @@ export const flowStore = {
     sessionWordsRead += words;
     windowHistory.push({ timestamp: now, words });
 
-    // 若為深度互動（翻譯、伴讀提問），瞬時權重偏向深度思辨
-    if (type === 'interact') {
+    // 若為滾動經過段落，根據近期段落字詞流速即時估算瞬時 WPM
+    if (type === 'scroll') {
+      lastScrollActivityTime = now;
+      const recent = windowHistory.slice(-4);
+      if (recent.length >= 2) {
+        const timeDiffSec = Math.max(1, (now - recent[0].timestamp) / 1000);
+        const wordsSum = recent.reduce((sum, r) => sum + r.words, 0);
+        // 快速掃讀瞬時上限調優至 480~500，符合人眼極限，不再粗暴封頂於 650
+        const instantWpm = Math.min(500, Math.max(140, Math.round((wordsSum / timeDiffSec) * 60)));
+        currentWpm = Math.round(currentWpm * 0.65 + instantWpm * 0.35);
+      } else {
+        currentWpm = Math.max(currentWpm, 220);
+      }
+    } else if (type === 'dwell') {
+      // 停留細讀時，平滑引導速率回歸沉浸心流區間 (180 ~ 240 wpm)
+      currentWpm = Math.round(currentWpm * 0.78 + Math.min(260, Math.max(160, words * 12)) * 0.22);
+    } else if (type === 'interact') {
+      // 若為深度互動（翻譯、伴讀提問），瞬時權重偏向深度思辨
       currentWpm = Math.round(currentWpm * 0.7 + 140 * 0.3);
     }
 

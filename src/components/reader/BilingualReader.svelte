@@ -16,6 +16,25 @@
   let selectedAuthorInfo: string | null = null;
   let scrollContainer: HTMLElement | null = null;
 
+  // 已讀小段落追蹤（以最小翻譯單位感應進度與心流速率）
+  let currentPaperId: string = '';
+  let passedParaKeys = new Set<string>();
+
+  $: if (paper && paper.id !== currentPaperId) {
+    currentPaperId = paper.id;
+    passedParaKeys = new Set<string>();
+    if (paper.sections) {
+      const allSecs = flattenSections(paper.sections);
+      for (const s of allSecs) {
+        if (s.readParaIndices && s.readParaIndices.length > 0) {
+          for (const idx of s.readParaIndices) {
+            passedParaKeys.add(`${s.id}_${idx}`);
+          }
+        }
+      }
+    }
+  }
+
   // 研讀焦點段落與文字選取狀態 (Paragraph Focus & Text Selection)
   export let focusedParagraphKey: string = '';
   export let focusedParagraphText: string = '';
@@ -488,11 +507,25 @@
     }
   }
 
+  function markParagraphAsRead(secId: string, pIndex: number, text: string) {
+    const key = `${secId}_${pIndex}`;
+    if (!passedParaKeys.has(key)) {
+      passedParaKeys.add(key);
+      const words = countWords(text);
+      flowStore.recordReadingActivity(Math.max(15, words), 'skim');
+      dispatch('paragraphsRead', {
+        paragraphs: [{ sectionId: secId, paraIndex: pIndex, words }]
+      });
+    }
+  }
+
   function handleParagraphClick(secId: string, pIndex: number, text: string) {
     const key = `${secId}_${pIndex}`;
     focusedParagraphKey = key;
     focusedParagraphText = text;
     activeSectionId = secId;
+
+    markParagraphAsRead(secId, pIndex, text);
 
     // 通知心流引擎記錄閱讀焦點切換與掃視詞數
     flowStore.touchActivity();
@@ -510,6 +543,7 @@
 
   function askCompanionAboutParagraph(sec: ChapterSection, pIndex: number, text: string) {
     flowStore.recordReadingActivity(25, 'interact');
+    markParagraphAsRead(sec.id, pIndex, text);
     handleParagraphClick(sec.id, pIndex, text);
     dispatch('readerAction', {
       action: 'focusCompanion',
@@ -568,7 +602,38 @@
       dispatch('reachedBottom');
     }
 
-    const sectionElements = scrollContainer.querySelectorAll<HTMLElement>('section[id^="sec-"]');
+    // 2. 逐段感應最小翻譯小段落（以段落為單位精準計算進度與心流速率）
+    const paraElements = scrollContainer.querySelectorAll<HTMLElement>('[data-para-key]');
+    const newlyReadParas: Array<{ sectionId: string; paraIndex: number; words: number }> = [];
+    let batchParaWords = 0;
+
+    for (let i = 0; i < paraElements.length; i++) {
+      const pEl = paraElements[i];
+      const pKey = pEl.getAttribute('data-para-key');
+      if (!pKey || passedParaKeys.has(pKey)) continue;
+
+      const pRect = pEl.getBoundingClientRect();
+      // 當段落底部滑過閱讀焦點線（視窗頂部+160px附近），視為讀者已研讀該段落
+      if (pRect.bottom <= focalPointY + 80 && pRect.bottom > 0) {
+        passedParaKeys.add(pKey);
+        const secId = pEl.getAttribute('data-sec-id') || activeSectionId;
+        const pText = pEl.getAttribute('data-para-text') || '';
+        const words = countWords(pText);
+        const pIndex = parseInt(pKey.split('_')[1] || '0', 10);
+
+        newlyReadParas.push({ sectionId: secId, paraIndex: pIndex, words });
+        batchParaWords += words;
+      }
+    }
+
+    if (newlyReadParas.length > 0) {
+      // 將滑過的段落文字詞數灌入心流遙測引擎
+      flowStore.recordReadingActivity(batchParaWords, 'scroll');
+      dispatch('paragraphsRead', { paragraphs: newlyReadParas });
+    }
+
+    // 包含一般內文 section 與純章節標題 header
+    const sectionElements = scrollContainer.querySelectorAll<HTMLElement>('[id^="sec-"]');
     let candidateId: string | null = null;
     const passedSectionIds: string[] = [];
 
@@ -588,7 +653,7 @@
       }
     }
 
-    // 2. 派發滑過章節事件（自動將上方滑過的章節升級為已研讀）
+    // 3. 派發滑過章節事件（自動將上方滑過的章節升級為已研讀）
     if (passedSectionIds.length > 0) {
       dispatch('sectionsPassed', { readSectionIds: passedSectionIds, currentSectionId: candidateId });
     }
@@ -603,6 +668,7 @@
 
   async function toggleParagraphTranslation(secId: string, pIndex: number, text: string, forceRetry: boolean = false) {
     flowStore.recordReadingActivity(25, 'interact');
+    markParagraphAsRead(secId, pIndex, text);
     const key = `${secId}_${pIndex}`;
     
     // 若正在打字機生成中，點擊可立即跳過打字動畫 (Instant Complete)

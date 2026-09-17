@@ -8,6 +8,7 @@ export interface ChapterSection {
   progress: number;
   isRead: boolean;
   paragraphs: string[];
+  readParaIndices?: number[]; // 已研讀之小段落索引集合
   svoSentence?: {
     sentence: string;
     svoBadge: string;
