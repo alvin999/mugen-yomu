@@ -225,6 +225,7 @@
         </button>
 
         {#if isThemeDropdownOpen}
+          <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
           <div
             class="absolute right-0 top-9 w-64 bg-[#282828] border border-[#504945] rounded-xl shadow-2xl z-50 p-2 flex flex-col gap-1 max-h-96 overflow-y-auto animate-fade-in"
             on:click|stopPropagation
