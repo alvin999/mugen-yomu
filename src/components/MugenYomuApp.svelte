@@ -19,6 +19,7 @@
     getActivePaperId,
     setActivePaperId,
     saveLibraryToStorage,
+    sanitizePaperData,
     type PaperDocument,
     type ChapterSection
   } from '../stores/documentStore';
@@ -70,8 +71,8 @@
   let paperLibrary: PaperDocument[] = [];
   let activePaperId: string = 'mugen_yomu_user_manual';
   let activePaper: PaperDocument | null = null;
-  let activeSectionId: string = '3.2';
-  let activeContextText: string = '§ 3.2 Complex Sentence Deconstruction';
+  let activeSectionId: string = '';
+  let activeContextText: string = '';
   let activeParagraphText: string = '';
   let activeSelectedText: string = '';
   let activeFocusedParagraphKey: string = '';
@@ -112,6 +113,9 @@
   }
 
   function setPaper(paper: PaperDocument) {
+    if (sanitizePaperData(paper)) {
+      saveLibraryToStorage(paperLibrary);
+    }
     activePaper = paper;
     activePaperId = paper.id;
     setActivePaperId(paper.id);
@@ -132,12 +136,15 @@
       }
     }
 
-    // Pick section 3.2 or 3.2.1 if exists, else first section
+    // 依序預設選取論文的第一個章節
     const allSecs = flattenSections(activePaper.sections);
-    const targetSec = allSecs.find(s => s.id === '3.2' || s.id === '3.2.1') || allSecs[0];
+    const targetSec = allSecs[0];
     if (targetSec) {
       activeSectionId = targetSec.id;
       activeContextText = `§ ${targetSec.title}`;
+    } else {
+      activeSectionId = '';
+      activeContextText = '';
     }
 
     // 初始化本篇閱讀心流速率遙測
@@ -551,14 +558,20 @@
     }
   }
 
-  function handleSelectEquation(event: CustomEvent<{ eqId: string }>) {
+  function handleSelectEquation(event: CustomEvent<{ eqId: string; sectionId?: string; formulaNumber?: string }>) {
     if (readingMode === 'figures') {
       readingMode = 'bilingual';
     }
+    const targetEqId = event.detail.eqId;
+    const targetSecId = event.detail.sectionId;
+    const formulaNumber = event.detail.formulaNumber;
+
     if (activePaper?.sections) {
       const allSecs = flattenSections(activePaper.sections);
-      const formulaSec = allSecs.find(s => s.formulas && s.formulas.some((f: any) => f.id === event.detail.eqId)) ||
-        allSecs.find(s => s.id === '3.2' || s.id === '3.2.1');
+      let formulaSec = targetSecId ? allSecs.find(s => s.id === targetSecId) : undefined;
+      if (!formulaSec) {
+        formulaSec = allSecs.find(s => s.formulas && s.formulas.some((f: any) => f.id === targetEqId)) || allSecs[0];
+      }
       if (formulaSec) {
         activeSectionId = formulaSec.id;
         activeContextText = `§ ${formulaSec.title}`;
@@ -566,9 +579,9 @@
     }
     setTimeout(() => {
       if (readerRef && readerRef.scrollToTarget) {
-        readerRef.scrollToTarget('eq-' + event.detail.eqId);
+        readerRef.scrollToTarget('eq-' + targetEqId, targetSecId, formulaNumber);
       }
-    }, 60);
+    }, 150);
   }
 
   function getAiConfig() {
@@ -864,6 +877,14 @@
     refreshCacheStats();
   }
 
+  function handleUpdatePaper(e: CustomEvent<{ paper: PaperDocument }>) {
+    const updated = e.detail.paper;
+    activePaper = updated;
+    paperLibrary = paperLibrary.map(p => p.id === updated.id ? updated : p);
+    saveLibraryToStorage(paperLibrary);
+    refreshCacheStats();
+  }
+
   function handleParagraphFocused(e: CustomEvent<{ sectionId: string; paragraphIndex: number; paragraphKey: string; text: string; selectedText: string }>) {
     const { sectionId, paragraphKey, text, selectedText } = e.detail;
     activeParagraphText = text;
@@ -947,6 +968,9 @@
         currentMainView = 'citation-graph';
       } else if (e.detail.path === 'reading-workspace') {
         currentMainView = 'workspace';
+        if (readingMode === 'figures') {
+          readingMode = 'bilingual';
+        }
       }
     }}
   />
@@ -1051,11 +1075,13 @@
         <div class="flex-1 overflow-hidden">
           <DerivationsFiguresView
             paper={activePaper}
+            on:backToReader={() => readingMode = 'bilingual'}
             on:selectSection={(e) => {
               readingMode = 'bilingual';
               handleSelectSection(e);
             }}
             on:saveNote={handleSaveNote}
+            on:updatePaper={handleUpdatePaper}
           />
         </div>
       {:else}
