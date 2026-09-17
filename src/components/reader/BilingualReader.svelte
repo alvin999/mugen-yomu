@@ -2,6 +2,7 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import type { PaperDocument, ChapterSection } from '../../stores/documentStore';
   import { flattenSections } from '../../stores/readingStore';
+  import { flowStore, countWords } from '../../stores/flowStore';
   import { translateAcademicText } from '../../services/aiService';
   import katex from 'katex';
 
@@ -430,9 +431,18 @@
           if (currentDwellSecs >= 3) {
             dispatch('sectionDwell', { id: activeSectionId, dwellSeconds: currentDwellSecs });
           }
+
+          // 同步通知心流遙測引擎累加研讀詞數
+          flowStore.touchActivity();
+          if (currentDwellSecs >= 2 && currentDwellSecs % 2 === 0) {
+            const pWords = focusedParagraphText ? countWords(focusedParagraphText) : 35;
+            const sampleWords = Math.max(3, Math.min(14, Math.round(pWords / 8)));
+            flowStore.recordReadingActivity(sampleWords, 'dwell');
+          }
         } else {
           lastDwellSectionId = activeSectionId;
           currentDwellSecs = 0;
+          flowStore.touchActivity();
         }
       }
     }, 1000);
@@ -483,6 +493,12 @@
     focusedParagraphKey = key;
     focusedParagraphText = text;
     activeSectionId = secId;
+
+    // 通知心流引擎記錄閱讀焦點切換與掃視詞數
+    flowStore.touchActivity();
+    const pWords = countWords(text);
+    flowStore.recordReadingActivity(Math.min(20, Math.round(pWords * 0.2)), 'skim');
+
     dispatch('paragraphFocused', {
       sectionId: secId,
       paragraphIndex: pIndex,
@@ -493,6 +509,7 @@
   }
 
   function askCompanionAboutParagraph(sec: ChapterSection, pIndex: number, text: string) {
+    flowStore.recordReadingActivity(25, 'interact');
     handleParagraphClick(sec.id, pIndex, text);
     dispatch('readerAction', {
       action: 'focusCompanion',
@@ -536,6 +553,7 @@
   }
 
   function handleContainerScroll() {
+    flowStore.touchActivity();
     if (isProgrammaticScrolling || !scrollContainer) return;
     const now = Date.now();
     if (now - lastScrollCheck < 60) return;
@@ -584,6 +602,7 @@
   }
 
   async function toggleParagraphTranslation(secId: string, pIndex: number, text: string, forceRetry: boolean = false) {
+    flowStore.recordReadingActivity(25, 'interact');
     const key = `${secId}_${pIndex}`;
     
     // 若正在打字機生成中，點擊可立即跳過打字動畫 (Instant Complete)
@@ -1037,12 +1056,28 @@
                     data-sec-id={sec.id}
                     on:click={() => handleParagraphClick(sec.id, pIndex, para)}
                   >
+                    {#if isParaFocused && $flowStore.isPacerActive}
+                      <!-- Saccadic Flow Pacer Visual Beam Guide -->
+                      <div class="absolute -left-1 top-2 bottom-2 w-1 rounded-full bg-[#3c3836]/60 overflow-hidden pointer-events-none z-10" title="視線心流節奏引導光條">
+                        <div
+                          class="w-full bg-gradient-to-b from-[#fabd2f] via-[#fe8019] to-[#d65d0e] shadow-[0_0_8px_#fe8019] rounded-full animate-saccadic-scan"
+                          style="animation-duration: {Math.max(2.8, Math.min(25, Math.round((countWords(para) / Math.max(120, $flowStore.targetPacingWpm)) * 60)))}s;"
+                        ></div>
+                      </div>
+                    {/if}
+
                     <!-- Paragraph Quick Micro-Toolbar (Appears on hover or when focused) -->
                     <div class="flex items-center justify-between opacity-0 group-hover/para:opacity-100 {isParaFocused ? '!opacity-100' : ''} transition-opacity duration-150 text-[11px] font-mono text-[#a89984] border-b border-[#3c3836]/40 pb-1 mb-0.5">
                       <div class="flex items-center gap-1.5">
                         <span class="text-[#fe8019] font-bold">¶ {pIndex + 1}</span>
                         {#if isParaFocused && readingMode !== 'zen'}
                           <span class="text-[10px] bg-[#fe8019]/15 text-[#fe8019] border border-[#fe8019]/40 px-1.5 py-0.2 rounded font-sans">當前研讀焦點</span>
+                        {/if}
+                        {#if isParaFocused && $flowStore.isPacerActive}
+                          <span class="text-[10px] bg-[#fe8019]/15 text-[#fe8019] border border-[#fe8019]/40 px-1.5 py-0.2 rounded font-mono flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[11px] animate-pulse text-[#fabd2f]">auto_read_play</span>
+                            <span>{$flowStore.targetPacingWpm} wpm 節奏導引</span>
+                          </span>
                         {/if}
                       </div>
                       <div class="flex items-center gap-1.5">
@@ -1445,3 +1480,31 @@
     </div>
   </div>
 {/if}
+
+<style>
+  @keyframes saccadicScan {
+    0% {
+      height: 0%;
+      top: 0%;
+      opacity: 0.2;
+    }
+    40% {
+      height: 45%;
+      opacity: 1;
+    }
+    85% {
+      height: 95%;
+      opacity: 0.85;
+    }
+    100% {
+      height: 100%;
+      top: 0%;
+      opacity: 0.2;
+    }
+  }
+
+  .animate-saccadic-scan {
+    position: absolute;
+    animation: saccadicScan linear infinite;
+  }
+</style>
