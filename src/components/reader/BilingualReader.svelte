@@ -26,11 +26,19 @@
   let currentPaperId: string = '';
   let passedParaKeys = new Set<string>();
 
-  $: if (paper && paper.id !== currentPaperId) {
-    currentPaperId = paper.id;
-    passedParaKeys = new Set<string>();
-    if (paper.sections) {
-      const allSecs = flattenSections(paper.sections);
+  $: if (paper) {
+    const isNewPaper = paper.id !== currentPaperId;
+    if (isNewPaper) {
+      currentPaperId = paper.id;
+      passedParaKeys = new Set<string>();
+    }
+    const allSecs = paper.sections ? flattenSections(paper.sections) : [];
+    const totalReadCount = allSecs.reduce((sum, s) => sum + (s.readParaIndices?.length || 0), 0);
+    const anySectionRead = allSecs.some(s => s.isRead || (s.progress && s.progress > 0));
+
+    if (!anySectionRead && totalReadCount === 0) {
+      passedParaKeys = new Set<string>();
+    } else if (isNewPaper) {
       for (const s of allSecs) {
         if (s.readParaIndices && s.readParaIndices.length > 0) {
           for (const idx of s.readParaIndices) {
@@ -267,6 +275,156 @@
     }
   }
 
+  // 智慧解析章節標題之編號與主文字，避免非數字標題（如 ABSTRACT、論文主標題）重複顯示
+  function getSectionTitleParts(title: string, fallbackId: string) {
+    if (!title) return { prefix: '§', mainTitle: fallbackId || '章節' };
+    const trimmed = title.trim();
+    const numMatch = trimmed.match(/^([0-9IVXLCDMA-Za-z]+(?:\.[0-9A-Za-z]+)*\.?)\s+(.*)$/);
+    if (numMatch && /^(?:[0-9]+(?:\.[0-9]+)*|[IVXLCDM]+)\.?$/i.test(numMatch[1])) {
+      return {
+        prefix: numMatch[1].replace(/\.$/, ''),
+        mainTitle: numMatch[2] || trimmed
+      };
+    }
+    return {
+      prefix: '§',
+      mainTitle: trimmed
+    };
+  }
+
+  export function scrollToTarget(targetId: string, sectionId?: string, formulaNumber?: string) {
+    if (typeof document === 'undefined') return;
+
+    const findElement = (): HTMLElement | null => {
+      // 1. 若提供方程式編號 (例如 "(1)" 或 "1")，優先精準搜尋該編號之卡片
+      const cleanNum = formulaNumber ? formulaNumber.replace(/[^0-9a-zA-Z]/g, '') : '';
+      const secIdToSearch = sectionId || (targetId.startsWith('sec-') ? targetId.replace(/^sec-/, '') : activeSectionId);
+
+      if (cleanNum && secIdToSearch) {
+        const secEl = document.getElementById('sec-' + secIdToSearch);
+        if (secEl) {
+          const matchByNum = secEl.querySelector(`[data-equation-number="${cleanNum}"]`) ||
+                             secEl.querySelector(`[data-raw-number="${formulaNumber}"]`);
+          if (matchByNum) return matchByNum as HTMLElement;
+
+          // 模糊比對包含該編號之卡片
+          const inlineCards = secEl.querySelectorAll('.group\\/display-math');
+          for (const card of inlineCards) {
+            if (card.textContent && card.textContent.includes(`(${cleanNum})`)) {
+              return card as HTMLElement;
+            }
+          }
+        }
+      }
+
+      // 2. 完全符合 ID
+      let el = document.getElementById(targetId);
+      if (el) return el;
+
+      // 3. 若指定了章節 sectionId，優先在該章節內搜尋公式或卡片
+      const isFormulaTarget = targetId.startsWith('eq-') || targetId.includes('formula') || targetId.includes('eq');
+      if (secIdToSearch) {
+        const secEl = document.getElementById('sec-' + secIdToSearch);
+        if (secEl) {
+          const childMatch = secEl.querySelector(`[id="${targetId}"]`) ||
+                             secEl.querySelector(`[id="eq-${targetId}"]`) ||
+                             secEl.querySelector(`[data-formula-id="${targetId}"]`);
+          if (childMatch) return childMatch as HTMLElement;
+
+          if (isFormulaTarget) {
+            const inlineFormula = secEl.querySelector('.group\\/display-math') ||
+                                  secEl.querySelector('[id^="eq-"]') ||
+                                  secEl.querySelector('.katex-display');
+            if (inlineFormula) return inlineFormula as HTMLElement;
+          } else {
+            return secEl;
+          }
+        }
+      }
+
+      // 4. 作為備援跳轉，全域搜尋公式編號
+      if (cleanNum) {
+        const globalMatch = document.querySelector(`[data-equation-number="${cleanNum}"]`);
+        if (globalMatch) return globalMatch as HTMLElement;
+      }
+
+      // 5. 作為備援跳轉但目標章節有公式：尋找章節內第一個正常包含公式之卡片
+      if (isFormulaTarget) {
+        const globalFormula = document.querySelector('.group\\/display-math') ||
+                              document.querySelector('.katex-display');
+        if (globalFormula) return globalFormula as HTMLElement;
+      }
+
+      // 6. 嘗試字綴變形
+      const cleanId = targetId.startsWith('sec-') || targetId.startsWith('eq-') || targetId.startsWith('fig-')
+        ? targetId
+        : `sec-${targetId}`;
+      el = document.getElementById(cleanId);
+      if (el) return el;
+
+      const rawId = targetId.replace(/^(?:eq|sec|fig)-/, '');
+      el = document.getElementById(rawId) ||
+           document.getElementById('eq-' + rawId) ||
+           document.getElementById('sec-' + rawId);
+      if (el) return el;
+
+      // 7. 最終模糊搜尋
+      return (document.querySelector(`[id*="${rawId}"]`) as HTMLElement) || null;
+    };
+
+    const doScrollAndHighlight = (): boolean => {
+      const el = findElement();
+      if (el) {
+        isProgrammaticScrolling = true;
+        if (scrollTimeout) clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+          isProgrammaticScrolling = false;
+        }, 650);
+
+        if (scrollContainer) {
+          const containerRect = scrollContainer.getBoundingClientRect();
+          const elRect = el.getBoundingClientRect();
+          const currentScroll = scrollContainer.scrollTop;
+          const isFormula = targetId.startsWith('eq-') || targetId.includes('formula');
+          const targetScroll = isFormula
+            ? currentScroll + (elRect.top - containerRect.top) - (containerRect.height / 2) + (elRect.height / 2)
+            : currentScroll + (elRect.top - containerRect.top) - 24;
+
+          scrollContainer.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
+        } else {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        el.classList.add('formula-target-highlight');
+        setTimeout(() => {
+          el.classList.remove('formula-target-highlight');
+        }, 3200);
+        return true;
+      }
+      return false;
+    };
+
+    if (!doScrollAndHighlight()) {
+      setTimeout(() => {
+        if (!doScrollAndHighlight()) {
+          setTimeout(doScrollAndHighlight, 250);
+        }
+      }, 100);
+    }
+  }
+
+  export function resetScrollAndProgress() {
+    passedParaKeys = new Set<string>();
+    if (scrollContainer) {
+      isProgrammaticScrolling = true;
+      if (scrollTimeout) clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        isProgrammaticScrolling = false;
+      }, 500);
+      scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
   export function highlightAndScrollToParagraph(paragraphKey: string) {
     if (typeof document === 'undefined') return;
     focusedParagraphKey = paragraphKey;
@@ -369,10 +527,8 @@
     if (now - lastScrollCheck < 60) return;
     lastScrollCheck = now;
 
-    const viewportHeight = scrollContainer.clientHeight;
-    const viewportTop = scrollContainer.scrollTop;
-    const viewportBottom = viewportTop + viewportHeight;
-
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const isAtBottom = scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 35;
     const paraElements = scrollContainer.querySelectorAll<HTMLElement>('[data-para-key]');
     const newlyReadParas: Array<{ sectionId: string; paraIndex: number; words: number }> = [];
 
@@ -380,10 +536,17 @@
       const pKey = pEl.getAttribute('data-para-key');
       if (!pKey || passedParaKeys.has(pKey)) return;
 
-      const pTop = pEl.offsetTop;
-      const pBottom = pTop + pEl.clientHeight;
+      const pRect = pEl.getBoundingClientRect();
+      const pTopRel = pRect.top - containerRect.top;
+      const pBottomRel = pRect.bottom - containerRect.top;
 
-      if (pTop < viewportBottom - 80 && pBottom > viewportTop) {
+      // 嚴格判定段落是否處於閱讀視野：
+      // 1. 段落頂部進入視野範圍（相對於容器頂部小於 70% 容器高度）且尚未完全移出上方（大於 30px）
+      // 2. 或若使用者已滾動到達文末觸底（isAtBottom），且段落正在視窗中
+      const isInNormalReadingView = pTopRel < containerRect.height * 0.7 && pBottomRel > 30;
+      const isInBottomView = isAtBottom && pTopRel < containerRect.height && pBottomRel > 0;
+
+      if (isInNormalReadingView || isInBottomView) {
         passedParaKeys.add(pKey);
         const pText = pEl.getAttribute('data-para-text') || '';
         const secId = pEl.getAttribute('data-sec-id') || activeSectionId;
@@ -399,19 +562,41 @@
       dispatch('paragraphsRead', { paragraphs: newlyReadParas });
     }
 
-    // 章節自動感應錨定
-    const sectionHeaders = scrollContainer.querySelectorAll<HTMLElement>('section[id^="sec-"], header[id^="sec-"]');
-    let currentInViewId = activeSectionId;
-    let closestDistance = Infinity;
+    if (isAtBottom) {
+      dispatch('reachedBottom');
+    }
 
-    sectionHeaders.forEach((el) => {
-      const elTop = el.offsetTop - viewportTop;
-      if (elTop <= 160 && Math.abs(elTop) < closestDistance) {
-        closestDistance = Math.abs(elTop);
-        const id = el.id.replace(/^sec-/, '');
-        currentInViewId = id;
+    // 章節自動感應錨定 (以視窗幾何閱讀基準線判定，避免上方章節標題搶焦)
+    const sectionElements = Array.from(
+      scrollContainer.querySelectorAll<HTMLElement>('section[id^="sec-"], header[id^="sec-"]')
+    );
+
+    // 閱讀錨定基準線：距閱讀容器頂部 140px（考慮內距與章節頭部）
+    const READING_LINE_OFFSET = 140;
+    let currentInViewId: string | null = null;
+
+    for (const el of sectionElements) {
+      const elRect = el.getBoundingClientRect();
+      const elTop = elRect.top - containerRect.top;
+
+      // 只要該章節頂部已到達或穿過閱讀基準線，便暫定為當前研讀章節
+      if (elTop <= READING_LINE_OFFSET) {
+        currentInViewId = el.id.replace(/^sec-/, '');
+      } else {
+        // 後續章節頂部尚未抵達基準線，結束搜尋
+        break;
       }
-    });
+    }
+
+    // 若在文章最底部，確保鎖定至最後一個章節
+    if (isAtBottom && sectionElements.length > 0) {
+      currentInViewId = sectionElements[sectionElements.length - 1].id.replace(/^sec-/, '');
+    }
+
+    // 若在文章最頂部且尚未觸及第一章，預設為第一章
+    if (!currentInViewId && sectionElements.length > 0) {
+      currentInViewId = sectionElements[0].id.replace(/^sec-/, '');
+    }
 
     if (currentInViewId && currentInViewId !== activeSectionId) {
       activeSectionId = currentInViewId;
@@ -503,7 +688,8 @@
 
   function handleSectionClick(secId: string) {
     activeSectionId = secId;
-    dispatch('selectSection', { sectionId: secId });
+    scrollToTarget('sec-' + secId);
+    dispatch('selectSection', { id: secId, sectionId: secId });
   }
 
   function handleAuthorClick(author: string) {
@@ -572,7 +758,7 @@
   on:mouseup={handleMouseUp}
   class="h-full w-full overflow-y-auto overflow-x-hidden {readingMode === 'split' ? 'px-3 sm:px-5' : 'px-4 sm:px-8'} py-6 flex justify-center items-start bg-[#282828]"
 >
-  <div class="w-full {readingMode === 'split' ? 'max-w-none' : (readingMode === 'zen' ? 'max-w-[980px]' : 'max-w-[880px] xl:max-w-[940px]')} flex flex-col gap-6 pb-28 transition-[max-width] duration-300 mx-auto">
+  <div class="w-full {readingMode === 'split' ? 'max-w-none' : (readingMode === 'zen' ? 'max-w-[980px]' : 'max-w-[880px] xl:max-w-[940px]')} flex flex-col gap-6 pb-[65vh] transition-[max-width] duration-300 mx-auto">
 
     {#if paper}
       <!-- Paper Academic Header -->
@@ -738,6 +924,7 @@
           {@const totalTextParas = textParas.length}
           {@const hasDirectContent = totalTextParas > 0 || (sec.figures && sec.figures.length > 0) || (sec.formulas && sec.formulas.length > 0) || (sec.svoSentence && readingMode !== 'zen')}
           {@const isPureHeading = !hasDirectContent}
+          {@const titleInfo = getSectionTitleParts(sec.title, sec.id)}
 
           {#if isPureHeading}
             <!-- PURE SECTION / CHAPTER HEADING DIVIDER -->
@@ -756,10 +943,10 @@
               <div class="flex items-center justify-between gap-3">
                 <div class="flex items-baseline gap-3 min-w-0">
                   <span class="font-mono {sec.level === 1 ? 'text-base font-bold bg-[#fe8019] text-[#1d2021] px-2.5 py-0.5 rounded shadow-sm' : 'text-sm font-bold text-[#fabd2f] bg-[#282828] border border-[#504945] px-2 py-0.5 rounded'} shrink-0">
-                    § {sec.title.split(' ')[0] || sec.id}
+                    {titleInfo.prefix === '§' ? '§' : `§ ${titleInfo.prefix}`}
                   </span>
                   <h2 class="{sec.level === 1 ? 'text-2xl sm:text-[26px] font-serif font-bold text-[#ebdbb2]' : 'text-lg sm:text-xl font-bold text-[#ebdbb2]'} tracking-tight truncate group-hover/chapter:text-[#fe8019] transition-colors">
-                    {sec.title.replace(/^[0-9.]+\s*/, '')}
+                    {titleInfo.mainTitle}
                   </h2>
                 </div>
 
@@ -824,10 +1011,10 @@
               <div class="flex items-center justify-between gap-2 pb-2 mb-0.5 border-b border-[#3c3836]/60">
                 <div class="flex items-baseline gap-2.5 min-w-0">
                   <span class="font-mono text-sm font-bold {sec.level === 1 ? 'text-[#fe8019]' : 'text-[#fabd2f] bg-[#282828] border border-[#504945]/70 px-2 py-0.5 rounded'} shrink-0">
-                    {sec.title.split(' ')[0] || sec.id}
+                    {titleInfo.prefix}
                   </span>
                   <h3 class="{sec.level === 1 ? 'text-2xl font-serif text-[#ebdbb2]' : 'text-lg sm:text-[19px] font-serif font-bold text-[#fbf1c7]'} tracking-tight truncate">
-                    {sec.title.replace(/^[0-9.]+\s*/, '')}
+                    {titleInfo.mainTitle}
                   </h3>
                 </div>
 
@@ -921,6 +1108,43 @@
             </section>
           {/if}
         {/each}
+
+        <!-- Document End Milestone & Breathing Room Spacer -->
+        <div class="mt-16 pt-10 pb-8 border-t border-[#3c3836]/60 flex flex-col items-center justify-center text-center gap-4 text-[#a89984] select-none">
+          <div class="flex items-center gap-3 text-xs font-mono uppercase tracking-widest text-[#7c6f64]">
+            <span class="w-12 h-px bg-[#504945]/60"></span>
+            <span class="flex items-center gap-1.5 text-[#fabd2f]">
+              <span class="material-symbols-outlined text-sm">verified</span>
+              <span>End of Document · 全文研讀完成</span>
+            </span>
+            <span class="w-12 h-px bg-[#504945]/60"></span>
+          </div>
+
+          <p class="text-xs text-[#928374] max-w-md font-mono leading-relaxed">
+            您已研讀至文獻末尾。本篇所有認知節點與段落已完整錨定至本機知識庫。
+          </p>
+
+          <div class="flex items-center gap-3 mt-1">
+            <button
+              class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#32302f] hover:bg-[#3c3836] border border-[#504945] hover:border-[#fe8019] text-xs font-mono text-[#ebdbb2] hover:text-[#fe8019] transition-all cursor-pointer shadow-xs active:scale-95"
+              on:click={() => {
+                if (scrollContainer) {
+                  scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+              }}
+            >
+              <span class="material-symbols-outlined text-[14px]">arrow_upward</span>
+              <span>回到論文頂端</span>
+            </button>
+            <button
+              class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#32302f] hover:bg-[#3c3836] border border-[#504945] hover:border-[#8ec07c] text-xs font-mono text-[#8ec07c] transition-all cursor-pointer shadow-xs active:scale-95"
+              on:click={() => dispatch('readerAction', { action: 'exportNotes' })}
+            >
+              <span class="material-symbols-outlined text-[14px]">psychology</span>
+              <span>檢視本篇認知筆記</span>
+            </button>
+          </div>
+        </div>
       </div>
     {/if}
 
@@ -934,3 +1158,36 @@
   caption={activeLightboxCaption}
   on:close={closeLightbox}
 />
+
+<style>
+  /* 核心目標函數、章節跳轉與公式高亮脈衝動畫 */
+  :global(.formula-target-highlight) {
+    animation: formulaGlowPulse 2.8s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    border-color: #fe8019 !important;
+    box-shadow: 0 0 35px rgba(254, 128, 25, 0.85), inset 0 0 15px rgba(254, 128, 25, 0.25) !important;
+    outline: 2px solid #fe8019 !important;
+    z-index: 30;
+  }
+
+  @keyframes formulaGlowPulse {
+    0% {
+      transform: scale(1);
+      box-shadow: 0 0 0 rgba(254, 128, 25, 0);
+    }
+    15% {
+      transform: scale(1.02);
+      box-shadow: 0 0 40px rgba(254, 128, 25, 0.95), inset 0 0 20px rgba(254, 128, 25, 0.35);
+    }
+    35% {
+      transform: scale(1);
+      box-shadow: 0 0 28px rgba(254, 128, 25, 0.75);
+    }
+    65% {
+      box-shadow: 0 0 20px rgba(254, 128, 25, 0.5);
+    }
+    100% {
+      transform: scale(1);
+      box-shadow: 0 0 0 rgba(254, 128, 25, 0);
+    }
+  }
+</style>

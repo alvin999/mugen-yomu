@@ -235,9 +235,31 @@
   // 5. 重設本篇閱讀進度
   function handleResetProgress() {
     if (!activePaper) return;
-    clearPaperReadingState(activePaper.id);
-    activePaper.sections = resetSectionsProgress(activePaper.sections);
-    activePaper = { ...activePaper };
+
+    const currentPaper = activePaper;
+
+    // 1. 重設章節樹進度至 0%
+    currentPaper.sections = resetSectionsProgress(currentPaper.sections);
+    const updatedPaper: PaperDocument = { ...currentPaper };
+    activePaper = updatedPaper;
+
+    // 2. 儲存全新的 0% 狀態至 LocalStorage（覆寫預設 Mock 論文之歷史已讀標記）
+    savePaperReadingState(updatedPaper.id, buildReadingStateMap(updatedPaper.sections));
+
+    // 3. 同步更新文獻庫並持久化
+    paperLibrary = paperLibrary.map(p =>
+      p.id === updatedPaper.id ? updatedPaper : p
+    );
+    saveLibraryToStorage(paperLibrary);
+
+    // 4. 重設計時與心流遙測
+    const stats = calculateReadingStats(updatedPaper.sections);
+    flowStore.initForPaper(updatedPaper.id, stats.totalWords, updatedPaper.readingSpeedWpm || 260);
+
+    // 5. 通知閱讀器重設段落已讀集合並平滑回到頂端
+    if (readerRef && readerRef.resetScrollAndProgress) {
+      readerRef.resetScrollAndProgress();
+    }
   }
 
   function handleModeChange(event: CustomEvent<{ mode: 'bilingual' | 'split' | 'zen' | 'figures' }>) {
@@ -304,8 +326,11 @@
     zoomLevel = event.detail.zoomLevel;
   }
 
-  function handleSelectSection(event: CustomEvent<{ id: string; source?: string; noScroll?: boolean }>) {
-    const { id, source, noScroll } = event.detail || {};
+  function handleSelectSection(event: CustomEvent<{ id?: string; sectionId?: string; source?: string; noScroll?: boolean }>) {
+    const detail = (event.detail || {}) as any;
+    const id = detail.id || detail.sectionId;
+    if (!id) return;
+    const { source, noScroll } = detail;
     activeSectionId = id;
     if (activePaper) {
       const allSecs = flattenSections(activePaper.sections);
@@ -323,6 +348,18 @@
           readerRef.scrollToTarget('sec-' + activeSectionId);
         }
       }, 30);
+    }
+  }
+
+  function handleSectionChanged(event: CustomEvent<{ sectionId: string }>) {
+    const { sectionId } = event.detail || {};
+    if (sectionId && sectionId !== activeSectionId) {
+      activeSectionId = sectionId;
+      if (activePaper) {
+        const allSecs = flattenSections(activePaper.sections);
+        const found = allSecs.find(s => s.id === activeSectionId);
+        activeContextText = found ? `§ ${found.title}` : `§ ${activeSectionId}`;
+      }
     }
   }
 
@@ -832,6 +869,7 @@
               {activeSectionId}
               {readingMode}
               on:selectSection={handleSelectSection}
+              on:sectionChanged={handleSectionChanged}
               on:readerAction={handleReaderAction}
               on:sectionDwell={handleSectionDwell}
               on:sectionSkimmed={handleSectionSkimmed}
@@ -896,6 +934,7 @@
               bind:focusedParagraphText={activeParagraphText}
               bind:selectedText={activeSelectedText}
               on:selectSection={handleSelectSection}
+              on:sectionChanged={handleSectionChanged}
               on:paragraphFocused={handleParagraphFocused}
               on:textSelected={handleTextSelected}
               on:probeCitation={handleProbeCitation}
