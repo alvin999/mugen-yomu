@@ -27,6 +27,9 @@ export function calculateNumericalSanity(dk: number, dotProduct: number) {
   };
 }
 
+export type SanityResult = ReturnType<typeof calculateNumericalSanity>;
+export type TensorShapeResult = ReturnType<typeof calculateTransformerShapes>;
+
 /**
  * 張量維度推演器：輸入 Transformer 各層參數，輸出各運算節點之精確張量形狀
  */

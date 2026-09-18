@@ -133,7 +133,7 @@
           
           if (!targetSec.formulas) targetSec.formulas = [];
           const normLatex = extFormula.latexText.trim().replace(/\s+/g, '');
-          const alreadyExists = targetSec.formulas.some(f => f.latexText.trim().replace(/\s+/g, '') === normLatex);
+          const alreadyExists = targetSec.formulas.some((f: any) => f.latexText.trim().replace(/\s+/g, '') === normLatex);
           if (!alreadyExists) {
             targetSec.formulas = [...targetSec.formulas, extFormula];
           }
@@ -217,7 +217,7 @@
       }
     } else {
       const adapted = getDomainAdaptedFigurePipeline(paper?.title || '', fig.name);
-      let rawData = CLASSIC_FIGURE_DECONSTRUCTIONS[fig.id];
+      let rawData: FigureDeconstructionData | null = CLASSIC_FIGURE_DECONSTRUCTIONS[fig.id] || null;
 
       const isML = /transformer|attention|neural|deep learning|resnet|machine learning|reinforcement|language model|convolution/i.test(paper?.title || '');
       if (rawData && !isML) {
@@ -563,6 +563,6 @@ ${scratchpadAiResult ? `### AI 導師審查講評\n**${scratchpadAiResult.verdic
 <ImageLightboxModal
   isOpen={isFigureLightboxOpen}
   imageUrl={lightboxImageUrl}
-  title={lightboxTitle}
+  caption={lightboxTitle}
   on:close={closeLightbox}
 />

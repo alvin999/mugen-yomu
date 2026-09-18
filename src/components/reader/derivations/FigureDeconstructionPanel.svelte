@@ -363,6 +363,7 @@
         {:else}
           <!-- 原始論文圖片視圖 -->
           <div class="w-full bg-[#141617] border border-[#504945] rounded-lg p-3 flex items-center justify-center overflow-auto min-h-[260px] max-h-[420px]">
+            <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
             <img
               src={normalizeAcademicImageUrl(rawImg)}
               alt={activeItem.figure.name}

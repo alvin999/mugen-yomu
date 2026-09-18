@@ -3,7 +3,8 @@
   import type { ChapterSection, FormulaItem } from '../../../types/document';
   import { renderMath } from '../../../utils/katexUtils';
 
-  export let sec: ChapterSection;
+  // svelte-ignore export_let_unused
+  export let sec: ChapterSection | undefined = undefined;
   export let formulas: FormulaItem[] = [];
 
   const dispatch = createEventDispatcher<{

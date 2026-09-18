@@ -5,6 +5,7 @@
   import type { ExtractedFormulaItem } from '../../../utils/derivationExtractor';
   import { renderMath, copyLatexToClipboard } from '../../../utils/katexUtils';
 
+  // svelte-ignore export_let_unused
   export let paper: PaperDocument | null = null;
   export let dynamicFormulas: ExtractedFormulaItem[] = [];
   export let selectedFormulaIndex: number = 0;

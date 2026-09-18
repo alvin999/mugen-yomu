@@ -173,17 +173,18 @@
       const flat = flattenSections(paper.sections);
       if (!realSecId || realSecId === sec.id) {
         if (formula.sectionTitle) {
+          const secTitle = formula.sectionTitle;
           const matchedByTitle = flat.find(s => 
-            formula.sectionTitle?.includes(s.title) || 
-            s.title.includes(formula.sectionTitle || '') ||
-            (formula.sectionTitle.includes('2.8') && s.title.includes('2.8'))
+            secTitle.includes(s.title) || 
+            s.title.includes(secTitle) ||
+            (secTitle.includes('2.8') && s.title.includes('2.8'))
           );
           if (matchedByTitle) realSecId = matchedByTitle.id;
         }
 
         if (!realSecId || realSecId === sec.id) {
           const matchedByContent = flat.find(s => 
-            s.paragraphs && s.paragraphs.some(p => p.includes('$$') || (formula.number && p.includes(formula.number)))
+            s.paragraphs && s.paragraphs.some((p: string) => p.includes('$$') || (Boolean(formula.number) && p.includes(formula.number!)))
           );
           if (matchedByContent) realSecId = matchedByContent.id;
         }
@@ -461,14 +462,13 @@
           if (isTypingMap[key]) {
             paragraphTranslations[key] = currentText;
           }
-        },
-        paper?.title
+        }
       );
 
-      paragraphTranslations[key] = streamResult.text;
-      translationSourceMap[key] = streamResult.source || 'AI 伴讀專屬模型';
-      if (streamResult.isOfflineFallback) {
-        translationNoticeMap[key] = '目前處於本機離線快取/智慧備援模式。設定 API 金鑰可獲得最頂級之文脈理解。';
+      paragraphTranslations[key] = streamResult.translation;
+      translationSourceMap[key] = streamResult.cached ? 'IndexedDB 本機快取' : 'AI 伴讀專屬模型';
+      if (streamResult.fallbackNotice) {
+        translationNoticeMap[key] = `目前處於備援模式（${streamResult.fallbackNotice}）。設定 API 金鑰可獲得最頂級之文脈理解。`;
       }
     } catch (err: any) {
       paragraphTranslations[key] = `[翻譯暫時無法完成: ${err.message || '連線逾時'}]`;
@@ -517,7 +517,7 @@
 
 <svelte:window on:keydown={(e) => { if (e.key === 'Escape' && activeLightboxImg) closeLightbox(); }} />
 
-<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions a11y_no_noninteractive_element_interactions -->
 <main
   bind:this={scrollContainer}
   on:scroll={handleContainerScroll}
@@ -810,6 +810,6 @@
 <ImageLightboxModal
   isOpen={Boolean(activeLightboxImg)}
   imageUrl={activeLightboxImg || ''}
-  title={activeLightboxCaption}
+  caption={activeLightboxCaption}
   on:close={closeLightbox}
 />
