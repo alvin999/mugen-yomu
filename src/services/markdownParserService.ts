@@ -1,4 +1,5 @@
 import type { ChapterSection, FormulaItem, FigureItem, PaperDocument } from '../types/document';
+import { cleanPaperText, unwrapParagraphLines } from '../utils/paperTextSanitizer';
 
 /**
  * 輔助函式：自 LaTeX 簡單萃取關鍵變數符號標記
@@ -55,12 +56,15 @@ export function parseMarkdownToDocument(
   venue?: string
 ): PaperDocument {
   // 清理 Jina Reader 與常見網頁爬蟲之 Metadata 標頭雜訊，避免污染正文與摘要
-  const cleanedMarkdown = markdown
+  let cleanedMarkdown = markdown
     .replace(/^Title:\s*.*$/gim, '')
     .replace(/^URL Source:\s*.*$/gim, '')
     .replace(/^Published Time:\s*.*$/gim, '')
     .replace(/^Markdown Content:\s*$/gim, '')
     .trim();
+
+  // 智慧段落重流與跨行斷詞修復（避免 PDF 邊界強制折行將段落切碎）
+  cleanedMarkdown = unwrapParagraphLines(cleanedMarkdown);
 
   const lines = cleanedMarkdown.split('\n');
   const sections: ChapterSection[] = [];
@@ -252,16 +256,22 @@ export function parseMarkdownToDocument(
     }
 
     // 4. 一般內文段落
-    if (currentSection) {
-      currentSection.paragraphs.push(trimmed);
-    } else {
-      abstractParagraphs.push(trimmed);
+    const cleanPara = cleanPaperText(trimmed, { unwrapLines: false });
+    if (cleanPara) {
+      if (currentSection) {
+        currentSection.paragraphs.push(cleanPara);
+      } else {
+        abstractParagraphs.push(cleanPara);
+      }
     }
     i++;
   }
 
   // Fallback if no markdown headers were found
   if (sections.length === 0) {
+    const fallbackParas = lines
+      .map(l => cleanPaperText(l.trim(), { unwrapLines: false }))
+      .filter(l => l.length > 0);
     sections.push({
       id: 'sec_1',
       title: '1. Document Body',
@@ -269,7 +279,7 @@ export function parseMarkdownToDocument(
       page: 1,
       progress: 0,
       isRead: false,
-      paragraphs: lines.filter(l => l.trim().length > 0)
+      paragraphs: fallbackParas
     });
   }
 

@@ -17,6 +17,8 @@ export function generateOfflineAcademicTranslation(text: string): string {
   return `[原文譯意]：${text.slice(0, 300)}...（請於右上方設定自備金鑰 BYOK 以啟動高精確度即時學術翻譯）`;
 }
 
+import { cleanPaperText } from '../utils/paperTextSanitizer';
+
 export async function translateAcademicText(
   text: string,
   provider: string = 'groq',
@@ -26,18 +28,21 @@ export async function translateAcademicText(
   onChunk?: (currentStreamText: string) => void,
   bypassCache: boolean = false
 ): Promise<AcademicTranslationResult> {
-  const cleanText = text.trim();
+  const cleanText = cleanPaperText(text.trim());
   const cacheKey = generateCacheKey(provider || 'cache', model || 'translator', 'translate:' + cleanText);
 
   // 1. Check IndexedDB cache (若未要求繞過快取)
   if (!bypassCache) {
     const cached = await getCachedCompletion(cacheKey);
-    // 檢查快取品質：若快取中是離線備援假譯文或失敗報錯，而現在有 apiKey，則作廢該快取
+    // 檢查快取品質：若快取中是離線備援假譯文、失敗報錯或模型無回覆，則作廢該快取
     const isInvalidFallback = cached && (
+      !cached.reply ||
+      cached.reply.trim() === '' ||
       cached.reply.includes('請於右上方設定自備金鑰') ||
       cached.reply.includes('[原文譯意]') ||
       cached.reply.includes('本機學術應急解析') ||
-      cached.reply.includes('[翻譯服務連線異常]')
+      cached.reply.includes('[翻譯服務連線異常]') ||
+      cached.reply.includes('未獲得模型有效回覆')
     );
 
     if (cached && !isInvalidFallback) {
@@ -76,7 +81,10 @@ export async function translateAcademicText(
           { role: 'system', content: translationSystemPrompt },
           { role: 'user', content: chunks[0] }
         ];
-        const res = await callProviderChatWithResilience(provider, messages, apiKey, model, ollamaUrl, onChunk);
+        const res = await callProviderChatWithResilience(provider, messages, apiKey, model, ollamaUrl, onChunk, bypassCache);
+        if (res.reply && !res.reply.includes('未獲得模型有效回覆') && !res.reply.includes('[翻譯服務連線異常]')) {
+          await setCachedCompletion(cacheKey, res.reply.trim(), model, provider, res.latencyMs);
+        }
         return {
           translation: res.reply.trim(),
           cached: false,
@@ -107,7 +115,8 @@ export async function translateAcademicText(
             apiKey,
             model,
             ollamaUrl,
-            onChunk ? (chunkText) => onChunk(chunkPrefix + chunkText) : undefined
+            onChunk ? (chunkText) => onChunk(chunkPrefix + chunkText) : undefined,
+            bypassCache
           );
           accumulatedOverall += chunkRes.reply.trim();
           translatedParts.push(chunkRes.reply.trim());
@@ -116,7 +125,9 @@ export async function translateAcademicText(
         }
 
         const combinedTranslation = translatedParts.join('\n\n');
-        await setCachedCompletion(cacheKey, combinedTranslation, model, provider, totalLatency);
+        if (combinedTranslation && !combinedTranslation.includes('未獲得模型有效回覆') && !combinedTranslation.includes('[翻譯服務連線異常]')) {
+          await setCachedCompletion(cacheKey, combinedTranslation, model, provider, totalLatency);
+        }
 
         return {
           translation: combinedTranslation,

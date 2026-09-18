@@ -79,6 +79,22 @@ export async function getCachedCompletion(cacheKey: string): Promise<CacheEntry 
   }
 }
 
+export async function deleteCachedCompletion(cacheKey: string): Promise<void> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_COMPLETIONS, 'readwrite');
+      const store = tx.objectStore(STORE_COMPLETIONS);
+      const req = store.delete(cacheKey);
+
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (e) {
+    console.warn('Failed to delete from IndexedDB cache:', e);
+  }
+}
+
 export async function setCachedCompletion(
   cacheKey: string,
   reply: string,
@@ -86,6 +102,17 @@ export async function setCachedCompletion(
   provider: string,
   latencyMs: number
 ): Promise<void> {
+  if (
+    !reply ||
+    reply.trim() === '' ||
+    reply.includes('未獲得模型有效回覆') ||
+    reply.includes('[翻譯服務連線異常]') ||
+    reply.includes('請於右上方設定自備金鑰')
+  ) {
+    await deleteCachedCompletion(cacheKey);
+    return;
+  }
+
   try {
     const db = await openDB();
     const tokenEst = Math.round((reply.length + 100) / 3.5);

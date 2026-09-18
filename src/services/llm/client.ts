@@ -1,5 +1,5 @@
 import type { ChatMessage, ChatCompletionResult } from './types';
-import { getCachedCompletion, setCachedCompletion, generateCacheKey } from '../cacheService';
+import { getCachedCompletion, setCachedCompletion, generateCacheKey, deleteCachedCompletion } from '../cacheService';
 import { playTypewriter } from '../../utils/typewriter';
 
 export const SCHOLAR_SYSTEM_PROMPT = `你是 MUGEN YOMU (無限閱讀) 內建的頂尖學術伴讀導師。
@@ -122,7 +122,7 @@ export async function callGroqChat(
   ];
 
   const is70B = (model || '').includes('70b');
-  const maxTokens = is70B ? 650 : 950;
+  const maxTokens = is70B ? 1200 : 1500;
 
   const doGroqRequest = async (useStream: boolean) => {
     return await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -142,37 +142,43 @@ export async function callGroqChat(
   };
 
   try {
-    let response = await doGroqRequest(!!onChunk);
+    let isStreaming = !!onChunk;
+    let response = await doGroqRequest(isStreaming);
     if (!response.ok) {
       const errorText = await response.text();
       // 若串流遭遇伺服器 EOF、499 或 500/502/503，自動轉為非串流重試
-      if (onChunk && (errorText.includes('unexpected EOF') || errorText.includes('stream reading') || response.status >= 500)) {
+      if (isStreaming && (errorText.includes('unexpected EOF') || errorText.includes('stream reading') || response.status >= 500)) {
         console.warn('[Groq 串流容錯] 串流請求遭遇中斷，自動切換為非串流重試...', errorText);
+        await delay(400);
         response = await doGroqRequest(false);
+        isStreaming = false;
       }
       if (!response.ok) {
-        throw new Error(`Groq API 請求失敗 (${response.status}): ${errorText}`);
+        const secondErrText = await response.text().catch(() => errorText);
+        throw new Error(`Groq API 請求失敗 (${response.status}): ${secondErrText || errorText}`);
       }
     }
 
     let reply = '';
-    if (onChunk && response.body) {
+    if (isStreaming && response.body) {
       try {
         reply = await streamOpenAICompatible(response, onChunk);
-      } catch (streamErr) {
+      } catch (streamErr: any) {
         console.warn('[Groq 串流容錯] 串流解析中斷，切換為非串流應急重試:', streamErr);
+        await delay(500);
         const fallbackRes = await doGroqRequest(false);
         if (fallbackRes.ok) {
           const json = await fallbackRes.json();
           reply = json.choices?.[0]?.message?.content || '';
           if (onChunk && reply) await playTypewriter(reply, onChunk, 10);
         } else {
-          throw streamErr;
+          const fbErrText = await fallbackRes.text().catch(() => '');
+          throw new Error(fbErrText || streamErr?.message || '串流中斷且非串流重試失敗');
         }
       }
     } else {
       const json = await response.json();
-      reply = json.choices?.[0]?.message?.content || '未獲得模型有效回覆。';
+      reply = json.choices?.[0]?.message?.content || '';
       if (onChunk && reply) {
         await playTypewriter(reply, onChunk, 10);
       }
@@ -180,6 +186,7 @@ export async function callGroqChat(
 
     // 若依然為空，再做一次非串流兜底
     if (!reply && onChunk) {
+      await delay(400);
       const fallbackRes = await doGroqRequest(false);
       if (fallbackRes.ok) {
         const json = await fallbackRes.json();
@@ -188,13 +195,18 @@ export async function callGroqChat(
       }
     }
 
+    if (!reply || reply.trim().length === 0) {
+      throw new Error('Groq 回應為空，未獲得模型有效回覆。');
+    }
+
     const latencyMs = Math.round(performance.now() - startTime);
-    return { reply: reply || '未獲得模型有效回覆。', latencyMs, model: model || 'llama-3.3-70b-versatile', provider: 'groq' };
+    return { reply, latencyMs, model: model || 'llama-3.3-70b-versatile', provider: 'groq' };
   } catch (err: any) {
     const errStr = String(err?.message || '');
     if (errStr.includes('unexpected EOF') || errStr.includes('stream reading')) {
       console.warn('[Groq 韌性保護] 捕捉到 unexpected EOF，執行非串流應急重試...');
       try {
+        await delay(500);
         const fallbackRes = await doGroqRequest(false);
         if (fallbackRes.ok) {
           const json = await fallbackRes.json();
@@ -420,23 +432,36 @@ export async function callProviderChat(
   apiKey: string,
   model: string,
   ollamaUrl?: string,
-  onChunk?: (text: string) => void
+  onChunk?: (text: string) => void,
+  bypassCache: boolean = false
 ): Promise<ChatCompletionResult> {
   const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content || '';
   const cacheKey = generateCacheKey(provider, model, lastUserMsg);
 
-  const cached = await getCachedCompletion(cacheKey);
-  if (cached) {
-    if (onChunk) {
-      await playTypewriter(cached.reply, onChunk, 10);
+  if (!bypassCache) {
+    const cached = await getCachedCompletion(cacheKey);
+    const isInvalid = cached && (
+      !cached.reply ||
+      cached.reply.trim() === '' ||
+      cached.reply.includes('未獲得模型有效回覆') ||
+      cached.reply.includes('[翻譯服務連線異常]') ||
+      cached.reply.includes('請於右上方設定自備金鑰')
+    );
+
+    if (isInvalid) {
+      await deleteCachedCompletion(cacheKey);
+    } else if (cached) {
+      if (onChunk) {
+        await playTypewriter(cached.reply, onChunk, 10);
+      }
+      return {
+        reply: cached.reply,
+        latencyMs: 12,
+        model: cached.model,
+        provider: cached.provider,
+        cached: true
+      };
     }
-    return {
-      reply: cached.reply,
-      latencyMs: 12,
-      model: cached.model,
-      provider: cached.provider,
-      cached: true
-    };
   }
 
   let result: ChatCompletionResult;
@@ -465,7 +490,9 @@ export async function callProviderChat(
       break;
   }
 
-  await setCachedCompletion(cacheKey, result.reply, result.model, result.provider, result.latencyMs);
+  if (result.reply && !result.reply.includes('未獲得模型有效回覆') && !result.reply.includes('[翻譯服務連線異常]')) {
+    await setCachedCompletion(cacheKey, result.reply, result.model, result.provider, result.latencyMs);
+  }
 
   return result;
 }
@@ -505,7 +532,13 @@ function isRateLimitError(err: any): boolean {
     msg.includes('server busy') ||
     msg.includes('unexpected eof') ||
     msg.includes('stream reading') ||
-    msg.includes('eof')
+    msg.includes('eof') ||
+    msg.includes('unreachable') ||
+    msg.includes('unavailable') ||
+    msg.includes('overloaded') ||
+    msg.includes('capacity') ||
+    msg.includes('未獲得模型有效回覆') ||
+    msg.includes('回應為空')
   );
 }
 
@@ -557,28 +590,29 @@ export async function callProviderChatWithResilience(
   apiKey: string,
   model: string,
   ollamaUrl?: string,
-  onChunk?: (text: string) => void
+  onChunk?: (text: string) => void,
+  bypassCache: boolean = false
 ): Promise<ChatCompletionResult & { fallbackNotice?: string }> {
   const safeMessages = pruneChatMessages(messages, provider === 'groq' ? 2200 : 4000);
 
   try {
-    return await callProviderChat(provider, safeMessages, apiKey, model, ollamaUrl, onChunk);
+    return await callProviderChat(provider, safeMessages, apiKey, model, ollamaUrl, onChunk, bypassCache);
   } catch (err: any) {
     const isRateLimit = isRateLimitError(err);
     const isNotFound = isModelNotFoundError(err);
 
     if (isRateLimit || isNotFound) {
-      const reason = isNotFound ? '模型不存在或無權限 (404)' : '頻率/負載限制 (429/503)';
+      const reason = isNotFound ? '模型不存在或無權限 (404)' : '頻率/負載限制或無回覆 (429/503/空回應)';
       console.warn(`[AI 韌性防護] ${model} 遭遇 ${reason}，啟動同源降級與備援機制...`);
 
       const fallbackModel = PROVIDER_FALLBACK_MAP[model] || (provider === 'groq' ? 'llama-3.1-8b-instant' : (provider === 'google' ? 'gemini-1.5-flash' : ''));
       if (fallbackModel && fallbackModel !== model) {
         try {
           await delay(600);
-          const fallbackRes = await callProviderChat(provider, safeMessages, apiKey, fallbackModel, ollamaUrl, onChunk);
+          const fallbackRes = await callProviderChat(provider, safeMessages, apiKey, fallbackModel, ollamaUrl, onChunk, true);
           return {
             ...fallbackRes,
-            fallbackNotice: `因 ${model.includes('70b') ? '70B (6k TPM)' : model} 頻率限制，已自動降級為 ${fallbackModel.includes('8b') ? '8B-Instant (20k TPM)' : fallbackModel} 應急推論`
+            fallbackNotice: `因 ${model.includes('70b') ? '70B (6k TPM)' : model} 頻率限制或無回應，已自動降級為 ${fallbackModel.includes('8b') ? '8B-Instant (20k TPM)' : fallbackModel} 應急推論`
           };
         } catch (fbErr: any) {
           console.warn(`[AI 韌性防護] 降級模型 ${fallbackModel} 亦失敗:`, fbErr);
@@ -587,7 +621,7 @@ export async function callProviderChatWithResilience(
 
       try {
         await delay(1200);
-        return await callProviderChat(provider, safeMessages, apiKey, fallbackModel || model, ollamaUrl, onChunk);
+        return await callProviderChat(provider, safeMessages, apiKey, fallbackModel || model, ollamaUrl, onChunk, true);
       } catch (retryErr: any) {
         console.warn(`[AI 韌性防護] 重試未果:`, retryErr);
       }

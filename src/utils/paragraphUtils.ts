@@ -1,4 +1,5 @@
 import { extractImageInfo } from './academicImageUtils';
+import { cleanPaperText } from './paperTextSanitizer';
 
 export interface NormalizedParagraphItem {
   type: 'subheading' | 'formula' | 'image' | 'text';
@@ -151,7 +152,7 @@ export function normalizeParagraphs(paragraphs: string[]): NormalizedParagraphIt
     // 5. 一般文字段落
     items.push({
       type: 'text',
-      text: trimmed,
+      text: cleanPaperText(trimmed, { unwrapLines: false }),
       originalIndex: i
     });
     i++;

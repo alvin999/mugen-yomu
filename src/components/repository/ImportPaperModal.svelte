@@ -13,6 +13,7 @@
     type PaperDocument
   } from '../../stores/documentStore';
   import { parsePdfToDocument } from '../../services/pdfParserService';
+  import { cleanPaperText } from '../../utils/paperTextSanitizer';
 
   export let isOpen: boolean = false;
   export let currentLibrary: PaperDocument[] = [];
@@ -37,6 +38,7 @@
   let pasteTitle: string = '';
   let pasteContent: string = '';
   let pasteError: string = '';
+  let autoSanitizePaste: boolean = true;
 
   // Tab PDF: Local PDF Parser State
   let isParsingPdf: boolean = false;
@@ -122,6 +124,11 @@
   }
 
   // --- Tab 3: Paste Text Logic ---
+  function handleCleanPasteText() {
+    if (!pasteContent.trim()) return;
+    pasteContent = cleanPaperText(pasteContent);
+  }
+
   function handleParsePaste() {
     if (!pasteContent.trim()) {
       pasteError = '請貼上文章內容或 Markdown 文字';
@@ -129,7 +136,8 @@
     }
     pasteError = '';
     const title = pasteTitle.trim() || '自訂貼上文獻';
-    const doc = parseMarkdownToDocument(title, pasteContent);
+    const contentToParse = autoSanitizePaste ? cleanPaperText(pasteContent) : pasteContent;
+    const doc = parseMarkdownToDocument(title, contentToParse);
     importAndActivatePaper(doc);
   }
 
@@ -786,8 +794,24 @@
 
             <div class="flex flex-col gap-1">
               <div class="flex items-center justify-between">
-                <label for="import-paste-content" class="font-mono text-[11px] text-[#d5c4a1]">正文內容或 Markdown</label>
-                <span class="font-mono text-[10px] text-[#a89984]">支援 # 1. Intro, ## 2. Details 分段</span>
+                <div class="flex items-center gap-2">
+                  <label for="import-paste-content" class="font-mono text-[11px] text-[#d5c4a1]">正文內容或 Markdown</label>
+                  <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono text-[#b8bb26] bg-[#b8bb26]/10 px-1.5 py-0.5 rounded border border-[#b8bb26]/30 hover:bg-[#b8bb26]/20 transition-colors" title="自動將 PDF 複製之硬換行、斷詞連字號 (如 Sys-tem) 與連字分離修復為乾淨段落">
+                    <input type="checkbox" bind:checked={autoSanitizePaste} class="rounded text-[#fe8019] focus:ring-0 cursor-pointer w-3 h-3" />
+                    <span>自動淨化 PDF 換行與連字號</span>
+                  </label>
+                </div>
+                {#if pasteContent.trim()}
+                  <button
+                    type="button"
+                    class="text-[10px] font-mono text-[#fe8019] hover:text-[#fabd2f] flex items-center gap-0.5 hover:underline cursor-pointer"
+                    on:click={handleCleanPasteText}
+                    title="立即在文字框內預覽淨化後的排版"
+                  >
+                    <span class="material-symbols-outlined text-[13px]">cleaning_services</span>
+                    預先淨化文字框
+                  </button>
+                {/if}
               </div>
               <textarea
                 id="import-paste-content"

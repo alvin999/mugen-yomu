@@ -4,6 +4,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import type { PaperDocument, ChapterSection, SectionCompanionData } from '../stores/documentStore';
+import { cleanPaperText, cleanParagraphs } from '../utils/paperTextSanitizer';
 
 if (typeof window !== 'undefined') {
   pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -24,6 +25,7 @@ export interface RawSection {
   level: number;
   page: number;
   paragraphs: string[];
+  rawLines?: ExtractedLine[];
 }
 
 export interface ParseProgressCallback {
@@ -31,13 +33,10 @@ export interface ParseProgressCallback {
 }
 
 /**
- * 清理並標準化文字
+ * 清理並標準化文字（消除斷詞連字號、修復連字字形分離並清理多餘空白）
  */
 function cleanText(text: string): string {
-  return text
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return cleanPaperText(text, { unwrapLines: false });
 }
 
 /**
@@ -267,28 +266,24 @@ function reconstructParagraphsFromLines(lines: ExtractedLine[]): {
     const text = line.text;
     const nextLine = lines[i + 1];
 
-    // 判斷是否為行尾連字號斷字 (e.g. "atten-", "trans-")
-    const endsWithHyphen = /([A-Za-z]+)-\s*$/.test(text);
-
-    if (endsWithHyphen && nextLine && /^[a-z]/.test(nextLine.text)) {
-      // 消除連字號並直接拼接單字
-      const dehyphenated = text.replace(/-\s*$/, '');
-      currentPara = currentPara ? `${currentPara} ${dehyphenated}` : dehyphenated;
+    if (currentPara.endsWith('-')) {
+      // 前一行結尾為連字號，直接緊密接合本行文字（保留連字號交由 cleanText 進行智慧詞庫分析）
+      currentPara = `${currentPara}${text}`;
     } else {
       currentPara = currentPara ? `${currentPara} ${text}` : text;
     }
 
     // 段落終止條件判定：
     // 1. 本行以句點/問號/驚嘆號/冒號結尾
-    // 2. 下一行開頭大寫或首行縮排
-    // 3. 下一行垂直距離明顯大於一般行距
-    // 4. 下一行是標題
+    // 2. 下一行垂直距離明顯大於一般行距 (例如行距 > 1.6 倍字體大小) 或跨頁
+    // 3. 本節已無後續行
     const isPunctuationEnd = /[.!?:]\s*$/.test(text);
     const hasNext = Boolean(nextLine);
-    const nextYGap = hasNext ? Math.abs(line.y - nextLine.y) : 0;
-    const isLargeGap = nextYGap > line.fontSize * 2.2;
+    const isDiffPage = hasNext && nextLine.page !== line.page;
+    const nextYGap = hasNext && !isDiffPage ? Math.abs(line.y - nextLine.y) : 0;
+    const isLargeGap = isDiffPage || nextYGap > line.fontSize * 1.6;
 
-    if (!hasNext || isLargeGap || (isPunctuationEnd && text.length > 40 && nextYGap > line.fontSize * 1.5)) {
+    if (!hasNext || isLargeGap || (isPunctuationEnd && text.length > 35 && nextYGap > line.fontSize * 1.3)) {
       const cleanPara = cleanText(currentPara);
       if (cleanPara.length > 0) {
         paragraphs.push(cleanPara);
@@ -298,7 +293,10 @@ function reconstructParagraphsFromLines(lines: ExtractedLine[]): {
   }
 
   if (currentPara.trim().length > 0) {
-    paragraphs.push(cleanText(currentPara));
+    const cleanPara = cleanText(currentPara);
+    if (cleanPara.length > 0) {
+      paragraphs.push(cleanPara);
+    }
   }
 
   return { paragraphs, lineCount: lines.length };
@@ -429,7 +427,8 @@ export async function parsePdfToDocument(
         title: line.text,
         level: headingLevel,
         page: line.page,
-        paragraphs: []
+        paragraphs: [],
+        rawLines: []
       };
       rawSections.push(currentSec);
     } else {
@@ -440,10 +439,13 @@ export async function parsePdfToDocument(
           title: 'Abstract & Overview',
           level: 1,
           page: 1,
-          paragraphs: []
+          paragraphs: [],
+          rawLines: []
         };
         rawSections.push(currentSec);
       }
+      if (!currentSec.rawLines) currentSec.rawLines = [];
+      currentSec.rawLines.push(line);
       currentSec.paragraphs.push(line.text);
     }
   }
@@ -465,19 +467,14 @@ export async function parsePdfToDocument(
       }
     }
   } else {
-    // 將每個章節中的散亂行重組為語意段落
+    // 將每個章節中的散亂行依據真實版面垂直座標重組為語意段落
     for (const sec of rawSections) {
-      // 構造假 line 物件供重構
-      const dummyLines = sec.paragraphs.map(p => ({
-        text: p,
-        x: 0,
-        y: 0,
-        width: 100,
-        fontSize: bodyFontSize,
-        page: sec.page
-      }));
-      const { paragraphs } = reconstructParagraphsFromLines(dummyLines);
-      sec.paragraphs = paragraphs;
+      if (sec.rawLines && sec.rawLines.length > 0) {
+        const { paragraphs } = reconstructParagraphsFromLines(sec.rawLines);
+        sec.paragraphs = paragraphs;
+      } else {
+        sec.paragraphs = cleanParagraphs(sec.paragraphs);
+      }
     }
   }
 
