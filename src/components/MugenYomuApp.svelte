@@ -9,10 +9,10 @@
   import CognitiveCompanion from './companion/CognitiveCompanion.svelte';
   import ByokModal from './byok/ByokModal.svelte';
   import ImportPaperModal from './repository/ImportPaperModal.svelte';
-  import PaperRepositoryPanel from './repository/PaperRepositoryPanel.svelte';
+  import PaperRepositoryView from './repository/PaperRepositoryView.svelte';
   import OriginalDocumentViewer from './reader/OriginalDocumentViewer.svelte';
   import CitationGraphView from './citation/CitationGraphView.svelte';
-  import CognitiveNotesModal from './notes/CognitiveNotesModal.svelte';
+  import CognitiveNotesView from './notes/CognitiveNotesView.svelte';
 
   import {
     getInitialLibrary,
@@ -53,16 +53,14 @@
   } from '../services/cognitiveDispatcher';
 
   // State Management
-  let currentMainView: 'workspace' | 'citation-graph' = 'workspace';
+  let currentMainView: 'workspace' | 'repository' | 'citation-graph' | 'notes' = 'workspace';
   let readingMode: 'bilingual' | 'split' | 'zen' | 'figures' = 'bilingual';
   let isPdfDrawerOpen: boolean = false;
-  let isNotesModalOpen: boolean = false;
   let splitRatio: number = 50;
   let isDraggingSplit: boolean = false;
   let zoomLevel: number = 100;
   let isByokOpen: boolean = false;
   let isImportOpen: boolean = false;
-  let isRepositoryOpen: boolean = false;
   let isRailCollapsed: boolean = false;
 
   let modelName: string = 'Groq (Llama 3.3 70B)';
@@ -299,8 +297,6 @@
       isPdfDrawerOpen = !isPdfDrawerOpen;
     } else if (e.key === 'Escape' && isPdfDrawerOpen) {
       isPdfDrawerOpen = false;
-    } else if (e.key === 'Escape' && isNotesModalOpen) {
-      isNotesModalOpen = false;
     }
   }
 
@@ -534,7 +530,11 @@
       const newNote = {
         title: noteTitle,
         text: `於 ${activeContextText} 標註之重要論文觀點與筆記內容。`,
-        time: new Date().toLocaleTimeString()
+        time: new Date().toLocaleTimeString(),
+        paperId: activePaperId,
+        paperTitle: activePaper?.title || '',
+        sectionId: activeSectionId,
+        sectionTitle: secTitle
       };
       saveNotes([newNote, ...capturedNotes]);
       alert(`已為「${noteTitle}」新增精讀筆記！可點選左側 Cognitive Notes 檢視與編輯。`);
@@ -625,7 +625,39 @@
   }
 
   function handleExportNotes() {
-    isNotesModalOpen = true;
+    currentMainView = 'notes';
+  }
+
+  function handlePaperSelectedFromRepository(event: CustomEvent<{ paper: PaperDocument }>) {
+    setPaper(event.detail.paper);
+    currentMainView = 'workspace';
+  }
+
+  function handleOpenCitationFromRepository(event: CustomEvent<{ paper: PaperDocument }>) {
+    setPaper(event.detail.paper);
+    currentMainView = 'citation-graph';
+  }
+
+  function handleOpenNotesFromRepository(event: CustomEvent<{ paper: PaperDocument }>) {
+    setPaper(event.detail.paper);
+    currentMainView = 'notes';
+  }
+
+  function handleJumpToSectionFromNotes(e: CustomEvent<{ paperId: string; sectionId: string }>) {
+    const { paperId, sectionId } = e.detail;
+    const found = paperLibrary.find(p => p.id === paperId || p.id.includes(paperId));
+    if (found && found.id !== activePaperId) {
+      setPaper(found);
+    }
+    currentMainView = 'workspace';
+    if (readingMode === 'figures') {
+      readingMode = 'bilingual';
+    }
+    if (sectionId) {
+      setTimeout(() => {
+        handleSelectSection(new CustomEvent('selectSection', { detail: { id: sectionId, source: 'nav' } }));
+      }, 50);
+    }
   }
 
   function handlePaperLoaded(event: CustomEvent<{ paper: PaperDocument; library: PaperDocument[] }>) {
@@ -662,23 +694,28 @@
 <div class="flex h-screen w-screen bg-[#282828] text-[#ebdbb2] overflow-hidden select-text">
   <!-- Left Navigation Rail (Collapsible: 64px / 240px) -->
   <NavigationRail
-    currentPath={currentMainView === 'citation-graph' ? 'citation-graph' : (readingMode === 'figures' ? 'prompt-formula-lab' : 'reading-workspace')}
+    currentPath={
+      currentMainView === 'repository' ? 'paper-repository' :
+      currentMainView === 'notes' ? 'cognitive-notes' :
+      currentMainView === 'citation-graph' ? 'citation-graph' :
+      (readingMode === 'figures' ? 'prompt-formula-lab' : 'reading-workspace')
+    }
     paperCount={paperLibrary.length}
     bind:isCollapsed={isRailCollapsed}
     memoryUsageMb={localMemoryMb}
     memoryPercent={localMemoryPercent}
     memoryTooltip={localMemoryTooltip}
-    on:openRepository={() => isRepositoryOpen = true}
-    on:openNotes={() => isNotesModalOpen = true}
     on:toggleCollapse={(e) => isRailCollapsed = e.detail.isCollapsed}
     on:navigate={(e) => {
-      if (e.detail.path === 'cognitive-notes') {
-        isNotesModalOpen = true;
+      if (e.detail.path === 'paper-repository') {
+        currentMainView = 'repository';
+      } else if (e.detail.path === 'cognitive-notes') {
+        currentMainView = 'notes';
+      } else if (e.detail.path === 'citation-graph') {
+        currentMainView = 'citation-graph';
       } else if (e.detail.path === 'prompt-formula-lab') {
         currentMainView = 'workspace';
         readingMode = 'figures';
-      } else if (e.detail.path === 'citation-graph') {
-        currentMainView = 'citation-graph';
       } else if (e.detail.path === 'reading-workspace') {
         currentMainView = 'workspace';
         if (readingMode === 'figures') {
@@ -700,18 +737,40 @@
       {cachedInfo}
       {isRailCollapsed}
       {cacheStats}
+      {currentMainView}
       on:modeChange={handleModeChange}
       on:zoomChange={handleZoomChange}
       on:togglePdfDrawer={() => isPdfDrawerOpen = !isPdfDrawerOpen}
       on:openSettings={() => isByokOpen = true}
-      on:openRepository={() => isRepositoryOpen = true}
+      on:openRepository={() => currentMainView = 'repository'}
       on:openImport={() => isImportOpen = true}
       on:exportNotes={handleExportNotes}
+      on:backToWorkspace={() => currentMainView = 'workspace'}
     />
 
     <!-- Main Workspace Frame (pushed down by 64px header) -->
     <main class="w-full pt-16 h-full flex flex-col bg-[#282828] overflow-hidden">
-      {#if currentMainView === 'citation-graph'}
+      {#if currentMainView === 'repository'}
+        <PaperRepositoryView
+          library={paperLibrary}
+          {activePaperId}
+          {localMemoryMb}
+          {cacheStats}
+          on:selectPaper={handlePaperSelectedFromRepository}
+          on:openCitationGraph={handleOpenCitationFromRepository}
+          on:openNotes={handleOpenNotesFromRepository}
+          on:openImport={() => isImportOpen = true}
+          on:updateLibrary={(e) => { paperLibrary = e.detail.library; refreshCacheStats(); }}
+          on:backToWorkspace={() => currentMainView = 'workspace'}
+        />
+      {:else if currentMainView === 'notes'}
+        <CognitiveNotesView
+          {paperLibrary}
+          {activePaper}
+          on:jumpToSection={handleJumpToSectionFromNotes}
+          on:backToWorkspace={() => currentMainView = 'workspace'}
+        />
+      {:else if currentMainView === 'citation-graph'}
         <CitationGraphView
           paper={activePaper}
           on:backToWorkspace={() => currentMainView = 'workspace'}
@@ -884,30 +943,11 @@
     on:close={() => isImportOpen = false}
   />
 
-  <!-- Paper Repository Panel -->
-  <PaperRepositoryPanel
-    bind:isOpen={isRepositoryOpen}
-    library={paperLibrary}
-    {activePaperId}
-    on:selectPaper={handlePaperSelected}
-    on:openImport={() => { isRepositoryOpen = false; isImportOpen = true; }}
-    on:close={() => isRepositoryOpen = false}
-  />
-
   <!-- BYOK Setting Modal -->
   <ByokModal
     bind:isOpen={isByokOpen}
     on:save={handleByokSave}
     on:close={() => isByokOpen = false}
-  />
-
-  <!-- Cognitive Notes Modal -->
-  <CognitiveNotesModal
-    bind:isOpen={isNotesModalOpen}
-    {activePaper}
-    notes={capturedNotes}
-    on:updateNotes={(e) => saveNotes(e.detail.notes)}
-    on:close={() => isNotesModalOpen = false}
   />
 
   <!-- Slide-out Original Document Inspector Drawer (Alt+P) -->

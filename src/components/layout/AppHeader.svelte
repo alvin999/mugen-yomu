@@ -12,6 +12,7 @@
   export let cachedInfo: string = '$0.14 / 2.4k cached (省 82%)';
   export let isRailCollapsed: boolean = false;
   export let cacheStats: CacheStats | null = null;
+  export let currentMainView: string = 'workspace';
 
   let isThemeDropdownOpen: boolean = false;
 
@@ -48,6 +49,10 @@
   function openImport() {
     dispatch('openImport');
   }
+
+  function backToWorkspace() {
+    dispatch('backToWorkspace');
+  }
 </script>
 
 <svelte:window on:click={handleWindowClick} />
@@ -79,9 +84,9 @@
     <!-- Repository & Import Buttons -->
     <div class="flex items-center gap-1.5 shrink-0">
       <button
-        class="text-[#a89984] hover:text-[#fe8019] transition-colors flex items-center gap-1 font-mono text-xs bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] px-2 py-1 rounded"
+        class="transition-colors flex items-center gap-1 font-mono text-xs px-2 py-1 rounded {currentMainView === 'repository' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#fe8019] bg-[#282828] hover:bg-[#32302f] border border-[#3c3836]'}"
         on:click={openRepository}
-        title="開啟文獻庫抽屜"
+        title="切換至文獻庫"
         id="btn-header-library"
       >
         <span class="material-symbols-outlined text-[14px]">library_books</span>
@@ -101,31 +106,69 @@
 
     <span class="text-[#665c54] shrink-0">/</span>
 
-    <!-- Active Paper Title & Badge -->
+    <!-- Active View or Active Paper Title & Badge -->
     <div class="flex items-center gap-1.5 min-w-0 overflow-hidden text-xs">
-      <span class="text-[#ebdbb2] font-medium truncate max-w-[220px]" title={activePaper?.title}>
-        {activePaper?.title || '載入中...'}
-      </span>
-
-      {#if activePaper?.type === 'web'}
-        <a
-          href={activePaper.sourceUrl || '#'}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="font-mono text-[10px] bg-[#83a598]/15 border border-[#83a598]/40 text-[#83a598] hover:text-[#ebdbb2] px-1.5 py-0.5 rounded shrink-0 flex items-center gap-0.5 transition-colors"
-          title="開啟原文網頁"
+      {#if currentMainView === 'repository'}
+        <span class="text-[#ebdbb2] font-semibold flex items-center gap-1.5 truncate">
+          <span class="material-symbols-outlined text-[15px] text-[#fe8019]">library_books</span>
+          <span>本地文獻總庫 (Paper Repository)</span>
+        </span>
+        <button
+          class="ml-2 px-2 py-0.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#fe8019] font-mono rounded text-[11px] flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+          on:click={backToWorkspace}
         >
-          <span class="material-symbols-outlined text-[11px]">open_in_new</span>
-          <span>{activePaper.venue || 'Web'}</span>
-        </a>
-      {:else if activePaper?.arxivId}
-        <span class="font-mono text-[10px] bg-[#32302f] border border-[#504945] text-[#fabd2f] px-1.5 py-0.5 rounded shrink-0">
-          {activePaper.arxivId}
+          <span class="material-symbols-outlined text-[12px]">arrow_back</span>
+          <span>返回閱讀</span>
+        </button>
+      {:else if currentMainView === 'notes'}
+        <span class="text-[#ebdbb2] font-semibold flex items-center gap-1.5 truncate">
+          <span class="material-symbols-outlined text-[15px] text-[#fabd2f]">draw</span>
+          <span>精讀筆記工作室 (Cognitive Notes)</span>
         </span>
-      {:else if activePaper}
-        <span class="font-mono text-[10px] bg-[#32302f] border border-[#504945] text-[#a89984] px-1.5 py-0.5 rounded shrink-0">
-          {activePaper.venue}
+        <button
+          class="ml-2 px-2 py-0.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#fabd2f] font-mono rounded text-[11px] flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+          on:click={backToWorkspace}
+        >
+          <span class="material-symbols-outlined text-[12px]">arrow_back</span>
+          <span>返回閱讀</span>
+        </button>
+      {:else if currentMainView === 'citation-graph'}
+        <span class="text-[#ebdbb2] font-semibold flex items-center gap-1.5 truncate">
+          <span class="material-symbols-outlined text-[15px] text-[#83a598]">hub</span>
+          <span>引文關聯星系 (Citation Graph)</span>
         </span>
+        <button
+          class="ml-2 px-2 py-0.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#83a598] font-mono rounded text-[11px] flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+          on:click={backToWorkspace}
+        >
+          <span class="material-symbols-outlined text-[12px]">arrow_back</span>
+          <span>返回閱讀</span>
+        </button>
+      {:else}
+        <span class="text-[#ebdbb2] font-medium truncate max-w-[220px]" title={activePaper?.title}>
+          {activePaper?.title || '載入中...'}
+        </span>
+
+        {#if activePaper?.type === 'web'}
+          <a
+            href={activePaper.sourceUrl || '#'}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="font-mono text-[10px] bg-[#83a598]/15 border border-[#83a598]/40 text-[#83a598] hover:text-[#ebdbb2] px-1.5 py-0.5 rounded shrink-0 flex items-center gap-0.5 transition-colors"
+            title="開啟原文網頁"
+          >
+            <span class="material-symbols-outlined text-[11px]">open_in_new</span>
+            <span>{activePaper.venue || 'Web'}</span>
+          </a>
+        {:else if activePaper?.arxivId}
+          <span class="font-mono text-[10px] bg-[#32302f] border border-[#504945] text-[#fabd2f] px-1.5 py-0.5 rounded shrink-0">
+            {activePaper.arxivId}
+          </span>
+        {:else if activePaper}
+          <span class="font-mono text-[10px] bg-[#32302f] border border-[#504945] text-[#a89984] px-1.5 py-0.5 rounded shrink-0">
+            {activePaper.venue}
+          </span>
+        {/if}
       {/if}
     </div>
   </div>
@@ -274,8 +317,12 @@
         {/if}
       </div>
 
-      <button class="w-7 h-7 rounded-lg flex items-center justify-center text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2] transition-colors" on:click={exportNotes} title="匯出精讀筆記與標註">
-        <span class="material-symbols-outlined text-[16px]">ios_share</span>
+      <button
+        class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer {currentMainView === 'notes' ? 'bg-[#3c3836] text-[#fabd2f]' : 'text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2]'}"
+        on:click={exportNotes}
+        title="開啟精讀筆記工作室"
+      >
+        <span class="material-symbols-outlined text-[16px]">draw</span>
       </button>
       <button class="w-7 h-7 rounded-lg flex items-center justify-center text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2] transition-colors" on:click={openSettings} title="BYOK 與系統設定">
         <span class="material-symbols-outlined text-[16px]">settings</span>

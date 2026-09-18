@@ -24,15 +24,8 @@
   }
 
   function handleNavClick(id: string) {
-    if (id === 'paper-repository') {
-      dispatch('openRepository');
-    } else if (id === 'cognitive-notes') {
-      dispatch('openNotes');
-      dispatch('navigate', { path: id });
-    } else {
-      currentPath = id;
-      dispatch('navigate', { path: id });
-    }
+    currentPath = id;
+    dispatch('navigate', { path: id });
   }
 </script>
 
