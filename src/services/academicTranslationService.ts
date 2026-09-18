@@ -38,6 +38,10 @@ export async function translateAcademicText(
     const isInvalidFallback = cached && (
       !cached.reply ||
       cached.reply.trim() === '' ||
+      cached.reply.startsWith('Error:') ||
+      cached.reply.includes('unexpected EOF') ||
+      cached.reply.includes('stream reading error') ||
+      cached.reply.includes('The model is currently unreachable') ||
       cached.reply.includes('請於右上方設定自備金鑰') ||
       cached.reply.includes('[原文譯意]') ||
       cached.reply.includes('本機學術應急解析') ||

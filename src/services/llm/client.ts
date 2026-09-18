@@ -186,9 +186,18 @@ export async function callGroqChat(
           const json = await fallbackRes.json();
           reply = json.choices?.[0]?.message?.content || '';
           if (onChunk && reply) await playTypewriter(reply, onChunk, 10);
+          if (reply) {
+            const latencyMs = Math.round(performance.now() - startTime);
+            return { reply, latencyMs, model: model || 'llama-3.3-70b-versatile', provider: 'groq' };
+          }
         } else {
           const fbErrText = await fallbackRes.text().catch(() => '');
-          throw new Error(fbErrText || streamErr?.message || '串流中斷且非串流重試失敗');
+          let fbMsg = fbErrText;
+          try {
+            const j = JSON.parse(fbErrText);
+            if (j.error?.message) fbMsg = j.error.message;
+          } catch {}
+          throw new Error(`Groq API 請求失敗 (${fallbackRes.status}): ${fbMsg || streamErr?.message || '串流中斷且非串流重試失敗'}`);
         }
       }
     } else {
@@ -458,6 +467,10 @@ export async function callProviderChat(
     const isInvalid = cached && (
       !cached.reply ||
       cached.reply.trim() === '' ||
+      cached.reply.startsWith('Error:') ||
+      cached.reply.includes('unexpected EOF') ||
+      cached.reply.includes('stream reading error') ||
+      cached.reply.includes('The model is currently unreachable') ||
       cached.reply.includes('未獲得模型有效回覆') ||
       cached.reply.includes('[翻譯服務連線異常]') ||
       cached.reply.includes('請於右上方設定自備金鑰')
@@ -505,7 +518,15 @@ export async function callProviderChat(
       break;
   }
 
-  if (result.reply && !result.reply.includes('未獲得模型有效回覆') && !result.reply.includes('[翻譯服務連線異常]')) {
+  if (
+    result.reply &&
+    !result.reply.startsWith('Error:') &&
+    !result.reply.includes('unexpected EOF') &&
+    !result.reply.includes('stream reading error') &&
+    !result.reply.includes('The model is currently unreachable') &&
+    !result.reply.includes('未獲得模型有效回覆') &&
+    !result.reply.includes('[翻譯服務連線異常]')
+  ) {
     await setCachedCompletion(cacheKey, result.reply, result.model, result.provider, result.latencyMs);
   }
 
@@ -624,7 +645,11 @@ export async function callProviderChatWithResilience(
       if (fallbackModel && fallbackModel !== model) {
         try {
           await delay(600);
-          const fallbackRes = await callProviderChat(provider, safeMessages, apiKey, fallbackModel, ollamaUrl, onChunk, true);
+          // 遭遇串流失敗後，備援模型一律以非串流安全取得完整 JSON，再以打字機平滑呈現，徹底避免串流 EOF 中斷
+          const fallbackRes = await callProviderChat(provider, safeMessages, apiKey, fallbackModel, ollamaUrl, undefined, true);
+          if (onChunk && fallbackRes.reply) {
+            await playTypewriter(fallbackRes.reply, onChunk, 10);
+          }
           return {
             ...fallbackRes,
             fallbackNotice: `因 ${model.includes('70b') ? '70B (6k TPM)' : model} 頻率限制或無回應，已自動降級為 ${fallbackModel.includes('8b') ? '8B-Instant (20k TPM)' : fallbackModel} 應急推論`
@@ -636,7 +661,11 @@ export async function callProviderChatWithResilience(
 
       try {
         await delay(1200);
-        return await callProviderChat(provider, safeMessages, apiKey, fallbackModel || model, ollamaUrl, onChunk, true);
+        const retryRes = await callProviderChat(provider, safeMessages, apiKey, fallbackModel || model, ollamaUrl, undefined, true);
+        if (onChunk && retryRes.reply) {
+          await playTypewriter(retryRes.reply, onChunk, 10);
+        }
+        return retryRes;
       } catch (retryErr: any) {
         console.warn(`[AI 韌性防護] 重試未果:`, retryErr);
       }

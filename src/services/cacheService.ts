@@ -105,6 +105,10 @@ export async function setCachedCompletion(
   if (
     !reply ||
     reply.trim() === '' ||
+    reply.startsWith('Error:') ||
+    reply.includes('unexpected EOF') ||
+    reply.includes('stream reading error') ||
+    reply.includes('The model is currently unreachable') ||
     reply.includes('未獲得模型有效回覆') ||
     reply.includes('[翻譯服務連線異常]') ||
     reply.includes('請於右上方設定自備金鑰')
