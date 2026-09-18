@@ -60,3 +60,7 @@ export {
   generateSentenceDeconstruction,
   generateTerminologyAlignment
 } from './cognitiveService';
+
+// 7. 導出論文核心雙語摘要服務
+export type { AbstractCoreResult } from './abstractAiService';
+export { generatePaperAbstractCore } from './abstractAiService';

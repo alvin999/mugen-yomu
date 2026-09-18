@@ -3,7 +3,7 @@
   import type { PaperDocument, ChapterSection, FormulaItem } from '../../types/document';
   import { flattenSections } from '../../stores/readingStore';
   import { flowStore, countWords } from '../../stores/flowStore';
-  import { translateAcademicText } from '../../services/aiService';
+  import { translateAcademicText, generatePaperAbstractCore, FALLBACK_MODELS } from '../../services/aiService';
   import { normalizeParagraphs } from '../../utils/paragraphUtils';
   import { renderMath, copyLatexToClipboard } from '../../utils/katexUtils';
   import AuthorInfoModal from './bilingual/AuthorInfoModal.svelte';
@@ -513,6 +513,53 @@
   function toggleAbstract() {
     isAbstractCollapsed = !isAbstractCollapsed;
   }
+
+  // 摘要狀態與防呆判定 (嚴格考量免費 AI 額度)
+  let isGeneratingAbstract: boolean = false;
+  let abstractGenError: string = '';
+
+  $: hasValidChineseSummary = Boolean(
+    paper?.abstract?.chineseSummary &&
+    paper.abstract.chineseSummary.trim().length > 0 &&
+    !paper.abstract.chineseSummary.includes('此文獻已由 MUGEN YOMU')
+  );
+
+  $: rawEnglishAbstract = (paper?.abstract?.english || '').trim();
+  $: isEnglishJinaNoise = rawEnglishAbstract.startsWith('Title:') || rawEnglishAbstract.startsWith('URL Source:');
+  $: cleanEnglishAbstract = isEnglishJinaNoise ? '' : rawEnglishAbstract;
+  $: hasValidEnglishSummary = Boolean(cleanEnglishAbstract.length > 0);
+
+  async function handleGenerateAbstract() {
+    if (!paper || isGeneratingAbstract) return;
+    isGeneratingAbstract = true;
+    abstractGenError = '';
+
+    try {
+      const activeProvider = localStorage.getItem('mugen_provider') || 'groq';
+      const apiKey = localStorage.getItem(`mugen_key_${activeProvider}`) || localStorage.getItem('mugen_key_groq') || '';
+      const activeModel = localStorage.getItem('mugen_model') || (FALLBACK_MODELS[activeProvider]?.[0]?.id) || '';
+      const ollamaUrl = localStorage.getItem('mugen_ollama_url') || 'http://localhost:11434';
+
+      if (!apiKey && activeProvider !== 'ollama') {
+        throw new Error(`請先在右側伴讀欄或設定中配置 ${activeProvider.toUpperCase()} API Key`);
+      }
+
+      const res = await generatePaperAbstractCore(paper, activeProvider, apiKey, activeModel, ollamaUrl);
+
+      paper.abstract = {
+        chineseSummary: res.chineseSummary,
+        english: res.english
+      };
+
+      isAbstractCollapsed = false;
+      dispatch('updatePaper', { paper });
+    } catch (err: any) {
+      console.error('生成核心摘要失敗:', err);
+      abstractGenError = err.message || '生成失敗，請檢查 API Key 或網路狀態';
+    } finally {
+      isGeneratingAbstract = false;
+    }
+  }
 </script>
 
 <svelte:window on:keydown={(e) => { if (e.key === 'Escape' && activeLightboxImg) closeLightbox(); }} />
@@ -580,28 +627,102 @@
         />
 
         <!-- Abstract Collapsible Card -->
-        <div class="mt-1 bg-[#282828] border border-[#3c3836] p-3.5 rounded-lg flex flex-col gap-2 shadow-inner">
-          <div class="flex items-center justify-between">
-            <span class="font-mono text-[11px] text-[#fabd2f] font-semibold uppercase tracking-wider flex items-center gap-1.5">
-              <span class="material-symbols-outlined text-[15px] text-[#fe8019]">auto_stories</span> 雙語論文核心摘要 (Bilingual Abstract Core)
-            </span>
-            <button
-              class="font-mono text-[10px] text-[#a89984] hover:text-[#ebdbb2] flex items-center gap-0.5 transition-colors cursor-pointer"
-              on:click={toggleAbstract}
-            >
-              <span>{isAbstractCollapsed ? '展開' : '收起'}</span>
-              <span class="material-symbols-outlined text-[13px]">{isAbstractCollapsed ? 'expand_more' : 'expand_less'}</span>
-            </button>
+        <div class="mt-1 bg-[#282828] border border-[#3c3836] p-3.5 rounded-lg flex flex-col gap-2.5 shadow-inner">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <div class="flex items-center gap-2">
+              <span class="font-mono text-[11px] text-[#fabd2f] font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[15px] text-[#fe8019]">auto_stories</span> 雙語論文核心摘要 (Bilingual Abstract Core)
+              </span>
+              {#if hasValidChineseSummary}
+                <span class="font-mono text-[9px] bg-[#8ec07c]/15 text-[#8ec07c] border border-[#8ec07c]/30 px-1.5 py-0.2 rounded font-medium">
+                  已提煉
+                </span>
+              {/if}
+            </div>
+
+            <div class="flex items-center gap-2 shrink-0 ml-auto">
+              {#if isGeneratingAbstract}
+                <span class="font-mono text-[10px] text-[#fe8019] flex items-center gap-1 animate-pulse">
+                  <span class="material-symbols-outlined text-[13px] animate-spin">progress_activity</span>
+                  <span>AI 提煉中...</span>
+                </span>
+              {:else if !hasValidChineseSummary}
+                <button
+                  class="font-mono text-[10px] bg-[#fe8019]/20 hover:bg-[#fe8019]/30 border border-[#fe8019]/50 hover:border-[#fe8019] text-[#fabd2f] px-2.5 py-0.5 rounded flex items-center gap-1 transition-all cursor-pointer shadow-sm active:scale-95"
+                  on:click={handleGenerateAbstract}
+                  title="由 AI 提煉論文核心導讀"
+                >
+                  <span class="material-symbols-outlined text-[12px]">auto_awesome</span>
+                  <span>生成導讀</span>
+                </button>
+              {:else}
+                <button
+                  class="font-mono text-[10px] text-[#a89984] hover:text-[#fabd2f] flex items-center gap-0.5 transition-colors cursor-pointer"
+                  on:click={handleGenerateAbstract}
+                  title="重新調用 AI 精煉核心導讀"
+                >
+                  <span class="material-symbols-outlined text-[12px]">refresh</span>
+                  <span>重刷</span>
+                </button>
+              {/if}
+
+              <button
+                class="font-mono text-[10px] text-[#a89984] hover:text-[#ebdbb2] flex items-center gap-0.5 transition-colors cursor-pointer ml-1"
+                on:click={toggleAbstract}
+              >
+                <span>{isAbstractCollapsed ? '展開' : '收起'}</span>
+                <span class="material-symbols-outlined text-[13px]">{isAbstractCollapsed ? 'expand_more' : 'expand_less'}</span>
+              </button>
+            </div>
           </div>
 
           {#if !isAbstractCollapsed}
-            <div class="flex flex-col gap-2 text-xs">
-              <p class="text-[#d5c4a1] leading-relaxed text-justify">
-                {paper.abstract.chineseSummary}
-              </p>
-              <p class="font-serif text-[#a89984] italic leading-relaxed border-t border-[#3c3836] pt-2 text-[13px]">
-                "{paper.abstract.english}"
-              </p>
+            <div class="flex flex-col gap-2.5 text-xs pt-0.5">
+              {#if abstractGenError}
+                <div class="bg-[#cc241d]/15 border border-[#cc241d]/40 text-[#fb4934] p-2 rounded text-[11px] flex items-center justify-between gap-2">
+                  <span>{abstractGenError}</span>
+                  <button
+                    class="underline hover:text-[#ebdbb2] cursor-pointer text-[10px]"
+                    on:click={handleGenerateAbstract}
+                  >
+                    重試
+                  </button>
+                </div>
+              {/if}
+
+              {#if hasValidChineseSummary}
+                <!-- 正體中文核心提煉導讀 -->
+                <p class="text-[#d5c4a1] leading-relaxed text-justify">
+                  {paper.abstract.chineseSummary}
+                </p>
+                {#if cleanEnglishAbstract}
+                  <p class="font-serif text-[#a89984] italic leading-relaxed border-t border-[#3c3836] pt-2 text-[13px]">
+                    "{cleanEnglishAbstract}"
+                  </p>
+                {/if}
+              {:else}
+                <!-- 尚未生成中文導讀時的引導區塊 -->
+                <div class="bg-[#32302f] border border-[#504945]/50 rounded-lg p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div class="flex items-center gap-2 text-[#d5c4a1] text-[11px]">
+                    <span class="material-symbols-outlined text-[#fe8019] text-[17px] shrink-0">psychology</span>
+                    <span>尚未建立繁體中文核心導讀。點擊按鈕由 AI 提煉論文核心精華。</span>
+                  </div>
+                  <button
+                    class="font-mono text-[11px] bg-[#fe8019] hover:bg-[#fabd2f] text-[#1d2021] font-medium px-3 py-1 rounded flex items-center gap-1.5 transition-all shadow-sm shrink-0 cursor-pointer active:scale-95 disabled:opacity-50"
+                    disabled={isGeneratingAbstract}
+                    on:click={handleGenerateAbstract}
+                  >
+                    <span class="material-symbols-outlined text-[14px]">{isGeneratingAbstract ? 'progress_activity' : 'auto_awesome'}</span>
+                    <span>{isGeneratingAbstract ? '提煉中...' : '✨ 提煉雙語導讀'}</span>
+                  </button>
+                </div>
+
+                {#if cleanEnglishAbstract}
+                  <p class="font-serif text-[#a89984] italic leading-relaxed border-t border-[#3c3836] pt-2 text-[13px]">
+                    "{cleanEnglishAbstract}"
+                  </p>
+                {/if}
+              {/if}
             </div>
           {/if}
         </div>

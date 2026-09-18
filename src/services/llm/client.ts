@@ -421,6 +421,17 @@ function isRateLimitError(err: any): boolean {
   );
 }
 
+function isModelNotFoundError(err: any): boolean {
+  const msg = String(err?.message || '').toLowerCase();
+  return (
+    msg.includes('model_not_found') ||
+    msg.includes('does not exist') ||
+    msg.includes('do not have access') ||
+    msg.includes('model not found') ||
+    msg.includes('404')
+  );
+}
+
 export function splitTextIntoChunks(text: string, maxWords: number = 450): string[] {
   const trimmed = text.trim();
   const words = trimmed.split(/\s+/);
@@ -428,25 +439,22 @@ export function splitTextIntoChunks(text: string, maxWords: number = 450): strin
     return [trimmed];
   }
 
-  const sentences = trimmed.match(/[^.!?\n]+[.!?\n]+/g) || [trimmed];
   const chunks: string[] = [];
-  let currentChunk = '';
-  let currentWordCount = 0;
+  let currentChunk: string[] = [];
+  let count = 0;
 
-  for (const sentence of sentences) {
-    const sentenceWords = sentence.trim().split(/\s+/).length;
-    if (currentWordCount + sentenceWords > maxWords && currentChunk.trim().length > 0) {
-      chunks.push(currentChunk.trim());
-      currentChunk = sentence;
-      currentWordCount = sentenceWords;
-    } else {
-      currentChunk += (currentChunk.length > 0 ? ' ' : '') + sentence.trim();
-      currentWordCount += sentenceWords;
+  for (const w of words) {
+    currentChunk.push(w);
+    count++;
+    if (count >= maxWords && (w.endsWith('.') || w.endsWith('!') || w.endsWith('?'))) {
+      chunks.push(currentChunk.join(' '));
+      currentChunk = [];
+      count = 0;
     }
   }
 
-  if (currentChunk.trim().length > 0) {
-    chunks.push(currentChunk.trim());
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk.join(' '));
   }
 
   return chunks.length > 0 ? chunks : [trimmed];
@@ -468,12 +476,15 @@ export async function callProviderChatWithResilience(
   try {
     return await callProviderChat(provider, safeMessages, apiKey, model, ollamaUrl, onChunk);
   } catch (err: any) {
-    if (isRateLimitError(err)) {
-      console.warn(`[AI 韌性防護] ${model} 觸發速率或負載限制 (429/503/TPM)，啟動同源降級與退避緩衝...`);
+    const isRateLimit = isRateLimitError(err);
+    const isNotFound = isModelNotFoundError(err);
 
-      const fallbackModel = PROVIDER_FALLBACK_MAP[model];
+    if (isRateLimit || isNotFound) {
+      const reason = isNotFound ? '模型不存在或無權限 (404)' : '頻率/負載限制 (429/503)';
+      console.warn(`[AI 韌性防護] ${model} 遭遇 ${reason}，啟動同源降級與備援機制...`);
+
+      const fallbackModel = PROVIDER_FALLBACK_MAP[model] || (provider === 'groq' ? 'llama-3.1-8b-instant' : (provider === 'google' ? 'gemini-1.5-flash' : ''));
       if (fallbackModel && fallbackModel !== model) {
-        console.warn(`[AI 韌性防護] 自動由 ${model} 降級切換至高頻寬模型 ${fallbackModel}...`);
         try {
           await delay(600);
           const fallbackRes = await callProviderChat(provider, safeMessages, apiKey, fallbackModel, ollamaUrl, onChunk);

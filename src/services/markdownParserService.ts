@@ -54,7 +54,15 @@ export function parseMarkdownToDocument(
   sourceUrl?: string,
   venue?: string
 ): PaperDocument {
-  const lines = markdown.split('\n');
+  // 清理 Jina Reader 與常見網頁爬蟲之 Metadata 標頭雜訊，避免污染正文與摘要
+  const cleanedMarkdown = markdown
+    .replace(/^Title:\s*.*$/gim, '')
+    .replace(/^URL Source:\s*.*$/gim, '')
+    .replace(/^Published Time:\s*.*$/gim, '')
+    .replace(/^Markdown Content:\s*$/gim, '')
+    .trim();
+
+  const lines = cleanedMarkdown.split('\n');
   const sections: ChapterSection[] = [];
   const allFigures: FigureItem[] = [];
   let currentSection: ChapterSection | null = null;
@@ -297,6 +305,27 @@ export function parseMarkdownToDocument(
     )
   );
 
+  // 智慧萃取論文摘要 (優先搜尋獨立的 Abstract 章節，次之取前導純文字段落)
+  const abstractSec = sections.find(s => /^abstract\b/i.test(s.title.trim()));
+  let extractedEnglish = '';
+  if (abstractSec && abstractSec.paragraphs.length > 0) {
+    extractedEnglish = abstractSec.paragraphs
+      .filter(p => !p.startsWith('!') && !p.startsWith('$$'))
+      .join('\n\n')
+      .trim();
+  } else if (abstractParagraphs.length > 0) {
+    const cleanParas = abstractParagraphs.filter(p => 
+      !p.startsWith('!') && 
+      !p.startsWith('$$') && 
+      !p.startsWith('Title:') && 
+      !p.startsWith('URL Source:') &&
+      !p.startsWith('Published Time:')
+    );
+    if (cleanParas.length > 0) {
+      extractedEnglish = cleanParas.slice(0, 3).join('\n\n').trim();
+    }
+  }
+
   const document: PaperDocument = {
     id: generatedId,
     type: isPdf ? 'paper' : (isWeb ? 'web' : 'paper'),
@@ -308,8 +337,8 @@ export function parseMarkdownToDocument(
     readingSpeedWpm: 250,
     depthLevel: 'Cognitive Synthesis',
     abstract: {
-      english: abstractParagraphs.slice(0, 3).join(' ') || 'Custom document content imported into MUGEN YOMU workspace.',
-      chineseSummary: '此文獻已由 MUGEN YOMU 智能解析並完成章節大綱切割，支援長篇專注閱讀、KaTeX 公式排版與 AI 伴讀探索。'
+      english: extractedEnglish,
+      chineseSummary: '' // 預設留空，等待使用者按需點擊生成，節省免費配額
     },
     sections,
     companionData: {},

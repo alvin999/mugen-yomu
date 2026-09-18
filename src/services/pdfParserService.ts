@@ -549,7 +549,7 @@ export async function parsePdfToDocument(
     depthLevel: 'Cognitive Synthesis',
     abstract: {
       english: abstractEnglish.slice(0, 900),
-      chineseSummary: '此文獻已由 MUGEN YOMU 本機離線 PDF 引擎在純瀏覽器端完成排版大綱抽取與章節切分，支援 100% 離線隱私研讀。'
+      chineseSummary: '' // 預設留空，等待使用者按需點擊生成，節省免費配額
     },
     sections: finalSections,
     companionData

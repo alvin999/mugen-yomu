@@ -839,6 +839,7 @@
               on:sectionsPassed={handleSectionsPassed}
               on:paragraphsRead={handleParagraphsRead}
               on:reachedBottom={handleReachedBottom}
+              on:updatePaper={handleUpdatePaper}
             />
           </div>
         </div>
@@ -905,6 +906,7 @@
               on:sectionsPassed={handleSectionsPassed}
               on:paragraphsRead={handleParagraphsRead}
               on:reachedBottom={handleReachedBottom}
+              on:updatePaper={handleUpdatePaper}
             />
           </div>
 
