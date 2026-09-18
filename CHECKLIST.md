@@ -238,9 +238,9 @@
 | `aiService.ts` | 1,180 行 | **55 行** | **-95%** | 6 個檔案 | ✅ 已完成（LLM Client 與認知服務抽離） |
 | `DerivationsFiguresView.svelte` | 1,939 行 | **504 行** | **-74%** | 4 個子模組 | ✅ 已完成（畫布、沙盒與證明面板抽離） |
 | `BilingualReader.svelte` | 1,739 行 | **718 行** | **-59%** | 5 個子模組 | ✅ 已完成（認知動作列、段落項目抽離） |
-| `OriginalDocumentViewer.svelte` | 1,359 行 | *進行中* | *目標 ~280 行* | 已建 2 個子元件 | ⏳ 進行中（排版與 Canvas 視圖抽離） |
-| `CitationGraphView.svelte` | 1,149 行 | *待重構* | *目標 ~300 行* | 預計 2 個子模組 | 📋 待處理（物理力導向引擎抽離） |
-| `MugenYomuApp.svelte` | 1,125 行 | *待重構* | *目標 ~350 行* | 預計 2 個工具模組 | 📋 待處理（章節樹與拖曳 hook 抽離） |
+| `OriginalDocumentViewer.svelte` | 1,495 行 | **441 行** | **-71%** | 3 個子元件 | ✅ 已完成（工具列、PDF 畫布與擬真排版抽離） |
+| `CitationGraphView.svelte` | 1,158 行 | **440 行** | **-62%** | 3 個子模組 | ✅ 已完成（物理力導向引擎、卷宗面板與工具列抽離） |
+| `MugenYomuApp.svelte` | 1,237 行 | **948 行** | **-23%** | 3 個專責模組 | ✅ 已完成（章節樹演算法、分屏 Hook 與 AI 調度抽離） |
 
 ---
 
@@ -264,7 +264,7 @@
   - [x] 建立 `src/services/academicTranslationService.ts`：抽離學術分塊翻譯服務（含離線備援防護）
   - [x] 建立 `src/services/cognitiveService.ts`：抽離白話科學直覺、SVO 長難句、學術術語表認知推論
   - [x] 重構 `src/services/aiService.ts`：轉為乾淨 Facade（1,180 行 → 55 行）
-- [x] **階段三（前篇）：兩大閱讀器 Svelte 巨獸模組化**
+- [x] **階段三：三大閱讀器 Svelte 巨獸模組化（全數完成）**
   - [x] 建立 `src/utils/derivationExtractor.ts`：動態公式與圖表萃取去重工具
   - [x] 建立 `src/components/reader/derivations/FigureDeconstructionPanel.svelte`：圖表解構與 SVG 拓撲管線
   - [x] 建立 `src/components/reader/derivations/FormulaDerivationPanel.svelte`：分步嚴謹證明與張量維度表
@@ -276,51 +276,28 @@
   - [x] 建立 `src/components/reader/bilingual/SectionFormulaChips.svelte`：章節結構化公式卡群
   - [x] 建立 `src/components/reader/bilingual/BilingualParagraphItem.svelte`：段落雙語對照、打字機動態與心流導引條
   - [x] 重構 `src/components/reader/BilingualReader.svelte`：主檔降至 718 行（-59%）
+  - [x] 建立 `src/components/reader/original/OriginalViewerToolbar.svelte`：頂部工具列（模式切換、縮放、頁碼跳轉、雙向同步鎖定）
+  - [x] 建立 `src/components/reader/original/PdfCanvasRenderer.svelte`：高保真 PDF.js 畫布渲染、載入狀態與失敗回退
+  - [x] 建立 `src/components/reader/original/StructuredTextRenderer.svelte`：實體論文擬真排版（雙黑線報頭、章節段落、KaTeX 公式與原圖燈箱）
+  - [x] 重構 `src/components/reader/OriginalDocumentViewer.svelte`：主檔降至 441 行（-71%），徹底去重
+- [x] **階段四：引文星系圖譜與根元件狀態解耦（全數完成）**
+  - [x] 建立 `src/services/citation/citationPhysicsEngine.ts`：抽離純 TypeScript 物理力導向迭代算式（星系斥力與彈簧引力）與時序演進譜系防重疊算式
+  - [x] 建立 `src/components/citation/CitationDetailPanel.svelte`：抽離右側學者引文卷宗詳細資訊與脈絡報告
+  - [x] 建立 `src/components/citation/CitationGraphControls.svelte`：抽離頂部/檢視模式切換膠囊、搜尋與縮放控制列
+  - [x] 重構 `src/components/citation/CitationGraphView.svelte`：主檔降至 440 行（-62%）
+  - [x] 建立 `src/utils/readingTreeUtils.ts`：抽離多層章節遞迴樹深度搜尋、進度計算標記與停留秒數累加函式
+  - [x] 建立 `src/utils/useSplitPane.ts`：抽離雙軌分割視窗滑鼠拖曳比例計算、邊界保護與百分比換算純函式
+  - [x] 建立 `src/services/cognitiveDispatcher.ts`：抽離 AI 伴讀推論請求調度與章節伴讀資料更新
+  - [x] 重構 `src/components/MugenYomuApp.svelte`：主檔降至 948 行（-23%）
 
 ---
 
-### ⏳ 待完成重構任務清單 (Pending Refactoring To-Do Checklist)
+### ⏳ 後續延伸維護任務清單 (Future Refactoring To-Do Checklist)
 
-#### 1. 完成 `OriginalDocumentViewer.svelte` 模組化拆解（1,359 行 → 目標 ~280 行）
-- [x] 已建立 `src/components/reader/original/OriginalViewerToolbar.svelte`（頂部工具列：模式切換、縮放、頁碼跳轉、雙向同步鎖定）
-- [x] 已建立 `src/components/reader/original/PdfCanvasRenderer.svelte`（高保真 PDF.js 畫布渲染、載入狀態與失敗回退）
-- [ ] **[待辦]** 建立 `src/components/reader/original/StructuredTextRenderer.svelte`：
-  - [ ] 封裝實體論文擬真排版（Physical Paper Sheet Canvas）
-  - [ ] 支援仿羊皮紙 (`parchment`) 與復古暗色 (`dark`) 主題切換
-  - [ ] 包含：頂部雙黑線學術報頭（Masthead）、論文大標題、作者群、摘要卡片、DOI / Open Access 標章
-  - [ ] 章節列表與段落渲染（子標題、內嵌圖片視圖、KaTeX 數學公式卡片）
-  - [ ] 點擊段落或章節聯動雙語伴讀閱讀器
-- [ ] **[待辦]** 重構 `src/components/reader/OriginalDocumentViewer.svelte` 主檔：
-  - [ ] 引入 `OriginalViewerToolbar`、`PdfCanvasRenderer`、`StructuredTextRenderer`
-  - [ ] 改用共用 `ImageLightboxModal` 與 `katexUtils`、`academicImageUtils`、`paragraphUtils`
-  - [ ] 移除主檔中重複定義的數百行 `sanitizeLatex`、`normalizeParagraphs` 冗餘代碼
-- [ ] **[待辦]** 執行 `npm run build` 驗證編譯通過
-
-#### 2. `CitationGraphView.svelte` 物理引擎與分析面板解耦（1,149 行 → 目標 ~300 行）
-- [ ] **[待辦]** 建立 `src/services/citation/citationPhysicsEngine.ts`：
-  - [ ] 抽離純 TypeScript 物理力導向迭代算式（星系模式引力場 `runGalaxyPhysicsStep`）
-  - [ ] 抽離時間軸投影迭代算式（`runTimelineStep`）
-  - [ ] 抽離節點碰撞排斥、速度阻尼、動能衰減與視埠投影矩陣變換純函式
-- [ ] **[待辦]** 建立 `src/components/citation/CitationDetailPanel.svelte`：
-  - [ ] 抽離右側引文卡片詳細資訊、關鍵字標籤、出處連結
-  - [ ] 抽離 AI 引文脈絡與論證目的分析報告面板
-- [ ] **[待辦]** 建立 `src/components/citation/CitationGraphControls.svelte`：
-  - [ ] 抽離頂部/底部檢視模式切換膠囊（星系 vs 時間軸）、關鍵字搜尋、節點過濾與物理模擬暫停/重置按鈕
-- [ ] **[待辦]** 重構 `src/components/citation/CitationGraphView.svelte` 主檔至 ~300 行
-- [ ] **[待辦]** 執行 `npm run build` 驗證編譯通過
-
-#### 3. `MugenYomuApp.svelte` 根元件狀態與工具解耦（1,125 行 → 目標 ~350 行）
-- [ ] **[待辦]** 建立 `src/utils/readingTreeUtils.ts`：
-  - [ ] 抽離多層章節遞迴樹深度搜尋、進度計算標記與停留秒數累加函式
-- [ ] **[待辦]** 建立 `src/utils/useSplitPane.ts`：
-  - [ ] 抽離雙軌分割視窗滑鼠拖曳比例計算、邊界保護與百分比換算純函式
-- [ ] **[待辦]** 重構 `src/components/MugenYomuApp.svelte` 主檔至 ~350 行
-- [ ] **[待辦]** 執行 `npm run build` 驗證編譯通過
-
-#### 4. 次要過長元件整理 (可選維護)
-- [ ] **[待辦]** `ImportPaperModal.svelte` (785 行)：將 4 個匯入分頁（PDF 上傳、arXiv 檢索、URL 爬取、手動文字貼上）拆分子元件
-- [ ] **[待辦]** `CognitiveCompanion.svelte` (654 行)：抽離對話訊息氣泡清單與快捷 Prompt 工具列
-- [ ] **[待辦]** `ReadingMap.svelte` (653 行)：抽離章節樹節點渲染子元件
+#### 次要過長元件整理 (可選維護)
+- [ ] `ImportPaperModal.svelte` (785 行)：將 4 個匯入分頁（PDF 上傳、arXiv 檢索、URL 爬取、手動文字貼上）拆分子元件
+- [ ] `CognitiveCompanion.svelte` (654 行)：抽離對話訊息氣泡清單與快捷 Prompt 工具列
+- [ ] `ReadingMap.svelte` (653 行)：抽離章節樹節點渲染子元件
 
 ---
 

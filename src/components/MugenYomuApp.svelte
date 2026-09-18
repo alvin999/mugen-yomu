@@ -34,12 +34,23 @@
   } from '../stores/readingStore';
   import { flowStore } from '../stores/flowStore';
   import { getCacheStats, getStorageEstimate, type CacheStats } from '../services/cacheService';
+  import { formatModelDisplayName } from '../services/aiService';
   import {
-    formatModelDisplayName,
-    generateScientificIntuition,
-    generateSentenceDeconstruction,
-    generateTerminologyAlignment
-  } from '../services/aiService';
+    updateSectionStateRecursive,
+    toggleSubsectionsRecursive,
+    resetSectionsProgress,
+    updateSectionsParagraphsRead,
+    updateSectionsPassed,
+    markAllSectionsRead,
+    buildReadingStateMap
+  } from '../utils/readingTreeUtils';
+  import { calculateSplitRatio, adjustSplitRatioByStep } from '../utils/useSplitPane';
+  import {
+    getStoredAiConfig,
+    dispatchGenerateIntuition,
+    dispatchGenerateSyntax,
+    dispatchGenerateTerminology
+  } from '../services/cognitiveDispatcher';
 
   // State Management
   let currentMainView: 'workspace' | 'citation-graph' = 'workspace';
@@ -167,39 +178,11 @@
   function updateSectionState(sectionId: string, updates: Partial<{ isRead: boolean; progress: number; dwellSeconds: number }>) {
     if (!activePaper || !activePaper.sections) return;
 
-    function updateRecursive(secs: ChapterSection[]): ChapterSection[] {
-      return secs.map(s => {
-        if (s.id === sectionId) {
-          const newIsRead = updates.isRead !== undefined ? updates.isRead : s.isRead;
-          const newProgress = updates.progress !== undefined ? updates.progress : (newIsRead ? 100 : s.progress);
-          return {
-            ...s,
-            isRead: newIsRead,
-            progress: newProgress
-          };
-        }
-        if (s.children && s.children.length > 0) {
-          return { ...s, children: updateRecursive(s.children) };
-        }
-        return s;
-      });
-    }
-
-    const updated = updateRecursive(activePaper.sections);
+    const updated = updateSectionStateRecursive(activePaper.sections, sectionId, updates);
     activePaper.sections = synchronizeHeadingProgress(updated);
     activePaper = { ...activePaper };
 
-    // 同步儲存至 LocalStorage
-    const flattened = flattenSections(activePaper.sections);
-    const stateMap: Record<string, any> = {};
-    for (const item of flattened) {
-      stateMap[item.id] = {
-        isRead: item.isRead,
-        progress: item.progress,
-        lastUpdated: Date.now()
-      };
-    }
-    savePaperReadingState(activePaper.id, stateMap);
+    savePaperReadingState(activePaper.id, buildReadingStateMap(activePaper.sections));
   }
 
   // 1. 視線停留累積精讀
@@ -243,44 +226,11 @@
     const target = allSecs.find(s => s.id === id);
     if (target) {
       const nextRead = !target.isRead;
-      // 若為純大標題或具備子章節，連帶將所屬子章節一同切換
-      const prefixMatch = (target.title || '').trim().match(/^([0-9]+)\.?\s+/);
-      const mainNum = prefixMatch ? prefixMatch[1] : null;
-
-      function toggleSubsections(secs: ChapterSection[]): ChapterSection[] {
-        return secs.map(s => {
-          let matches = s.id === id;
-          if (target.children && target.children.length > 0) {
-            if (target.children.some((c: ChapterSection) => c.id === s.id)) matches = true;
-          } else if (mainNum && s.title.trim().startsWith(`${mainNum}.`)) {
-            matches = true;
-          }
-          if (matches) {
-            return {
-              ...s,
-              isRead: nextRead,
-              progress: nextRead ? 100 : 0,
-              children: s.children ? toggleSubsections(s.children) : undefined
-            };
-          }
-          return {
-            ...s,
-            children: s.children ? toggleSubsections(s.children) : undefined
-          };
-        });
-      }
-
-      const toggled = toggleSubsections(activePaper.sections);
+      const toggled = toggleSubsectionsRecursive(activePaper.sections, target, nextRead);
       activePaper.sections = synchronizeHeadingProgress(toggled);
       activePaper = { ...activePaper };
 
-      // 同步保存
-      const flattened = flattenSections(activePaper.sections);
-      const stateMap: Record<string, any> = {};
-      for (const item of flattened) {
-        stateMap[item.id] = { isRead: item.isRead, progress: item.progress, lastUpdated: Date.now() };
-      }
-      savePaperReadingState(activePaper.id, stateMap);
+      savePaperReadingState(activePaper.id, buildReadingStateMap(activePaper.sections));
     }
   }
 
@@ -288,15 +238,7 @@
   function handleResetProgress() {
     if (!activePaper) return;
     clearPaperReadingState(activePaper.id);
-    function resetSecs(secs: ChapterSection[]): ChapterSection[] {
-      return secs.map(s => ({
-        ...s,
-        isRead: false,
-        progress: 0,
-        children: s.children ? resetSecs(s.children) : undefined
-      }));
-    }
-    activePaper.sections = resetSecs(activePaper.sections);
+    activePaper.sections = resetSectionsProgress(activePaper.sections);
     activePaper = { ...activePaper };
   }
 
@@ -333,7 +275,7 @@
     refreshCacheStats();
   }
 
-  function handleSplitMouseDown(e: MouseEvent) {
+  function handleSplitMouseDown(_e: MouseEvent) {
     isDraggingSplit = true;
     window.addEventListener('mousemove', handleSplitMouseMove);
     window.addEventListener('mouseup', handleSplitMouseUp);
@@ -342,11 +284,7 @@
   function handleSplitMouseMove(e: MouseEvent) {
     if (!isDraggingSplit) return;
     const container = document.getElementById('split-container');
-    if (!container) return;
-    const rect = container.getBoundingClientRect();
-    const offsetX = e.clientX - rect.left;
-    const newRatio = Math.max(25, Math.min(75, Math.round((offsetX / rect.width) * 100)));
-    splitRatio = newRatio;
+    splitRatio = calculateSplitRatio(e.clientX, container, { minRatio: 25, maxRatio: 75 });
   }
 
   function handleSplitMouseUp() {
@@ -382,8 +320,6 @@
       readingMode = 'bilingual';
     }
 
-    // 關鍵修復：絕對不要在使用者滾動或點擊段落時反向呼叫 scrollToTarget！
-    // 只有當來源是目錄樹點擊 (outline)、導航 (nav)、PDF跳轉 (pdf) 時才主動跳轉！
     const isNavigation = source === 'outline' || source === 'nav' || source === 'pdf';
     if (isNavigation && !noScroll) {
       setTimeout(() => {
@@ -399,70 +335,11 @@
     const { paragraphs } = e.detail || {};
     if (!activePaper || !paragraphs || paragraphs.length === 0) return;
 
-    // 依 sectionId 分組收集小段落索引
-    const grouped: Record<string, number[]> = {};
-    for (const p of paragraphs) {
-      if (!grouped[p.sectionId]) grouped[p.sectionId] = [];
-      if (!grouped[p.sectionId].includes(p.paraIndex)) {
-        grouped[p.sectionId].push(p.paraIndex);
-      }
-    }
-
-    let hasChange = false;
-    function updateSectionParas(secs: ChapterSection[]): ChapterSection[] {
-      return secs.map(s => {
-        let readIndices = [...(s.readParaIndices || [])];
-        let changed = false;
-
-        if (grouped[s.id]) {
-          for (const idx of grouped[s.id]) {
-            if (!readIndices.includes(idx)) {
-              readIndices.push(idx);
-              changed = true;
-              hasChange = true;
-            }
-          }
-        }
-
-        let progress = s.progress;
-        let isRead = s.isRead;
-        const totalParas = s.paragraphs?.length || 0;
-
-        if (changed && totalParas > 0) {
-          // 精確小段落閱讀進度比例
-          progress = Math.min(100, Math.round((readIndices.length / totalParas) * 100));
-          if (progress >= 100) {
-            isRead = true;
-          }
-        }
-
-        return {
-          ...s,
-          readParaIndices: readIndices,
-          progress,
-          isRead,
-          children: s.children ? updateSectionParas(s.children) : undefined
-        };
-      });
-    }
-
-    const updated = updateSectionParas(activePaper.sections);
+    const { updatedSections, hasChange } = updateSectionsParagraphsRead(activePaper.sections, paragraphs);
     if (hasChange) {
-      activePaper.sections = synchronizeHeadingProgress(updated);
+      activePaper.sections = synchronizeHeadingProgress(updatedSections);
       activePaper = { ...activePaper };
-
-      // 持久化儲存小段落進度狀態
-      const flattened = flattenSections(activePaper.sections);
-      const stateMap: Record<string, any> = {};
-      for (const item of flattened) {
-        stateMap[item.id] = {
-          isRead: item.isRead,
-          progress: item.progress,
-          readParaIndices: item.readParaIndices || [],
-          lastUpdated: Date.now()
-        };
-      }
-      savePaperReadingState(activePaper.id, stateMap);
+      savePaperReadingState(activePaper.id, buildReadingStateMap(activePaper.sections));
     }
   }
 
@@ -471,42 +348,11 @@
     const { readSectionIds } = e.detail || {};
     if (!activePaper || !readSectionIds || readSectionIds.length === 0) return;
 
-    let hasChange = false;
-    function updatePassed(secs: ChapterSection[]): ChapterSection[] {
-      return secs.map(s => {
-        let isRead = s.isRead;
-        let progress = s.progress;
-        if (readSectionIds.includes(s.id) && !s.isRead) {
-          isRead = true;
-          progress = 100;
-          hasChange = true;
-        }
-        return {
-          ...s,
-          isRead,
-          progress,
-          children: s.children ? updatePassed(s.children) : undefined
-        };
-      });
-    }
-
-    const updated = updatePassed(activePaper.sections);
+    const { updatedSections, hasChange } = updateSectionsPassed(activePaper.sections, readSectionIds);
     if (hasChange) {
-      activePaper.sections = synchronizeHeadingProgress(updated);
+      activePaper.sections = synchronizeHeadingProgress(updatedSections);
       activePaper = { ...activePaper };
-
-      // 持久化儲存
-      const flattened = flattenSections(activePaper.sections);
-      const stateMap: Record<string, any> = {};
-      for (const item of flattened) {
-        stateMap[item.id] = {
-          isRead: item.isRead,
-          progress: item.progress,
-          readParaIndices: item.readParaIndices || [],
-          lastUpdated: Date.now()
-        };
-      }
-      savePaperReadingState(activePaper.id, stateMap);
+      savePaperReadingState(activePaper.id, buildReadingStateMap(activePaper.sections));
     }
   }
 
@@ -517,29 +363,9 @@
     const allAlreadyRead = allSecs.every(s => s.isRead);
     if (allAlreadyRead) return;
 
-    function markAll(secs: ChapterSection[]): ChapterSection[] {
-      return secs.map(s => ({
-        ...s,
-        isRead: true,
-        progress: 100,
-        children: s.children ? markAll(s.children) : undefined
-      }));
-    }
-
-    activePaper.sections = markAll(activePaper.sections);
+    activePaper.sections = markAllSectionsRead(activePaper.sections);
     activePaper = { ...activePaper };
-
-    const flattened = flattenSections(activePaper.sections);
-    const stateMap: Record<string, any> = {};
-    for (const item of flattened) {
-      stateMap[item.id] = {
-        isRead: true,
-        progress: 100,
-        readParaIndices: item.readParaIndices || [],
-        lastUpdated: Date.now()
-      };
-    }
-    savePaperReadingState(activePaper.id, stateMap);
+    savePaperReadingState(activePaper.id, buildReadingStateMap(activePaper.sections));
   }
 
   function handleSelectFigure(event: CustomEvent<{ figId: string; imageUrl?: string; name?: string }>) {
@@ -584,48 +410,12 @@
     }, 150);
   }
 
-  function getAiConfig() {
-    if (typeof window === 'undefined') {
-      return { provider: 'groq', apiKey: '', model: 'llama-3.3-70b-versatile', ollamaUrl: 'http://localhost:11434' };
-    }
-    const provider = localStorage.getItem('mugen_provider') || 'groq';
-    const apiKey = localStorage.getItem(`mugen_key_${provider}`) || localStorage.getItem('mugen_key_groq') || '';
-    const model = localStorage.getItem('mugen_model') || 'llama-3.3-70b-versatile';
-    const ollamaUrl = localStorage.getItem('mugen_ollama_url') || 'http://localhost:11434';
-    return { provider, apiKey, model, ollamaUrl };
-  }
-
   async function generateIntuitionForSection(sec: ChapterSection) {
-    if (!sec || !sec.id) return;
+    if (!sec || !sec.id || !activePaper) return;
     loadingIntuitionId = sec.id;
     try {
-      const config = getAiConfig();
-      const res = await generateScientificIntuition(
-        sec.title,
-        sec.paragraphs || [],
-        config.provider,
-        config.apiKey,
-        config.model,
-        config.ollamaUrl
-      );
-
-      if (activePaper) {
-        if (!activePaper.companionData) activePaper.companionData = {};
-        const prev = activePaper.companionData[sec.id] || {
-          intuition: res,
-          terminology: [],
-          socraticQuestions: []
-        };
-        activePaper.companionData[sec.id] = {
-          ...prev,
-          intuition: {
-            title: res.title,
-            tag: res.tag,
-            content: res.content
-          }
-        };
-        activePaper = { ...activePaper };
-      }
+      await dispatchGenerateIntuition(activePaper, sec, getStoredAiConfig());
+      activePaper = { ...activePaper };
       refreshCacheStats();
       setTimeout(() => {
         companionRef?.focusCard('intuition');
@@ -638,66 +428,11 @@
   }
 
   async function generateSyntaxForSection(sec: ChapterSection, selectedText?: string) {
-    if (!sec || !sec.id) return;
+    if (!sec || !sec.id || !activePaper) return;
     loadingSyntaxId = sec.id;
     try {
-      const config = getAiConfig();
-      const textToAnalyze = (selectedText && selectedText.trim().length > 10)
-        ? selectedText.trim()
-        : (sec.paragraphs ? sec.paragraphs.join(' ') : sec.title);
-
-      const res = await generateSentenceDeconstruction(
-        textToAnalyze,
-        sec.title,
-        config.provider,
-        config.apiKey,
-        config.model,
-        config.ollamaUrl
-      );
-
-      if (activePaper) {
-        if (!activePaper.companionData) activePaper.companionData = {};
-        const prev = activePaper.companionData[sec.id] || {
-          intuition: { title: `關於「${sec.title}」的核心探討`, tag: 'Insight', content: [] },
-          terminology: [],
-          socraticQuestions: []
-        };
-        activePaper.companionData[sec.id] = {
-          ...prev,
-          syntaxTree: {
-            line: res.line,
-            snippet: res.snippet,
-            svo: res.svo
-          }
-        };
-
-        // 同步更新章節原型的 svoSentence，讓雙語閱讀器內文也直接呈現彩色結構標籤
-        const svoItem = res.svo.find(item => item.role.includes('主幹') || item.role.includes('S-V-O')) || res.svo[0];
-        const modItem = res.svo.find(item => item.role.includes('方式') || item.role.includes('條件') || item.role.includes('修飾') || item.role.includes('平行')) || res.svo[1];
-        const purItem = res.svo.find(item => item.role.includes('目的') || item.role.includes('結果')) || res.svo[2];
-
-        sec.svoSentence = {
-          sentence: res.snippet,
-          svoBadge: 'S-V-O 認知拆解',
-          subjectVerbObject: {
-            title: svoItem ? svoItem.role : '[主幹 S-V-O]',
-            en: svoItem ? svoItem.text : res.snippet,
-            zh: svoItem ? svoItem.zh : '核心論述主幹'
-          },
-          modifier: {
-            title: modItem ? modItem.role : '[方式與條件]',
-            en: modItem ? modItem.text : '',
-            zh: modItem ? modItem.zh : '前提條件與限定修飾'
-          },
-          purpose: {
-            title: purItem ? purItem.role : '[目的與結果]',
-            en: purItem ? purItem.text : '',
-            zh: purItem ? purItem.zh : '預期達致之效應與推論'
-          }
-        };
-
-        activePaper = { ...activePaper };
-      }
+      await dispatchGenerateSyntax(activePaper, sec, selectedText, getStoredAiConfig());
+      activePaper = { ...activePaper };
       refreshCacheStats();
       setTimeout(() => {
         companionRef?.focusCard('syntax');
@@ -710,32 +445,11 @@
   }
 
   async function generateTerminologyForSection(sec: ChapterSection) {
-    if (!sec || !sec.id) return;
+    if (!sec || !sec.id || !activePaper) return;
     loadingTerminologyId = sec.id;
     try {
-      const config = getAiConfig();
-      const res = await generateTerminologyAlignment(
-        sec.title,
-        sec.paragraphs || [],
-        config.provider,
-        config.apiKey,
-        config.model,
-        config.ollamaUrl
-      );
-
-      if (activePaper) {
-        if (!activePaper.companionData) activePaper.companionData = {};
-        const prev = activePaper.companionData[sec.id] || {
-          intuition: { title: `關於「${sec.title}」的核心探討`, tag: 'Insight', content: [] },
-          terminology: [],
-          socraticQuestions: []
-        };
-        activePaper.companionData[sec.id] = {
-          ...prev,
-          terminology: res.terms
-        };
-        activePaper = { ...activePaper };
-      }
+      await dispatchGenerateTerminology(activePaper, sec, getStoredAiConfig());
+      activePaper = { ...activePaper };
       refreshCacheStats();
       setTimeout(() => {
         companionRef?.focusCard('terminology');
@@ -773,7 +487,6 @@
       targetSec = allSecs.find(s => s.id === (payload || activeSectionId));
     }
 
-    // 關鍵同步：確保伴讀卡片、載入骨架態與當前章節正確聯動切換
     if (targetSec && activeSectionId !== targetSec.id) {
       activeSectionId = targetSec.id;
     }
@@ -1045,8 +758,8 @@
             aria-valuemax="80"
             aria-label="左右分屏調整桿"
             on:keydown={(e) => {
-              if (e.key === 'ArrowLeft') splitRatio = Math.max(20, splitRatio - 5);
-              if (e.key === 'ArrowRight') splitRatio = Math.min(80, splitRatio + 5);
+              if (e.key === 'ArrowLeft') splitRatio = adjustSplitRatioByStep(splitRatio, 'decrease', { minRatio: 20, maxRatio: 80, step: 5 });
+              if (e.key === 'ArrowRight') splitRatio = adjustSplitRatioByStep(splitRatio, 'increase', { minRatio: 20, maxRatio: 80, step: 5 });
             }}
           >
             <div class="w-1 h-8 bg-[#504945] group-hover:bg-[#1d2021] rounded-full"></div>
@@ -1233,4 +946,3 @@
 </div>
 
 <svelte:window on:keydown={handleGlobalKeydown} />
-

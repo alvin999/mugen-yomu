@@ -4,8 +4,6 @@
     getCitationGraphForPaper,
     isPresetCitationPaper,
     hasCustomCitationGraph,
-    type CitationNode,
-    type CitationEdge,
     type CitationGraphData,
     type CitationCategory
   } from '../../services/citationService';
@@ -15,10 +13,23 @@
   } from '../../services/citationAnalysisService';
   import type { PaperDocument } from '../../stores/documentStore';
   import { currentTheme, getCurrentThemeMeta } from '../../stores/themeStore';
+  import {
+    initSimulationNodes,
+    runGalaxyPhysicsStep,
+    runTimelineStep,
+    type SimNode,
+    type SimEdge
+  } from '../../services/citation/citationPhysicsEngine';
+  import CitationGraphControls from './CitationGraphControls.svelte';
+  import CitationDetailPanel from './CitationDetailPanel.svelte';
 
   export let paper: PaperDocument | null = null;
 
-  const dispatch = createEventDispatcher();
+  const dispatch = createEventDispatcher<{
+    backToWorkspace: void;
+    updateCitationGraph: { paperId: string; citationGraph: CitationGraphData };
+    loadPaper: { paperId: string };
+  }>();
 
   // Layout & View States
   let layoutMode: 'galaxy' | 'timeline' = 'galaxy';
@@ -43,22 +54,6 @@
   let containerWidth: number = 900;
   let containerHeight: number = 650;
   let containerElement: HTMLDivElement | null = null;
-
-  // Working nodes with simulation properties
-  interface SimNode extends CitationNode {
-    x: number;
-    y: number;
-    vx: number;
-    vy: number;
-    fx?: number | null;
-    fy?: number | null;
-    radius: number;
-  }
-
-  interface SimEdge extends CitationEdge {
-    sourceNode?: SimNode;
-    targetNode?: SimNode;
-  }
 
   let simNodes: SimNode[] = [];
   let simEdges: SimEdge[] = [];
@@ -170,39 +165,13 @@
 
     const w = containerWidth || 900;
     const h = containerHeight || 650;
-    const cx = w / 2;
-    const cy = h / 2;
 
-    // 初始化節點位置與半徑
-    simNodes = graph.nodes.map((n, i) => {
-      const isCore = n.category === 'core';
-      const angle = (i / (graph.nodes.length || 1)) * Math.PI * 2;
-      const dist = isCore ? 0 : (n.category === 'foundational' ? 140 : (n.category === 'derivative' ? 220 : 180));
-      
-      const x = cx + Math.cos(angle) * dist + (Math.random() - 0.5) * 20;
-      const y = cy + Math.sin(angle) * dist + (Math.random() - 0.5) * 20;
-
-      return {
-        ...n,
-        x,
-        y,
-        vx: 0,
-        vy: 0,
-        radius: isCore ? 34 : (n.category === 'derivative' ? 28 : 26)
-      };
-    });
-
-    // 建立 Edges 節點引用
-    const nodeMap = new Map(simNodes.map(n => [n.id, n]));
-    simEdges = graph.edges.map(e => ({
-      ...e,
-      sourceNode: nodeMap.get(e.source),
-      targetNode: nodeMap.get(e.target)
-    }));
-
-    // 預設選中核心節點
-    const core = simNodes.find(n => n.category === 'core');
-    if (core) selectedNodeId = core.id;
+    const result = initSimulationNodes(graph, w, h);
+    simNodes = result.simNodes;
+    simEdges = result.simEdges;
+    if (result.initialSelectedNodeId) {
+      selectedNodeId = result.initialSelectedNodeId;
+    }
 
     // 重置縮放與位置
     zoom = 1.0;
@@ -213,7 +182,7 @@
   }
 
   // -------------------------------------------------------------
-  // 力導向物理模擬 (Force Simulation Engine)
+  // 力導向物理模擬迴圈 (Force Simulation Loop)
   // -------------------------------------------------------------
   function startSimulation() {
     simAlpha = 1.0;
@@ -221,9 +190,9 @@
 
     function tick() {
       if (layoutMode === 'galaxy') {
-        runGalaxyPhysicsStep();
+        runGalaxyPhysicsStep(simNodes, simEdges, containerWidth, containerHeight, simAlpha, draggingNodeId);
       } else {
-        runTimelineStep();
+        runTimelineStep(simNodes, containerWidth, containerHeight, simAlpha, draggingNodeId);
       }
 
       simAlpha *= 0.985; // 阻尼能量衰減
@@ -237,166 +206,6 @@
     }
 
     animationFrameId = requestAnimationFrame(tick);
-  }
-
-  function runGalaxyPhysicsStep() {
-    const cx = containerWidth / 2;
-    const cy = containerHeight / 2;
-
-    // 1. 節點間庫倫斥力 (Repulsion)
-    for (let i = 0; i < simNodes.length; i++) {
-      for (let j = i + 1; j < simNodes.length; j++) {
-        const a = simNodes[i];
-        const b = simNodes[j];
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const distSq = dx * dx + dy * dy || 1;
-        const dist = Math.sqrt(distSq);
-
-        // 避免重疊過近，給予文字標籤充足空間
-        const minDist = a.radius + b.radius + 75;
-        if (dist < minDist) {
-          const force = ((minDist - dist) / minDist) * 12.0 * simAlpha;
-          const fx = (dx / dist) * force;
-          const fy = (dy / dist) * force;
-          if (a.id !== draggingNodeId) { a.vx -= fx; a.vy -= fy; }
-          if (b.id !== draggingNodeId) { b.vx += fx; b.vy += fy; }
-        } else {
-          const force = (1800 / distSq) * simAlpha;
-          const fx = (dx / dist) * force;
-          const fy = (dy / dist) * force;
-          if (a.id !== draggingNodeId) { a.vx -= fx; a.vy -= fy; }
-          if (b.id !== draggingNodeId) { b.vx += fx; b.vy += fy; }
-        }
-      }
-    }
-
-    // 2. 連線彈簧引力 (Spring Attraction)
-    const targetEdgeLen = 190;
-    for (const edge of simEdges) {
-      const s = edge.sourceNode;
-      const t = edge.targetNode;
-      if (!s || !t) continue;
-
-      const dx = t.x - s.x;
-      const dy = t.y - s.y;
-      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const force = (dist - targetEdgeLen) * 0.045 * simAlpha;
-      const fx = (dx / dist) * force;
-      const fy = (dy / dist) * force;
-
-      if (s.id !== draggingNodeId) { s.vx += fx; s.vy += fy; }
-      if (t.id !== draggingNodeId) { t.vx -= fx; t.vy -= fy; }
-    }
-
-    // 3. 核心節點與全域向心引力 (Centering Gravity)
-    for (const n of simNodes) {
-      if (n.id === draggingNodeId) continue;
-      
-      if (n.category === 'core') {
-        n.vx += (cx - n.x) * 0.08 * simAlpha;
-        n.vy += (cy - n.y) * 0.08 * simAlpha;
-      } else {
-        n.vx += (cx - n.x) * 0.012 * simAlpha;
-        n.vy += (cy - n.y) * 0.012 * simAlpha;
-      }
-
-      // 速度阻尼
-      n.vx *= 0.85;
-      n.vy *= 0.85;
-
-      n.x += n.vx;
-      n.y += n.vy;
-    }
-  }
-
-  function runTimelineStep() {
-    const w = containerWidth || 900;
-    const h = containerHeight || 650;
-
-    // 1. 提取所有不重複的出現年份並升冪排序 (Distinct Sorted Epochs)
-    const distinctYears = Array.from(new Set(simNodes.map(n => n.year || 2017))).sort((a, b) => a - b);
-    const numEpochs = distinctYears.length;
-
-    // 每個年份縱列保證至少 220px 寬度，確保 150px 的標籤橫向絕不干擾重疊
-    const minColumnWidth = 230;
-    const totalIdealWidth = (numEpochs - 1) * minColumnWidth;
-    const startX = Math.max(140, (w - totalIdealWidth) / 2);
-
-    // 建立年份對應的 X 座標映射表
-    const yearToXMap = new Map<number, number>();
-    distinctYears.forEach((yr, idx) => {
-      if (numEpochs <= 1) {
-        yearToXMap.set(yr, w / 2);
-      } else {
-        const xPos = startX + idx * minColumnWidth;
-        yearToXMap.set(yr, xPos);
-      }
-    });
-
-    // 2. 依年份分組
-    const yearGroups: Record<number, SimNode[]> = {};
-    simNodes.forEach(n => {
-      const y = n.year || 2017;
-      if (!yearGroups[y]) yearGroups[y] = [];
-      yearGroups[y].push(n);
-    });
-
-    // 3. 縱向 (Y 軸) 排列：同一年份多篇文獻給予至少 130px 充足高度間距
-    for (const [yrStr, group] of Object.entries(yearGroups)) {
-      const yr = Number(yrStr);
-      const targetX = yearToXMap.get(yr) ?? w / 2;
-      const count = group.length;
-      const verticalGap = 135;
-      const totalColHeight = (count - 1) * verticalGap;
-      const startY = (h - totalColHeight) / 2;
-
-      // 排序使核心主文置於中央偏好位置
-      group.sort((a, b) => {
-        if (a.category === 'core') return -1;
-        if (b.category === 'core') return 1;
-        return a.id.localeCompare(b.id);
-      });
-
-      group.forEach((node, idx) => {
-        if (node.id === draggingNodeId) return;
-
-        const targetY = startY + idx * verticalGap;
-
-        // 平滑導向目標座標
-        node.vx += (targetX - node.x) * 0.16 * simAlpha;
-        node.vy += (targetY - node.y) * 0.16 * simAlpha;
-
-        node.vx *= 0.78;
-        node.vy *= 0.78;
-
-        node.x += node.vx;
-        node.y += node.vy;
-      });
-    }
-
-    // 4. 全局防重疊碰撞箱保護 (Anti-Overlap Collision Box)
-    // 依標籤寬度 160px、高度 95px 設定最小隔離包圍盒
-    const minDx = 160;
-    const minDy = 95;
-    for (let i = 0; i < simNodes.length; i++) {
-      for (let j = i + 1; j < simNodes.length; j++) {
-        const a = simNodes[i];
-        const b = simNodes[j];
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-
-        if (Math.abs(dx) < minDx && Math.abs(dy) < minDy) {
-          const overlapX = minDx - Math.abs(dx);
-          const overlapY = minDy - Math.abs(dy);
-          const pushX = (dx >= 0 ? 1 : -1) * (overlapX * 0.12) * simAlpha;
-          const pushY = (dy >= 0 ? 1 : -1) * (overlapY * 0.12) * simAlpha;
-
-          if (a.id !== draggingNodeId) { a.x -= pushX; a.y -= pushY; }
-          if (b.id !== draggingNodeId) { b.x += pushX; b.y += pushY; }
-        }
-      }
-    }
   }
 
   // -------------------------------------------------------------
@@ -417,7 +226,6 @@
       const node = simNodes.find(n => n.id === draggingNodeId);
       if (node && containerElement) {
         const rect = containerElement.getBoundingClientRect();
-        // 考量當前 zoom 與 pan 偏移量計算節點的世界座標
         const mouseWorldX = (e.clientX - rect.left - panX) / zoom;
         const mouseWorldY = (e.clientY - rect.top - panY) / zoom;
         node.x = mouseWorldX - dragOffset.x;
@@ -503,9 +311,8 @@
     return sId === hoveredNodeId || tId === hoveredNodeId;
   }
 
-  function handleLoadTargetPaper(paperId?: string) {
-    if (!paperId) return;
-    dispatch('loadPaper', { paperId });
+  function handleLoadTargetPaper(event: CustomEvent<{ paperId: string }>) {
+    dispatch('loadPaper', { paperId: event.detail.paperId });
   }
 
   onMount(() => {
@@ -531,174 +338,24 @@
   aria-label="引用文獻關聯圖譜互動視圖"
 >
   <!-- ==================== TOP CONTROL TOOLBAR ==================== -->
-  <header class="h-14 bg-[#1d2021]/95 backdrop-blur-sm border-b border-[#3c3836] px-4 flex items-center justify-between z-30 shrink-0 shadow-md">
-    <!-- Left: Navigation Back & Title Badge -->
-    <div class="flex items-center gap-3">
-      <button
-        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#282828] hover:bg-[#32302f] text-[#ebdbb2] border border-[#3c3836] hover:border-[#fe8019] text-xs font-medium transition-colors shadow-sm cursor-pointer"
-        on:click={() => dispatch('backToWorkspace')}
-        title="返回閱讀工作台 (Alt + ←)"
-      >
-        <span class="material-symbols-outlined text-[16px] text-[#fe8019]">arrow_back</span>
-        <span>返回雙語研讀</span>
-      </button>
-
-      <div class="h-4 w-px bg-[#3c3836]"></div>
-
-      <div class="flex items-center gap-2">
-        <div class="w-6 h-6 rounded bg-[#fe8019]/20 border border-[#fe8019]/50 flex items-center justify-center text-[#fe8019]">
-          <span class="material-symbols-outlined text-[15px]">hub</span>
-        </div>
-        <div class="flex flex-col">
-          <div class="flex items-center gap-2">
-            <h2 class="text-xs font-bold text-[#ebdbb2] tracking-wide font-mono">
-              Citation Topology & Intellectual Lineage
-            </h2>
-            <span class="font-mono text-[9px] bg-[#fabd2f]/15 border border-[#fabd2f]/40 text-[#fabd2f] px-1.5 py-0.2 rounded">
-              {visibleNodes.length} 篇關聯文獻 · {visibleEdges.length} 條引證傳承
-            </span>
-          </div>
-          <span class="text-[10px] text-[#a89984] truncate max-w-md">
-            當前研讀標的：{paper?.title || 'Attention Is All You Need'}
-          </span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Center: Layout Switcher & Category Filter -->
-    <div class="flex items-center gap-2">
-      <!-- Layout Toggle: Galaxy vs. Timeline -->
-      <div class="flex items-center bg-[#282828] border border-[#3c3836] p-0.5 rounded-lg">
-        <button
-          class="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-mono transition-colors {layoutMode === 'galaxy' ? 'bg-[#3c3836] text-[#fe8019] font-bold shadow-inner' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
-          on:click={() => switchLayout('galaxy')}
-          title="力導向星系圖：以核心論文為引力中心放射展開"
-        >
-          <span class="material-symbols-outlined text-[14px]">bubble_chart</span>
-          <span>星系拓撲</span>
-        </button>
-        <button
-          class="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-mono transition-colors {layoutMode === 'timeline' ? 'bg-[#3c3836] text-[#fe8019] font-bold shadow-inner' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
-          on:click={() => switchLayout('timeline')}
-          title="時序演進譜系：依年代水平均勻展開學術傳承鏈"
-        >
-          <span class="material-symbols-outlined text-[14px]">timeline</span>
-          <span>演進譜系</span>
-        </button>
-      </div>
-
-      <!-- Category Filter Chips -->
-      <div class="flex items-center gap-1">
-        <button
-          class="px-2 py-1 rounded font-mono text-[11px] transition-colors {filterCategory === 'all' ? 'bg-[#fe8019]/20 text-[#fe8019] border border-[#fe8019]/50 font-semibold' : 'text-[#a89984] hover:bg-[#282828]'}"
-          on:click={() => filterCategory = 'all'}
-        >
-          全部
-        </button>
-        <button
-          class="px-2 py-1 rounded font-mono text-[11px] transition-colors flex items-center gap-1 {filterCategory === 'foundational' ? 'bg-[#b8bb26]/20 text-[#b8bb26] border border-[#b8bb26]/50 font-semibold' : 'text-[#a89984] hover:bg-[#282828]'}"
-          on:click={() => filterCategory = 'foundational'}
-        >
-          <span class="w-1.5 h-1.5 rounded-full bg-[#b8bb26]"></span>
-          奠基基石
-        </button>
-        <button
-          class="px-2 py-1 rounded font-mono text-[11px] transition-colors flex items-center gap-1 {filterCategory === 'derivative' ? 'bg-[#83a598]/20 text-[#83a598] border border-[#83a598]/50 font-semibold' : 'text-[#a89984] hover:bg-[#282828]'}"
-          on:click={() => filterCategory = 'derivative'}
-        >
-          <span class="w-1.5 h-1.5 rounded-full bg-[#83a598]"></span>
-          衍生突破
-        </button>
-        <button
-          class="px-2 py-1 rounded font-mono text-[11px] transition-colors flex items-center gap-1 {filterCategory === 'methodological' ? 'bg-[#d3869b]/20 text-[#d3869b] border border-[#d3869b]/50 font-semibold' : 'text-[#a89984] hover:bg-[#282828]'}"
-          on:click={() => filterCategory = 'methodological'}
-        >
-          <span class="w-1.5 h-1.5 rounded-full bg-[#d3869b]"></span>
-          方法親緣
-        </button>
-      </div>
-    </div>
-
-    <!-- Right: Search Input, AI Dynamic Analysis & Zoom Controls -->
-    <div class="flex items-center gap-2">
-      <!-- AI Topology Analysis Button -->
-      {#if isAnalyzing}
-        <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#fabd2f]/15 border border-[#fabd2f]/50 text-[#fabd2f] text-xs font-mono shadow-sm animate-pulse">
-          <span class="material-symbols-outlined text-[14px] animate-spin">sync</span>
-          <span class="truncate max-w-[150px]">{analysisStatus?.message || 'AI 拓撲剖析中...'}</span>
-        </div>
-      {:else if isAnalyzed}
-        <div class="flex items-center gap-1 bg-[#282828] border border-[#3c3836] p-0.5 rounded-lg">
-          <span class="flex items-center gap-1 px-2 py-1 text-[11px] font-mono text-[#b8bb26] font-semibold">
-            <span class="material-symbols-outlined text-[13px]">verified</span>
-            <span>已由 AI 深度分析</span>
-          </span>
-          <button
-            class="flex items-center gap-1 px-2 py-1 rounded text-xs font-mono text-[#a89984] hover:text-[#fe8019] hover:bg-[#32302f] transition-colors cursor-pointer"
-            on:click={() => handleStartAnalysis(true)}
-            title="重新調用 OpenAlex 與 AI 伴讀推導最新拓撲"
-          >
-            <span class="material-symbols-outlined text-[13px]">refresh</span>
-            <span>重跑</span>
-          </button>
-        </div>
-      {:else}
-        <button
-          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#fe8019] hover:bg-[#d65d0e] text-[#141617] font-bold text-xs font-mono transition-all shadow-md hover:shadow-lg cursor-pointer"
-          on:click={() => handleStartAnalysis(false)}
-          title="透過 OpenAlex 學術檢索與 AI 伴讀推導真實星系圖譜"
-        >
-          <span class="material-symbols-outlined text-[15px]">psychology</span>
-          <span>⚡ AI 引文動態剖析</span>
-        </button>
-      {/if}
-
-      <div class="h-4 w-px bg-[#3c3836]"></div>
-
-      <div class="relative">
-        <span class="material-symbols-outlined absolute left-2 top-1.5 text-[15px] text-[#a89984]">search</span>
-        <input
-          class="w-36 focus:w-48 bg-[#282828] border border-[#3c3836] text-[#ebdbb2] pl-7 pr-2 py-1 rounded-lg text-xs font-mono focus:outline-none focus:border-[#fe8019] placeholder:text-[#a89984]/50 transition-all"
-          type="text"
-          placeholder="搜尋作者或標題..."
-          bind:value={searchQuery}
-        />
-        {#if searchQuery}
-          <button
-            class="absolute right-1.5 top-1.5 text-[#a89984] hover:text-[#ebdbb2]"
-            on:click={() => searchQuery = ''}
-          >
-            <span class="material-symbols-outlined text-[13px]">close</span>
-          </button>
-        {/if}
-      </div>
-
-      <div class="flex items-center bg-[#282828] border border-[#3c3836] rounded-lg text-xs font-mono">
-        <button
-          class="px-2 py-1 text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f] rounded-l transition-colors"
-          on:click={() => zoom = Math.max(0.4, zoom - 0.15)}
-          title="縮小"
-        >
-          -
-        </button>
-        <span class="px-2 py-1 text-[#fabd2f] font-semibold">{Math.round(zoom * 100)}%</span>
-        <button
-          class="px-2 py-1 text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f] transition-colors"
-          on:click={() => zoom = Math.min(2.5, zoom + 0.15)}
-          title="放大"
-        >
-          +
-        </button>
-        <button
-          class="px-2 py-1 text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f] rounded-r border-l border-[#3c3836] transition-colors"
-          on:click={resetViewport}
-          title="重設視角與置中"
-        >
-          <span class="material-symbols-outlined text-[13px] mt-0.5">center_focus_strong</span>
-        </button>
-      </div>
-    </div>
-  </header>
+  <CitationGraphControls
+    paperTitle={paper?.title || 'Attention Is All You Need'}
+    visibleNodesCount={visibleNodes.length}
+    visibleEdgesCount={visibleEdges.length}
+    bind:layoutMode
+    bind:filterCategory
+    bind:searchQuery
+    {zoom}
+    {isAnalyzing}
+    {isAnalyzed}
+    {analysisStatus}
+    on:backToWorkspace={() => dispatch('backToWorkspace')}
+    on:switchLayout={(e) => switchLayout(e.detail)}
+    on:startAnalysis={(e) => handleStartAnalysis(e.detail.forceRefresh)}
+    on:zoomIn={() => zoom = Math.min(2.5, zoom + 0.15)}
+    on:zoomOut={() => zoom = Math.max(0.4, zoom - 0.15)}
+    on:resetViewport={resetViewport}
+  />
 
   <!-- ==================== MAIN SVG CANVAS & DOSSIER SPLIT ==================== -->
   <div class="flex-1 relative overflow-hidden flex">
@@ -1017,131 +674,12 @@
     </div>
 
     <!-- ==================== RIGHT SCHOLAR CITATION DOSSIER ==================== -->
-    {#if selectedNode}
-      {@const meta = categoryMeta[selectedNode.category]}
-      <aside class="w-96 bg-[#1d2021] border-l border-[#3c3836] flex flex-col h-full z-20 shadow-2xl overflow-y-auto animate-fade-in shrink-0">
-        <!-- Dossier Header -->
-        <div class="p-4 border-b border-[#3c3836] bg-[#141617]/60 flex items-start justify-between">
-          <div class="flex flex-col gap-1">
-            <div class="flex items-center gap-2">
-              <span
-                class="font-mono text-[10px] px-2 py-0.5 rounded font-semibold uppercase tracking-wider"
-                style="background: {meta.bgBadge}; color: {meta.color}; border: 1px solid {meta.borderBadge};"
-              >
-                {meta.name}
-              </span>
-              <span class="font-mono text-[11px] text-[#fabd2f] font-semibold">
-                {selectedNode.year}
-              </span>
-            </div>
-            <h3 class="text-sm font-serif font-bold text-[#ebdbb2] leading-snug pt-1">
-              {selectedNode.title}
-            </h3>
-          </div>
-          <button
-            class="text-[#a89984] hover:text-[#ebdbb2] p-1 rounded hover:bg-[#282828] transition-colors"
-            on:click={() => selectedNodeId = null}
-            title="收合卷宗"
-          >
-            <span class="material-symbols-outlined text-[16px]">close</span>
-          </button>
-        </div>
-
-        <!-- Dossier Content Body -->
-        <div class="p-4 flex flex-col gap-4 text-xs">
-
-          <!-- Authors & Venue Card -->
-          <div class="bg-[#282828] border border-[#3c3836] p-3 rounded-xl flex flex-col gap-2 shadow-inner">
-            <div class="flex items-center justify-between text-[11px]">
-              <span class="text-[#a89984] font-mono">發表場域 / 會議</span>
-              <span class="text-[#fabd2f] font-mono font-medium">{selectedNode.venue}</span>
-            </div>
-            <div class="flex flex-col gap-0.5">
-              <span class="text-[#a89984] font-mono text-[10px]">作者群 (Authors)</span>
-              <span class="text-[#d5c4a1] leading-relaxed">
-                {selectedNode.authors.join(', ')}
-              </span>
-            </div>
-            {#if selectedNode.citations}
-              <div class="pt-2 border-t border-[#3c3836] flex items-center justify-between">
-                <span class="text-[#a89984] font-mono text-[10px]">總引用數 (Citations)</span>
-                <span class="text-[#8ec07c] font-mono font-bold bg-[#8ec07c]/10 px-2 py-0.5 rounded border border-[#8ec07c]/30">
-                  {selectedNode.citations}
-                </span>
-              </div>
-            {/if}
-          </div>
-
-          <!-- Highlight: Lineage & Intellectual Heritage Connection -->
-          <div class="bg-[#282828] border-l-4 p-3.5 rounded-r-xl flex flex-col gap-1.5 shadow-md" style="border-left-color: {meta.color};">
-            <div class="flex items-center gap-1.5 font-mono text-[11px] font-bold" style="color: {meta.color};">
-              <span class="material-symbols-outlined text-[16px]">account_tree</span>
-              <span>與研讀主文之學術承接關係</span>
-            </div>
-            <p class="text-[#ebdbb2] leading-relaxed text-[12px] bg-[#1d2021]/80 p-2.5 rounded-lg border border-[#3c3836]">
-              {selectedNode.connectionSnippet}
-            </p>
-          </div>
-
-          <!-- Core Insight & Breakthrough -->
-          {#if selectedNode.coreInsight}
-            <div class="flex flex-col gap-1.5">
-              <span class="font-mono text-[10px] text-[#a89984] uppercase tracking-wider flex items-center gap-1">
-                <span class="material-symbols-outlined text-[13px] text-[#fabd2f]">lightbulb</span>
-                核心理論突破與貢獻 (Core Insight)
-              </span>
-              <div class="bg-[#282828] border border-[#3c3836] p-3 rounded-lg text-[#d5c4a1] leading-relaxed text-[11px]">
-                {selectedNode.coreInsight}
-              </div>
-            </div>
-          {/if}
-
-          <!-- External Academic Links (arXiv / DOI) -->
-          <div class="flex items-center gap-2 pt-1">
-            {#if selectedNode.arxivId}
-              <a
-                href="https://arxiv.org/abs/{selectedNode.arxivId.replace(/^arxiv:/i, '')}"
-                target="_blank"
-                rel="noreferrer"
-                class="flex-1 py-2 px-3 rounded-lg bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019] text-[#ebdbb2] text-[11px] font-mono flex items-center justify-center gap-1.5 transition-colors"
-              >
-                <span class="material-symbols-outlined text-[14px] text-[#fe8019]">open_in_new</span>
-                <span>arXiv:{selectedNode.arxivId}</span>
-              </a>
-            {/if}
-
-            {#if selectedNode.doi}
-              <a
-                href="https://doi.org/{selectedNode.doi}"
-                target="_blank"
-                rel="noreferrer"
-                class="flex-1 py-2 px-3 rounded-lg bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#8ec07c] text-[#ebdbb2] text-[11px] font-mono flex items-center justify-center gap-1.5 transition-colors"
-              >
-                <span class="material-symbols-outlined text-[14px] text-[#8ec07c]">link</span>
-                <span>DOI 官方索引</span>
-              </a>
-            {/if}
-          </div>
-
-          <!-- Action: One-Click Load Into Reading Workspace -->
-          {#if selectedNode.targetPaperId}
-            <button
-              class="mt-2 w-full py-2.5 bg-[#fe8019] hover:bg-[#d65d0e] text-[#141617] font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg cursor-pointer text-xs"
-              on:click={() => handleLoadTargetPaper(selectedNode.targetPaperId)}
-            >
-              <span class="material-symbols-outlined text-[17px]">auto_stories</span>
-              <span>載入此論文並進入雙語伴讀</span>
-            </button>
-          {/if}
-
-        </div>
-
-        <!-- Dossier Footer Note -->
-        <div class="mt-auto p-3 border-t border-[#3c3836] bg-[#141617]/50 text-center text-[#a89984] font-mono text-[10px]">
-          MUGEN YOMU Scholar Citation Graph · BETA
-        </div>
-      </aside>
-    {/if}
+    <CitationDetailPanel
+      {selectedNode}
+      {categoryMeta}
+      on:close={() => selectedNodeId = null}
+      on:loadPaper={handleLoadTargetPaper}
+    />
 
   </div>
 </div>
