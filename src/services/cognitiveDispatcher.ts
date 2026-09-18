@@ -18,12 +18,29 @@ export interface AiClientConfig {
   ollamaUrl: string;
 }
 
+export function getStoredApiKey(provider: string = 'groq'): string {
+  if (typeof window === 'undefined') return '';
+  const p = (provider || 'groq').toLowerCase();
+  return (
+    localStorage.getItem(`mugen_key_${p}`) ||
+    localStorage.getItem(`mugen_api_key_${p}`) ||
+    localStorage.getItem(`mugen_${p}_key`) ||
+    localStorage.getItem(`${p}_api_key`) ||
+    localStorage.getItem(`${p}_key`) ||
+    localStorage.getItem('mugen_key_groq') ||
+    localStorage.getItem('mugen_api_key_groq') ||
+    localStorage.getItem('groq_api_key') ||
+    localStorage.getItem('GROQ_API_KEY') ||
+    ''
+  ).trim();
+}
+
 export function getStoredAiConfig(): AiClientConfig {
   if (typeof window === 'undefined') {
     return { provider: 'groq', apiKey: '', model: 'llama-3.3-70b-versatile', ollamaUrl: 'http://localhost:11434' };
   }
   const provider = localStorage.getItem('mugen_provider') || 'groq';
-  const apiKey = localStorage.getItem(`mugen_key_${provider}`) || localStorage.getItem('mugen_key_groq') || '';
+  const apiKey = getStoredApiKey(provider);
   const model = localStorage.getItem('mugen_model') || 'llama-3.3-70b-versatile';
   const ollamaUrl = localStorage.getItem('mugen_ollama_url') || 'http://localhost:11434';
   return { provider, apiKey, model, ollamaUrl };

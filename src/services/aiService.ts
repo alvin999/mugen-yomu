@@ -64,3 +64,7 @@ export {
 // 7. 導出論文核心雙語摘要服務
 export type { AbstractCoreResult } from './abstractAiService';
 export { generatePaperAbstractCore } from './abstractAiService';
+
+// 8. 導出配置與金鑰存取工具
+export type { AiClientConfig } from './cognitiveDispatcher';
+export { getStoredApiKey, getStoredAiConfig } from './cognitiveDispatcher';

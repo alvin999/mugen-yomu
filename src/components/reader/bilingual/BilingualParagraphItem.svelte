@@ -30,6 +30,7 @@
     copyTranslation: { text: string };
     saveNote: { title: string; text: string };
     skipTyping: void;
+    openSettings: void;
   }>();
 
   function parseLinksAndText(rawText: string, currentMode: string): string {
@@ -324,9 +325,21 @@
         </div>
 
         {#if translationNotice}
-          <div class="text-[11px] text-[#fabd2f] bg-[#fabd2f]/10 border border-[#fabd2f]/30 px-2.5 py-1 rounded flex items-center gap-1">
-            <span class="material-symbols-outlined text-[13px]">info</span>
-            <span>{translationNotice}</span>
+          <div class="text-[11px] text-[#fabd2f] bg-[#fabd2f]/10 border border-[#fabd2f]/30 px-2.5 py-1.5 rounded-lg flex items-center justify-between gap-2 flex-wrap">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span class="material-symbols-outlined text-[14px] shrink-0 text-[#fe8019]">info</span>
+              <span class="leading-tight">{translationNotice}</span>
+            </div>
+            {#if translationNotice.includes('尚未設定') || translationNotice.includes('BYOK') || translationNotice.includes('金鑰')}
+              <button
+                type="button"
+                class="font-mono text-[10px] bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold px-2 py-0.5 rounded cursor-pointer transition-colors shadow-xs ml-auto shrink-0 flex items-center gap-1"
+                on:click|stopPropagation={() => dispatch('openSettings')}
+              >
+                <span class="material-symbols-outlined text-[12px]">tune</span>
+                <span>前往設定金鑰</span>
+              </button>
+            {/if}
           </div>
         {/if}
 

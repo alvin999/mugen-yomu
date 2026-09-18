@@ -65,6 +65,9 @@ async function streamOpenAICompatible(
     }
   } catch (err) {
     console.warn('Stream reading exception:', err);
+    if (!accumulated) {
+      throw err;
+    }
   }
 
   if (onChunk && accumulated) onChunk(accumulated);
@@ -110,42 +113,104 @@ export async function callGroqChat(
   onChunk?: (text: string) => void
 ): Promise<ChatCompletionResult> {
   const startTime = performance.now();
-  const pruned = pruneChatMessages(messages, 2200);
-  const conversation = [{ role: 'system', content: SCHOLAR_SYSTEM_PROMPT }, ...pruned];
+  const systemMsg = messages.find(m => m.role === 'system');
+  const nonSystem = messages.filter(m => m.role !== 'system');
+  const pruned = pruneChatMessages(nonSystem, 2200);
+  const conversation = [
+    systemMsg || { role: 'system', content: SCHOLAR_SYSTEM_PROMPT },
+    ...pruned
+  ];
 
   const is70B = (model || '').includes('70b');
-  const maxTokens = is70B ? 550 : 800;
+  const maxTokens = is70B ? 650 : 950;
 
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey.trim()}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: model || 'llama-3.3-70b-versatile',
-      messages: conversation,
-      temperature: 0.3,
-      max_tokens: maxTokens,
-      stream: !!onChunk
-    })
-  });
+  const doGroqRequest = async (useStream: boolean) => {
+    return await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey.trim()}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: model || 'llama-3.3-70b-versatile',
+        messages: conversation,
+        temperature: 0.3,
+        max_tokens: maxTokens,
+        stream: useStream
+      })
+    });
+  };
 
-  const latencyMs = Math.round(performance.now() - startTime);
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Groq API 請求失敗 (${response.status}): ${errorText}`);
+  try {
+    let response = await doGroqRequest(!!onChunk);
+    if (!response.ok) {
+      const errorText = await response.text();
+      // 若串流遭遇伺服器 EOF、499 或 500/502/503，自動轉為非串流重試
+      if (onChunk && (errorText.includes('unexpected EOF') || errorText.includes('stream reading') || response.status >= 500)) {
+        console.warn('[Groq 串流容錯] 串流請求遭遇中斷，自動切換為非串流重試...', errorText);
+        response = await doGroqRequest(false);
+      }
+      if (!response.ok) {
+        throw new Error(`Groq API 請求失敗 (${response.status}): ${errorText}`);
+      }
+    }
+
+    let reply = '';
+    if (onChunk && response.body) {
+      try {
+        reply = await streamOpenAICompatible(response, onChunk);
+      } catch (streamErr) {
+        console.warn('[Groq 串流容錯] 串流解析中斷，切換為非串流應急重試:', streamErr);
+        const fallbackRes = await doGroqRequest(false);
+        if (fallbackRes.ok) {
+          const json = await fallbackRes.json();
+          reply = json.choices?.[0]?.message?.content || '';
+          if (onChunk && reply) await playTypewriter(reply, onChunk, 10);
+        } else {
+          throw streamErr;
+        }
+      }
+    } else {
+      const json = await response.json();
+      reply = json.choices?.[0]?.message?.content || '未獲得模型有效回覆。';
+      if (onChunk && reply) {
+        await playTypewriter(reply, onChunk, 10);
+      }
+    }
+
+    // 若依然為空，再做一次非串流兜底
+    if (!reply && onChunk) {
+      const fallbackRes = await doGroqRequest(false);
+      if (fallbackRes.ok) {
+        const json = await fallbackRes.json();
+        reply = json.choices?.[0]?.message?.content || '';
+        if (reply) await playTypewriter(reply, onChunk, 10);
+      }
+    }
+
+    const latencyMs = Math.round(performance.now() - startTime);
+    return { reply: reply || '未獲得模型有效回覆。', latencyMs, model: model || 'llama-3.3-70b-versatile', provider: 'groq' };
+  } catch (err: any) {
+    const errStr = String(err?.message || '');
+    if (errStr.includes('unexpected EOF') || errStr.includes('stream reading')) {
+      console.warn('[Groq 韌性保護] 捕捉到 unexpected EOF，執行非串流應急重試...');
+      try {
+        const fallbackRes = await doGroqRequest(false);
+        if (fallbackRes.ok) {
+          const json = await fallbackRes.json();
+          const reply = json.choices?.[0]?.message?.content || '';
+          if (reply) {
+            if (onChunk) await playTypewriter(reply, onChunk, 10);
+            const latencyMs = Math.round(performance.now() - startTime);
+            return { reply, latencyMs, model: model || 'llama-3.3-70b-versatile', provider: 'groq' };
+          }
+        }
+      } catch (e2) {
+        console.warn('非串流應急亦失敗:', e2);
+      }
+    }
+    throw err;
   }
-
-  let reply = '';
-  if (onChunk && response.body) {
-    reply = await streamOpenAICompatible(response, onChunk);
-  } else {
-    const json = await response.json();
-    reply = json.choices?.[0]?.message?.content || '未獲得模型有效回覆。';
-  }
-
-  return { reply, latencyMs, model: model || 'llama-3.3-70b-versatile', provider: 'groq' };
 }
 
 export async function callOpenAIChat(
@@ -155,7 +220,12 @@ export async function callOpenAIChat(
   onChunk?: (text: string) => void
 ): Promise<ChatCompletionResult> {
   const startTime = performance.now();
-  const conversation = [{ role: 'system', content: SCHOLAR_SYSTEM_PROMPT }, ...messages];
+  const systemMsg = messages.find(m => m.role === 'system');
+  const nonSystem = messages.filter(m => m.role !== 'system');
+  const conversation = [
+    systemMsg || { role: 'system', content: SCHOLAR_SYSTEM_PROMPT },
+    ...nonSystem
+  ];
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -195,7 +265,12 @@ export async function callDeepSeekChat(
   onChunk?: (text: string) => void
 ): Promise<ChatCompletionResult> {
   const startTime = performance.now();
-  const conversation = [{ role: 'system', content: SCHOLAR_SYSTEM_PROMPT }, ...messages];
+  const systemMsg = messages.find(m => m.role === 'system');
+  const nonSystem = messages.filter(m => m.role !== 'system');
+  const conversation = [
+    systemMsg || { role: 'system', content: SCHOLAR_SYSTEM_PROMPT },
+    ...nonSystem
+  ];
 
   const response = await fetch('https://api.deepseek.com/chat/completions', {
     method: 'POST',
@@ -234,6 +309,7 @@ export async function callAnthropicChat(
   model: string = 'claude-3-5-sonnet-20241022'
 ): Promise<ChatCompletionResult> {
   const startTime = performance.now();
+  const systemPrompt = messages.find(m => m.role === 'system')?.content || SCHOLAR_SYSTEM_PROMPT;
   const promptMessages = messages
     .filter(m => m.role !== 'system')
     .map(m => ({
@@ -251,7 +327,7 @@ export async function callAnthropicChat(
     },
     body: JSON.stringify({
       model: model || 'claude-3-5-sonnet-20241022',
-      system: SCHOLAR_SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: promptMessages,
       max_tokens: 1500,
       temperature: 0.3
@@ -277,6 +353,7 @@ export async function callGeminiChat(
   const startTime = performance.now();
   const targetModel = (model || 'gemini-1.5-flash').replace(/^models\//, '');
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey.trim()}`;
+  const systemPrompt = messages.find(m => m.role === 'system')?.content || SCHOLAR_SYSTEM_PROMPT;
 
   const contents = messages
     .filter(m => m.role !== 'system')
@@ -289,7 +366,7 @@ export async function callGeminiChat(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: SCHOLAR_SYSTEM_PROMPT }] },
+      systemInstruction: { parts: [{ text: systemPrompt }] },
       contents,
       generationConfig: { temperature: 0.3, maxOutputTokens: 1500 }
     })
@@ -313,13 +390,15 @@ export async function callOllamaChat(
 ): Promise<ChatCompletionResult> {
   const startTime = performance.now();
   const endpoint = `${ollamaUrl.replace(/\/$/, '')}/api/chat`;
+  const systemMsg = messages.find(m => m.role === 'system') || { role: 'system', content: SCHOLAR_SYSTEM_PROMPT };
+  const nonSystem = messages.filter(m => m.role !== 'system');
 
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: model || 'llama3.3:70b',
-      messages: [{ role: 'system', content: SCHOLAR_SYSTEM_PROMPT }, ...messages],
+      messages: [systemMsg, ...nonSystem],
       stream: false
     })
   });
@@ -409,15 +488,24 @@ function isRateLimitError(err: any): boolean {
   return (
     status === 429 ||
     status === 503 ||
+    status === 500 ||
+    status === 502 ||
+    status === 504 ||
     msg.includes('429') ||
     msg.includes('503') ||
+    msg.includes('500') ||
+    msg.includes('502') ||
+    msg.includes('504') ||
     msg.includes('rate_limit') ||
     msg.includes('rate limit') ||
     msg.includes('tokens per minute') ||
     msg.includes('tpm') ||
     msg.includes('resource exhausted') ||
     msg.includes('too many requests') ||
-    msg.includes('server busy')
+    msg.includes('server busy') ||
+    msg.includes('unexpected eof') ||
+    msg.includes('stream reading') ||
+    msg.includes('eof')
   );
 }
 

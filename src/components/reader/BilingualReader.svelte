@@ -3,7 +3,7 @@
   import type { PaperDocument, ChapterSection, FormulaItem } from '../../types/document';
   import { flattenSections } from '../../stores/readingStore';
   import { flowStore, countWords } from '../../stores/flowStore';
-  import { translateAcademicText, generatePaperAbstractCore, FALLBACK_MODELS } from '../../services/aiService';
+  import { translateAcademicText, generatePaperAbstractCore, FALLBACK_MODELS, getStoredApiKey } from '../../services/aiService';
   import { normalizeParagraphs } from '../../utils/paragraphUtils';
   import { renderMath, copyLatexToClipboard } from '../../utils/katexUtils';
   import AuthorInfoModal from './bilingual/AuthorInfoModal.svelte';
@@ -604,7 +604,13 @@
     }
   }
 
-  async function toggleParagraphTranslation(secId: string, pIndex: number, text: string, forceRetry: boolean = false) {
+  async function toggleParagraphTranslation(
+    secId: string,
+    pIndex: number,
+    text: string,
+    forceRetry: boolean = false,
+    ensureOpen: boolean = false
+  ) {
     flowStore.recordReadingActivity(25, 'interact');
     markParagraphAsRead(secId, pIndex, text);
     const key = `${secId}_${pIndex}`;
@@ -614,13 +620,16 @@
       return;
     }
 
-    if (showTranslationMap[key] && !forceRetry) {
+    // 若非 ensureOpen 模式且已展開，代表使用者主動點擊按鈕想要收起翻譯
+    if (showTranslationMap[key] && !forceRetry && !ensureOpen) {
       showTranslationMap[key] = false;
       return;
     }
 
+    // 確保展開
     showTranslationMap[key] = true;
 
+    // 若已經有翻譯且不需重試，則已展開成功直接返回
     if (paragraphTranslations[key] && !forceRetry) {
       return;
     }
@@ -633,7 +642,7 @@
 
     try {
       const p = (typeof window !== 'undefined' ? localStorage.getItem('mugen_provider') : null) || 'groq';
-      const k = (typeof window !== 'undefined' ? localStorage.getItem(`mugen_api_key_${p}`) : null) || '';
+      const k = getStoredApiKey(p);
       const m = (typeof window !== 'undefined' ? localStorage.getItem('mugen_model') : null) || 'llama-3.3-70b-versatile';
       const o = (typeof window !== 'undefined' ? localStorage.getItem('mugen_ollama_url') : null) || 'http://localhost:11434';
 
@@ -647,13 +656,19 @@
           if (isTypingMap[key]) {
             paragraphTranslations[key] = currentText;
           }
-        }
+        },
+        forceRetry
       );
 
       paragraphTranslations[key] = streamResult.translation;
-      translationSourceMap[key] = streamResult.cached ? 'IndexedDB 本機快取' : 'AI 伴讀專屬模型';
-      if (streamResult.fallbackNotice) {
-        translationNoticeMap[key] = `目前處於備援模式（${streamResult.fallbackNotice}）。設定 API 金鑰可獲得最頂級之文脈理解。`;
+      translationSourceMap[key] = streamResult.cached
+        ? 'IndexedDB 本機快取'
+        : (p === 'groq' ? 'Groq LPU 極速推論' : 'AI 伴讀專屬模型');
+
+      if (!k && p !== 'ollama') {
+        translationNoticeMap[key] = `尚未設定 ${p.toUpperCase()} 金鑰。請於右上方設定自備金鑰 (BYOK) 以連線官方端點即時翻譯。`;
+      } else if (streamResult.fallbackNotice) {
+        translationNoticeMap[key] = `目前狀態（${streamResult.fallbackNotice}）。`;
       }
     } catch (err: any) {
       paragraphTranslations[key] = `[翻譯暫時無法完成: ${err.message || '連線逾時'}]`;
@@ -670,8 +685,18 @@
     isSectionTranslating = true;
     try {
       for (let i = 0; i < sec.paragraphs.length; i++) {
-        await toggleParagraphTranslation(sec.id, i, sec.paragraphs[i]);
-        await new Promise(r => setTimeout(r, 120));
+        const pText = sec.paragraphs[i];
+        if (!pText || pText.trim().length === 0) continue;
+        const key = `${sec.id}_${i}`;
+        const alreadyHasTranslation = Boolean(paragraphTranslations[key]);
+
+        // 傳入 ensureOpen: true，保證一律展開，絕不反向收合先前已展開的段落
+        await toggleParagraphTranslation(sec.id, i, pText, false, true);
+
+        // 若本段原本就已有翻譯，立即展開無需延遲；若是新請求，保留間隔避免 API 頻率超標
+        if (!alreadyHasTranslation) {
+          await new Promise(r => setTimeout(r, 120));
+        }
       }
     } finally {
       isSectionTranslating = false;
@@ -722,7 +747,7 @@
 
     try {
       const activeProvider = localStorage.getItem('mugen_provider') || 'groq';
-      const apiKey = localStorage.getItem(`mugen_key_${activeProvider}`) || localStorage.getItem('mugen_key_groq') || '';
+      const apiKey = getStoredApiKey(activeProvider);
       const activeModel = localStorage.getItem('mugen_model') || (FALLBACK_MODELS[activeProvider]?.[0]?.id) || '';
       const ollamaUrl = localStorage.getItem('mugen_ollama_url') || 'http://localhost:11434';
 
@@ -1076,6 +1101,7 @@
                     on:copyTranslation={(e) => copyTranslationText(e.detail.text)}
                     on:saveNote={(e) => dispatch('saveNote', e.detail)}
                     on:skipTyping={() => { isTypingMap[key] = false; }}
+                    on:openSettings={() => triggerAction('openSettings')}
                   />
                 {/each}
               </div>

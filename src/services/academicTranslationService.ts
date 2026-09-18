@@ -23,23 +23,39 @@ export async function translateAcademicText(
   apiKey: string = '',
   model: string = 'llama-3.3-70b-versatile',
   ollamaUrl?: string,
-  onChunk?: (currentStreamText: string) => void
+  onChunk?: (currentStreamText: string) => void,
+  bypassCache: boolean = false
 ): Promise<AcademicTranslationResult> {
   const cleanText = text.trim();
   const cacheKey = generateCacheKey(provider || 'cache', model || 'translator', 'translate:' + cleanText);
 
-  // 1. Check IndexedDB cache
-  const cached = await getCachedCompletion(cacheKey);
-  if (cached) {
-    if (onChunk) {
-      await playTypewriter(cached.reply, onChunk, 10);
+  // 1. Check IndexedDB cache (若未要求繞過快取)
+  if (!bypassCache) {
+    const cached = await getCachedCompletion(cacheKey);
+    // 檢查快取品質：若快取中是離線備援假譯文或失敗報錯，而現在有 apiKey，則作廢該快取
+    const isInvalidFallback = cached && (
+      cached.reply.includes('請於右上方設定自備金鑰') ||
+      cached.reply.includes('[原文譯意]') ||
+      cached.reply.includes('本機學術應急解析') ||
+      cached.reply.includes('[翻譯服務連線異常]')
+    );
+
+    if (cached && !isInvalidFallback) {
+      if (onChunk) {
+        await playTypewriter(cached.reply, onChunk, 10);
+      }
+      return {
+        translation: cached.reply,
+        cached: true,
+        latencyMs: 8
+      };
     }
-    return {
-      translation: cached.reply,
-      cached: true,
-      latencyMs: 8
-    };
   }
+
+  const cleanKey = (apiKey || '').trim();
+  const hasValidKey = (cleanKey.length > 5) || provider === 'ollama';
+
+  console.info(`[AcademicTranslation] 準備翻譯. Provider: ${provider}, Model: ${model}, 有效金鑰: ${hasValidKey} (Key 長度: ${cleanKey.length}), BypassCache: ${bypassCache}`);
 
   // 2. Call AI Provider if key or ollama is configured
   if ((apiKey && apiKey.trim().length > 5) || provider === 'ollama') {
@@ -52,6 +68,7 @@ export async function translateAcademicText(
 
     const chunks = splitTextIntoChunks(cleanText, 450);
 
+    let errorNotice: string | null = null;
     try {
       if (chunks.length === 1) {
         // 單塊標準呼叫
@@ -110,7 +127,21 @@ export async function translateAcademicText(
         };
       }
     } catch (e: any) {
-      console.warn('AI 翻譯連線異常，啟動本機語意應急備援:', e);
+      console.warn('AI 翻譯連線異常:', e);
+      errorNotice = e?.message || '連線逾時或端點無回應';
+    }
+
+    if (errorNotice) {
+      const displayErr = `[翻譯服務連線異常]：${errorNotice}。請檢查網路或於右上角重新確認金鑰與模型設定。`;
+      if (onChunk) {
+        await playTypewriter(displayErr, onChunk, 12);
+      }
+      return {
+        translation: displayErr,
+        cached: false,
+        latencyMs: 30,
+        fallbackNotice: `連線失敗: ${errorNotice.slice(0, 35)}`
+      };
     }
   }
 
@@ -119,11 +150,10 @@ export async function translateAcademicText(
   if (onChunk) {
     await playTypewriter(fallback, onChunk, 12);
   }
-  await setCachedCompletion(cacheKey, fallback, 'local-scholar', 'local', 15);
   return {
     translation: fallback,
-    cached: true,
+    cached: false,
     latencyMs: 15,
-    fallbackNotice: '本機學術應急解析'
+    fallbackNotice: '尚未設定 API 金鑰，此為本機應急導讀'
   };
 }

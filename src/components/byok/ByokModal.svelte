@@ -31,7 +31,7 @@
       const savedProvider = localStorage.getItem('mugen_provider') || 'groq';
       currentProvider = savedProvider;
 
-      const savedKey = localStorage.getItem(`mugen_key_${currentProvider}`);
+      const savedKey = localStorage.getItem(`mugen_key_${currentProvider}`) || localStorage.getItem(`mugen_api_key_${currentProvider}`);
       if (savedKey) apiKey = savedKey;
 
       const savedModel = localStorage.getItem('mugen_model') || 'llama-3.3-70b-versatile';
@@ -98,7 +98,7 @@
     if (p) currentModel = p.defaultModel;
 
     if (typeof window !== 'undefined') {
-      apiKey = localStorage.getItem(`mugen_key_${providerId}`) || '';
+      apiKey = localStorage.getItem(`mugen_key_${providerId}`) || localStorage.getItem(`mugen_api_key_${providerId}`) || '';
     }
 
     availableModels = FALLBACK_MODELS[providerId] || [];
@@ -113,6 +113,7 @@
   function saveSettings() {
     if (typeof window !== 'undefined') {
       localStorage.setItem(`mugen_key_${currentProvider}`, apiKey);
+      localStorage.setItem(`mugen_api_key_${currentProvider}`, apiKey);
       localStorage.setItem('mugen_provider', currentProvider);
       localStorage.setItem('mugen_model', currentModel);
       if (currentProvider === 'ollama') {

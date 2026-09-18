@@ -3,7 +3,7 @@
 
 import type { CitationGraphData, CitationNode, CitationEdge } from './citationService';
 import type { PaperDocument } from '../stores/documentStore';
-import { callProviderChatWithResilience, safeParseJsonFromLLM } from './aiService';
+import { callProviderChatWithResilience, safeParseJsonFromLLM, getStoredApiKey } from './aiService';
 import { generateCacheKey, getCachedCompletion, setCachedCompletion } from './cacheService';
 
 export interface AcademicCandidateWork {
@@ -203,7 +203,7 @@ export async function synthesizeCitationGraphWithLLM(
   });
 
   const provider = (typeof window !== 'undefined' ? localStorage.getItem('mugen_provider') : null) || 'groq';
-  const apiKey = (typeof window !== 'undefined' ? localStorage.getItem(`mugen_api_key_${provider}`) : null) || '';
+  const apiKey = getStoredApiKey(provider);
   const model = (typeof window !== 'undefined' ? localStorage.getItem('mugen_model') : null) || 'llama-3.3-70b-versatile';
   const ollamaUrl = (typeof window !== 'undefined' ? localStorage.getItem('mugen_ollama_url') : null) || 'http://localhost:11434';
 

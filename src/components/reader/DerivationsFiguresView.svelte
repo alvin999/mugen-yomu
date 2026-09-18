@@ -19,6 +19,7 @@
     extractDynamicFigures,
     extractDynamicFormulas
   } from '../../utils/derivationExtractor';
+  import { getStoredApiKey } from '../../services/aiService';
   import ImageLightboxModal from '../common/ImageLightboxModal.svelte';
   import FigureDeconstructionPanel from './derivations/FigureDeconstructionPanel.svelte';
   import FormulaDerivationPanel from './derivations/FormulaDerivationPanel.svelte';
@@ -108,7 +109,7 @@
     scanError = '';
     try {
       const p = (typeof window !== 'undefined' ? localStorage.getItem('mugen_provider') : null) || 'groq';
-      const k = (typeof window !== 'undefined' ? localStorage.getItem(`mugen_api_key_${p}`) : null) || '';
+      const k = getStoredApiKey(p);
       const m = (typeof window !== 'undefined' ? localStorage.getItem('mugen_model') : null) || 'llama-3.3-70b-versatile';
       const o = (typeof window !== 'undefined' ? localStorage.getItem('mugen_ollama_url') : null) || 'http://localhost:11434';
 
@@ -203,7 +204,7 @@
       isAnalyzingFigure = true;
       try {
         const p = (typeof window !== 'undefined' ? localStorage.getItem('mugen_provider') : null) || 'groq';
-        const k = (typeof window !== 'undefined' ? localStorage.getItem(`mugen_api_key_${p}`) : null) || '';
+        const k = getStoredApiKey(p);
         const m = (typeof window !== 'undefined' ? localStorage.getItem('mugen_model') : null) || 'llama-3.3-70b-versatile';
         const o = (typeof window !== 'undefined' ? localStorage.getItem('mugen_ollama_url') : null) || 'http://localhost:11434';
 
@@ -250,7 +251,7 @@
       isDerivingFormula = true;
       try {
         const p = (typeof window !== 'undefined' ? localStorage.getItem('mugen_provider') : null) || 'groq';
-        const k = (typeof window !== 'undefined' ? localStorage.getItem(`mugen_api_key_${p}`) : null) || '';
+        const k = getStoredApiKey(p);
         const m = (typeof window !== 'undefined' ? localStorage.getItem('mugen_model') : null) || 'llama-3.3-70b-versatile';
         const o = (typeof window !== 'undefined' ? localStorage.getItem('mugen_ollama_url') : null) || 'http://localhost:11434';
 
@@ -394,7 +395,7 @@ ${scratchpadAiResult ? `### AI 導師審查講評\n**${scratchpadAiResult.verdic
     isVerifyingScratchpad = true;
     try {
       const p = (typeof window !== 'undefined' ? localStorage.getItem('mugen_provider') : null) || 'groq';
-      const k = (typeof window !== 'undefined' ? localStorage.getItem(`mugen_api_key_${p}`) : null) || '';
+      const k = getStoredApiKey(p);
       const m = (typeof window !== 'undefined' ? localStorage.getItem('mugen_model') : null) || 'llama-3.3-70b-versatile';
       const o = (typeof window !== 'undefined' ? localStorage.getItem('mugen_ollama_url') : null) || 'http://localhost:11434';
 

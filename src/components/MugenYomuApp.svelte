@@ -596,6 +596,8 @@
       if (readingMode !== 'split') {
         isPdfDrawerOpen = true;
       }
+    } else if (action === 'openSettings') {
+      isByokOpen = true;
     }
   }
 
