@@ -77,21 +77,35 @@ async function streamOpenAICompatible(
 /**
  * 智慧上下文修剪與滑動窗口保護器 (Token Guard)
  */
-export function pruneChatMessages(messages: ChatMessage[], maxTotalChars: number = 2200): ChatMessage[] {
+export function pruneChatMessages(messages: ChatMessage[], maxTotalChars: number = 5000): ChatMessage[] {
   if (!messages || messages.length === 0) return [];
-  const last = messages[messages.length - 1];
-  let budget = maxTotalChars - last.content.length;
-  if (budget <= 150) {
-    return [{
-      role: last.role,
-      content: last.content.slice(0, Math.max(100, maxTotalChars - 50)) + '... (已自動精簡長度)'
-    }];
+
+  // 強制保護 system message，絕不丟失提示詞角色定位
+  const systemMsg = messages.find(m => m.role === 'system');
+  const nonSystem = messages.filter(m => m.role !== 'system');
+
+  if (nonSystem.length === 0) {
+    return systemMsg ? [systemMsg] : [];
   }
 
+  const systemLen = systemMsg ? systemMsg.content.length : 0;
+  let budget = maxTotalChars - systemLen;
+
+  const last = nonSystem[nonSystem.length - 1];
+  if (last.content.length > budget) {
+    const prunedLast: ChatMessage = {
+      role: last.role,
+      content: last.content.slice(0, Math.max(200, budget - 50))
+    };
+    return systemMsg ? [systemMsg, prunedLast] : [prunedLast];
+  }
+
+  budget -= last.content.length;
   const preserved: ChatMessage[] = [last];
-  for (let i = messages.length - 2; i >= 0; i--) {
-    const msg = messages[i];
-    if (budget <= 150) break;
+
+  for (let i = nonSystem.length - 2; i >= 0; i--) {
+    const msg = nonSystem[i];
+    if (budget <= 100) break;
     if (msg.content.length <= budget) {
       preserved.unshift(msg);
       budget -= msg.content.length;
@@ -103,7 +117,8 @@ export function pruneChatMessages(messages: ChatMessage[], maxTotalChars: number
       break;
     }
   }
-  return preserved;
+
+  return systemMsg ? [systemMsg, ...preserved] : preserved;
 }
 
 export async function callGroqChat(
@@ -115,7 +130,7 @@ export async function callGroqChat(
   const startTime = performance.now();
   const systemMsg = messages.find(m => m.role === 'system');
   const nonSystem = messages.filter(m => m.role !== 'system');
-  const pruned = pruneChatMessages(nonSystem, 2200);
+  const pruned = pruneChatMessages(nonSystem, 5000);
   const conversation = [
     systemMsg || { role: 'system', content: SCHOLAR_SYSTEM_PROMPT },
     ...pruned
@@ -593,7 +608,7 @@ export async function callProviderChatWithResilience(
   onChunk?: (text: string) => void,
   bypassCache: boolean = false
 ): Promise<ChatCompletionResult & { fallbackNotice?: string }> {
-  const safeMessages = pruneChatMessages(messages, provider === 'groq' ? 2200 : 4000);
+  const safeMessages = pruneChatMessages(messages, provider === 'groq' ? 5000 : 8000);
 
   try {
     return await callProviderChat(provider, safeMessages, apiKey, model, ollamaUrl, onChunk, bypassCache);

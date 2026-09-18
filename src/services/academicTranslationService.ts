@@ -71,7 +71,7 @@ export async function translateAcademicText(
 2. 保留原文的邏輯因果關係、學術嚴謹度與流暢語感，不要添加任何主觀解說、前後綴問候或引號標籤。
 3. 直接輸出正體中文譯文。`;
 
-    const chunks = splitTextIntoChunks(cleanText, 450);
+    const chunks = splitTextIntoChunks(cleanText, 300);
 
     let errorNotice: string | null = null;
     try {
