@@ -93,6 +93,18 @@
 
     return parts.join('');
   }
+
+  function handleParagraphWrapperClick(e: MouseEvent, pIndex: number, paraText: string) {
+    e.stopPropagation();
+    // 若正在選取文字（滑鼠拖曳反白），不觸發段落焦點切換，保護選取狀態
+    if (typeof window !== 'undefined') {
+      const selection = window.getSelection();
+      if (selection && selection.toString().trim().length > 0) {
+        return;
+      }
+    }
+    dispatch('paragraphClick', { secId: sec.id, pIndex, text: paraText });
+  }
 </script>
 
 {#if item.type === 'subheading'}
@@ -212,7 +224,7 @@
     data-para-key={key}
     data-para-text={para}
     data-sec-id={sec.id}
-    on:click={() => dispatch('paragraphClick', { secId: sec.id, pIndex, text: para })}
+    on:click={(e) => handleParagraphWrapperClick(e, pIndex, para)}
   >
     {#if isParaFocused && isPacerActive}
       <!-- Saccadic Flow Pacer Visual Beam Guide -->

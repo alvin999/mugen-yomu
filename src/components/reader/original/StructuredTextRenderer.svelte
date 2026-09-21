@@ -165,19 +165,22 @@
       <div class="flex flex-col gap-6">
         {#each allSections as sec, sIndex (sec.id)}
           {@const isFocused = sec.id === activeSectionId}
-          <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
           <section
             id={`text-sec-${sec.id}`}
-            class="flex flex-col transition-all duration-300 rounded p-3 -mx-3 border cursor-pointer {
+            class="flex flex-col transition-all duration-300 rounded p-3 -mx-3 border {
               isFocused
                 ? (paperTheme === 'parchment' ? 'bg-[#f0ebe0] border-[#fe8019]/80 shadow-xs' : 'bg-[#282828] border-[#fe8019]/80 shadow-xs')
                 : 'border-transparent hover:border-current/10'
             }"
-            on:click={() => dispatch('sectionClick', { sectionId: sec.id })}
           >
             <!-- Section Heading -->
-            <div class="flex items-baseline justify-between gap-2 border-b border-current/20 pb-1.5 mb-3">
-              <h2 class="font-serif text-base sm:text-lg font-bold flex items-baseline gap-2 {paperTheme === 'parchment' ? 'text-[#1c1b1a]' : 'text-[#fbf1c7]'}">
+            <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+            <div
+              class="flex items-baseline justify-between gap-2 border-b border-current/20 pb-1.5 mb-3 cursor-pointer group/sec-header"
+              on:click={() => dispatch('sectionClick', { sectionId: sec.id })}
+              title="點擊定位章節"
+            >
+              <h2 class="font-serif text-base sm:text-lg font-bold flex items-baseline gap-2 {paperTheme === 'parchment' ? 'text-[#1c1b1a]' : 'text-[#fbf1c7]'} group-hover/sec-header:text-[#fe8019] transition-colors">
                 <span class="font-mono text-sm {paperTheme === 'parchment' ? 'text-[#b57614]' : 'text-[#fe8019]'}">
                   § {sec.id}
                 </span>

@@ -1019,7 +1019,6 @@
             </header>
           {:else}
             <!-- REGULAR CONTENT SECTION CARD -->
-            <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
             <section
               id={`sec-${sec.id}`}
               class="flex flex-col gap-3 transition-[background-color,border-color,box-shadow,opacity] duration-300 rounded-xl p-4 sm:p-5 relative {
@@ -1029,16 +1028,20 @@
                     ? 'bg-[#282828]/45 hover:bg-[#282828] border border-[#3c3836]/40 opacity-75 hover:opacity-95'
                     : 'bg-[#1d2021]/30 hover:bg-[#282828]/30 border border-[#3c3836]/20 opacity-35 hover:opacity-65'
               }"
-              on:click={() => handleSectionClick(sec.id)}
             >
               <div class="absolute -left-1 top-4 bottom-4 w-1.5 bg-[#fe8019] rounded-full transition-opacity duration-300 {isFocused ? 'focus-lens-bar opacity-100' : 'opacity-0 pointer-events-none'}"></div>
 
-              <div class="flex items-center justify-between gap-2 pb-2 mb-0.5 border-b border-[#3c3836]/60">
+              <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+              <div
+                class="flex items-center justify-between gap-2 pb-2 mb-0.5 border-b border-[#3c3836]/60 cursor-pointer group/sec-header"
+                on:click={() => handleSectionClick(sec.id)}
+                title="點擊定位至此章節頂部"
+              >
                 <div class="flex items-baseline gap-2.5 min-w-0">
                   <span class="font-mono text-sm font-bold {sec.level === 1 ? 'text-[#fe8019]' : 'text-[#fabd2f] bg-[#282828] border border-[#504945]/70 px-2 py-0.5 rounded'} shrink-0">
                     {titleInfo.prefix}
                   </span>
-                  <h3 class="{sec.level === 1 ? 'text-2xl font-serif text-[#ebdbb2]' : 'text-lg sm:text-[19px] font-serif font-bold text-[#fbf1c7]'} tracking-tight truncate">
+                  <h3 class="{sec.level === 1 ? 'text-2xl font-serif text-[#ebdbb2]' : 'text-lg sm:text-[19px] font-serif font-bold text-[#fbf1c7]'} tracking-tight truncate group-hover/sec-header:text-[#fe8019] transition-colors">
                     {titleInfo.mainTitle}
                   </h3>
                 </div>
