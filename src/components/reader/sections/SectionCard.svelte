@@ -4,9 +4,9 @@
   import { flowStore } from '../../../stores/flowStore';
   import { normalizeParagraphs } from '../../../utils/paragraphUtils';
   import { getSectionTitleParts } from '../controllers/readerScrollManager';
-  import BilingualParagraphItem from '../bilingual/BilingualParagraphItem.svelte';
-  import SectionFormulaChips from '../bilingual/SectionFormulaChips.svelte';
-  import CognitiveActionToolbar from '../bilingual/CognitiveActionToolbar.svelte';
+  import ParagraphItem from '../paragraphs/ParagraphItem.svelte';
+  import SectionFormulaChips from './SectionFormulaChips.svelte';
+  import CognitiveActionToolbar from './CognitiveActionToolbar.svelte';
 
   export let sec: ChapterSection;
   export let isFocused: boolean = false;
@@ -116,7 +116,7 @@
     {#each normalizedParas as item}
       {@const pIndex = item.originalIndex}
       {@const key = `${sec.id}_${pIndex}`}
-      <BilingualParagraphItem
+      <ParagraphItem
         {item}
         {sec}
         {totalTextParas}

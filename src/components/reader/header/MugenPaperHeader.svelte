@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import type { PaperDocument } from '../../../types/document';
-  import AuthorInfoModal from '../bilingual/AuthorInfoModal.svelte';
+  import AuthorInfoModal from './AuthorInfoModal.svelte';
 
   export let paper: PaperDocument | null = null;
   export let selectedAuthorInfo: string | null = null;

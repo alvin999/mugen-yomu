@@ -277,6 +277,10 @@ export class ReaderVimController {
   private scrollContainer: HTMLElement | null = null;
   public currentCharIndex: number = 0;
   public preferredColLeft: number | null = null;
+  /** 追蹤目前游標所在段落的 key（`${secId}_${pIndex}`），避免依賴 Svelte reactivity 時序 */
+  public currentParaKey: string = '';
+  /** 在 ensureCursorInComfortView 捲動前呼叫，用於設定 isProgrammaticScrolling 旗標 */
+  private onBeforeComfortScroll: (() => void) | null = null;
   private lastGPressTime: number = 0;
 
   constructor(scrollContainer?: HTMLElement | null) {
@@ -285,6 +289,11 @@ export class ReaderVimController {
 
   public setScrollContainer(container: HTMLElement | null) {
     this.scrollContainer = container;
+  }
+
+  /** 設定在投入换行捲動前的鐘彾（一次設定即永久生效） */
+  public setBeforeScrollHook(hook: () => void) {
+    this.onBeforeComfortScroll = hook;
   }
 
   public syncCursor(
@@ -300,8 +309,10 @@ export class ReaderVimController {
 
     const rect = computeCharRect(el, charIdx, this.scrollContainer);
     if (rect) {
+      this.currentParaKey = key; // 同步記錄當前段落，避免 Svelte 時序問題
       updateCursorPosition(rect, secId, pIndex, charIdx, triggerAnimation);
       if (!skipComfortScroll) {
+        this.onBeforeComfortScroll?.(); // 通知外部設定 isProgrammaticScrolling
         ensureCursorInComfortView(rect, this.scrollContainer);
       }
     }
@@ -314,6 +325,8 @@ export class ReaderVimController {
       focusedParagraphKey: string;
       activeSectionId: string;
       onParagraphClick: (secId: string, pIndex: number, text: string, clickCharIdx?: number) => void;
+      /** 游標在同段落內移動時，同步更新 focus 段落（不觸發滾動） */
+      onSyncFocus: (secId: string, pIndex: number, text: string) => void;
       onToggleTranslation: (secId: string, pIndex: number, text: string) => void;
       onAskCompanion: (secId: string, pIndex: number, text: string) => void;
       onShowToast: (text: string) => void;
@@ -343,10 +356,20 @@ export class ReaderVimController {
     if (paras.length === 0) return;
 
     const cursorState = get(vimCursorState);
-    let curIdx = paras.findIndex(p => p.key === callbacks.focusedParagraphKey);
+
+    // 優先用 controller 自身維護的 currentParaKey（無 Svelte 時序問題），
+    // 其次用 vimCursorState（updateCursorPosition 同步更新），
+    // 最後才用外部傳入的 focusedParagraphKey
+    let curIdx = -1;
+    if (this.currentParaKey) {
+      curIdx = paras.findIndex(p => p.key === this.currentParaKey);
+    }
     if (curIdx === -1 && cursorState.active) {
       const stateKey = `${cursorState.sectionId}_${cursorState.paraIndex}`;
       curIdx = paras.findIndex(p => p.key === stateKey);
+    }
+    if (curIdx === -1) {
+      curIdx = paras.findIndex(p => p.key === callbacks.focusedParagraphKey);
     }
     if (curIdx === -1) {
       curIdx = 0;
@@ -417,6 +440,7 @@ export class ReaderVimController {
       this.currentCharIndex = 0;
       this.preferredColLeft = null;
       this.syncCursor(curPara.secId, curPara.pIndex, 0, true);
+      callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
       return;
     }
 
@@ -426,6 +450,7 @@ export class ReaderVimController {
       this.currentCharIndex = Math.max(0, curPara.text.length - 1);
       this.preferredColLeft = null;
       this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
+      callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
       return;
     }
 
@@ -438,6 +463,7 @@ export class ReaderVimController {
       if (match && match.index !== undefined) {
         this.currentCharIndex += match.index + match[0].length - 1;
         this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
+        callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
       } else if (curIdx < paras.length - 1) {
         const next = paras[curIdx + 1];
         this.currentCharIndex = 0;
@@ -455,9 +481,11 @@ export class ReaderVimController {
       if (match && match.index !== undefined && match.index < this.currentCharIndex) {
         this.currentCharIndex = match.index;
         this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
+        callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
       } else if (this.currentCharIndex > 0) {
         this.currentCharIndex = 0;
         this.syncCursor(curPara.secId, curPara.pIndex, 0, true);
+        callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
       } else if (curIdx > 0) {
         const prev = paras[curIdx - 1];
         this.currentCharIndex = Math.max(0, prev.text.length - 1);
@@ -476,6 +504,7 @@ export class ReaderVimController {
         if (nextIdx !== undefined) {
           this.currentCharIndex = nextIdx;
           this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
+          callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
         } else if (curIdx < paras.length - 1) {
           const next = paras[curIdx + 1];
           const nextVis = getParagraphVisibleCharIndices(next.el);
@@ -506,6 +535,7 @@ export class ReaderVimController {
         if (prevIdx !== undefined) {
           this.currentCharIndex = prevIdx;
           this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
+          callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
         } else if (curIdx > 0) {
           const prev = paras[curIdx - 1];
           const prevVis = getParagraphVisibleCharIndices(prev.el);
@@ -559,6 +589,7 @@ export class ReaderVimController {
         }
         this.currentCharIndex = bestChar.index;
         this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
+        callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
       } else {
         if (curIdx < paras.length - 1) {
           const nextPara = paras[curIdx + 1];
@@ -579,6 +610,7 @@ export class ReaderVimController {
           const lastLine = lines[lines.length - 1];
           this.currentCharIndex = lastLine[lastLine.length - 1].index;
           this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
+          callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
         }
       }
       return;
@@ -623,6 +655,7 @@ export class ReaderVimController {
         }
         this.currentCharIndex = bestChar.index;
         this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
+        callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
       } else {
         if (curIdx > 0) {
           const prevPara = paras[curIdx - 1];
@@ -642,6 +675,7 @@ export class ReaderVimController {
         } else {
           this.currentCharIndex = 0;
           this.syncCursor(curPara.secId, curPara.pIndex, 0, true);
+          callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
         }
       }
       return;

@@ -167,6 +167,14 @@
     vimController.setScrollContainer(scrollContainer);
     if (scrollContainer) lastScrollTop = scrollContainer.scrollTop;
 
+    // 設定 hook：游標移動觸發自動捲動前，標記為 programmatic scroll
+    // 這樣可避免 scroll handler 以視線重新計算覆蓋 vim 游標帶來的 focus 狀態
+    vimController.setBeforeScrollHook(() => {
+      isProgrammaticScrolling = true;
+      if (scrollTimeout) clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => { isProgrammaticScrolling = false; }, 650);
+    });
+
     setTimeout(() => {
       if ($vimConfigStore.isVimEnabled && !$vimCursorState.active) {
         const paras = getAllRenderedParas(scrollContainer, activeSectionId);
@@ -504,11 +512,8 @@
     flowStore.touchActivity();
     if (!scrollContainer) return;
 
-    if (isProgrammaticScrolling) {
-      lastScrollTop = scrollContainer.scrollTop;
-      return;
-    }
-
+    // --- 游標視覺同步（永遠執行，不受 isProgrammaticScrolling 影響）---
+    // vim 游標觸發的 comfort scroll 也需要這段來更新 overlay 位置
     if ($vimConfigStore.isVimEnabled && $vimCursorState.active) {
       if (scrollSyncRafId !== null) cancelAnimationFrame(scrollSyncRafId);
       scrollSyncRafId = requestAnimationFrame(() => {
@@ -524,6 +529,9 @@
     } else {
       lastScrollTop = scrollContainer.scrollTop;
     }
+
+    // --- 以下為 section 視線追蹤 / 閱讀進度，vim 自動捲動期間跳過 ---
+    if (isProgrammaticScrolling) return;
 
     const now = Date.now();
     if (now - lastScrollCheck < 60) return;
@@ -603,6 +611,18 @@
       activeSectionId,
       onParagraphClick: (secId, pIndex, text, clickCharIdx) => {
         handleParagraphClick(secId, pIndex, text, clickCharIdx);
+      },
+      onSyncFocus: (secId, pIndex, text) => {
+        const key = `${secId}_${pIndex}`;
+        focusedParagraphKey = key;
+        focusedParagraphText = text;
+        dispatch('paragraphFocused', {
+          sectionId: secId,
+          paragraphIndex: pIndex,
+          paragraphKey: key,
+          text,
+          selectedText
+        });
       },
       onToggleTranslation: (secId, pIndex, text) => {
         toggleParagraphTranslation(secId, pIndex, text);
