@@ -135,8 +135,6 @@
       }
     }
 
-    const isMLPaper = /transformer|attention|neural|deep learning|resnet|machine learning|reinforcement|language model|convolution/i.test(paper?.title || '');
-
     for (const f of sec.formulas) {
       if (!f || !f.latexText) continue;
       const normalizedLatex = f.latexText.trim().replace(/\s+/g, '');
@@ -145,12 +143,6 @@
         continue;
       }
       if (f.sectionTitle && !f.sectionTitle.includes(sec.title) && !sec.title.includes(f.sectionTitle) && !hasMathInSec) {
-        continue;
-      }
-
-      const combinedInfo = `${f.latexText} ${f.name || ''} ${JSON.stringify(f.variables || [])}`;
-      const isFabricatedML = /\\min[\s_{]|\\mathcal\{L\}|\\mathbb\{E\}|\\Omega\s*\(|\\ell\s*\(|f_\\theta/i.test(combinedInfo);
-      if (isFabricatedML && !isMLPaper) {
         continue;
       }
 

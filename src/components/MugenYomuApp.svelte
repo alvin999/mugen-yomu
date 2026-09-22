@@ -14,7 +14,6 @@
     getActivePaperId,
     setActivePaperId,
     saveLibraryToStorage,
-    sanitizePaperData,
     type PaperDocument
   } from '../stores/documentStore';
   import {
@@ -82,9 +81,6 @@
   }
 
   function setPaper(paper: PaperDocument) {
-    if (sanitizePaperData(paper)) {
-      saveLibraryToStorage(paperLibrary);
-    }
     activePaper = paper;
     activePaperId = paper.id;
     setActivePaperId(paper.id);

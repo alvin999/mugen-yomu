@@ -41,60 +41,6 @@ export {
 const STORAGE_KEY_PAPERS = 'mugen_paper_library_v3';
 const STORAGE_KEY_ACTIVE_ID = 'mugen_active_paper_id_v3';
 
-/**
- * 清洗文獻資料：自動過濾歷史遺留或捏造之非本篇主題機器學習損失函數 (Self-Healing)
- */
-export function sanitizePaperData(paper: PaperDocument): boolean {
-  if (!paper || !paper.sections) return false;
-  const isMLPaper = /transformer|attention|neural|deep learning|resnet|machine learning|reinforcement|language model|convolution/i.test(paper.title || '');
-  let modified = false;
-
-  const isFabricatedML = (latexText: string, name?: string, vars?: any[]): boolean => {
-    if (isMLPaper) return false;
-    const combined = `${latexText} ${name || ''} ${JSON.stringify(vars || [])}`;
-    // 檢測機器學習損失函數與目標函數特徵
-    const mlPatterns = [
-      /\\min[\s_{]/,
-      /\\mathcal\{L\}/,
-      /\\mathbb\{E\}/,
-      /\\Omega\s*\(/,
-      /\\ell\s*\(/,
-      /f_\\theta/,
-      /綜合損失/,
-      /正則化懲罰/,
-      /模型參數權重/
-    ];
-    return mlPatterns.some(p => p.test(combined));
-  };
-
-  const cleanSection = (sec: ChapterSection) => {
-    if (sec.formulas && sec.formulas.length > 0) {
-      const originalLen = sec.formulas.length;
-      sec.formulas = sec.formulas.filter(f => {
-        if (!f || !f.latexText) return false;
-        if (isFabricatedML(f.latexText, f.name, f.variables)) {
-          return false;
-        }
-        return true;
-      });
-      if (sec.formulas.length !== originalLen) {
-        modified = true;
-      }
-    }
-    if (sec.children && sec.children.length > 0) {
-      for (const child of sec.children) {
-        cleanSection(child);
-      }
-    }
-  };
-
-  for (const sec of paper.sections) {
-    cleanSection(sec);
-  }
-
-  return modified;
-}
-
 export function getInitialLibrary(): PaperDocument[] {
   const defaults = [userManualDocument, attentionPaper, resnetPaper, anthropicCircuitsWeb];
 
@@ -107,16 +53,10 @@ export function getInitialLibrary(): PaperDocument[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        let hasSanitized = false;
-        for (const p of parsed) {
-          if (sanitizePaperData(p)) {
-            hasSanitized = true;
-          }
-        }
         // Ensure userManualDocument is present if missing from older storage
         const hasManual = parsed.some((p: any) => p.id === userManualDocument.id);
-        if (!hasManual || hasSanitized) {
-          const updated = hasManual ? parsed : [userManualDocument, ...parsed];
+        if (!hasManual) {
+          const updated = [userManualDocument, ...parsed];
           saveLibraryToStorage(updated);
           return updated;
         }
@@ -130,6 +70,7 @@ export function getInitialLibrary(): PaperDocument[] {
   saveLibraryToStorage(defaults);
   return defaults;
 }
+
 
 export function saveLibraryToStorage(library: PaperDocument[]): void {
   if (typeof window === 'undefined') return;

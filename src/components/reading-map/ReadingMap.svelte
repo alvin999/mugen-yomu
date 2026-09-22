@@ -131,17 +131,13 @@
   $: allPaperFormulas = (() => {
     const list: DashboardFormulaItem[] = [];
     const seenLatex = new Set<string>();
-    const isMLPaper = /transformer|attention|neural|deep learning|resnet|machine learning|reinforcement|language model|convolution/i.test(paper?.title || '');
 
     function extractFromSecs(secs: ChapterSection[]) {
       for (const sec of secs) {
-        // 1. 已結構化之 formulas (嚴格過濾非 ML 論文中的偽造損失函數)
+        // 1. 已結構化之 formulas
         if (sec.formulas) {
           for (const f of sec.formulas) {
             if (!f || !f.latexText) continue;
-            const combined = `${f.latexText} ${f.name || ''} ${JSON.stringify(f.variables || [])}`;
-            const isFabricatedML = /\\min[\s_{]|\\mathcal\{L\}|\\mathbb\{E\}|\\Omega\s*\(|\\ell\s*\(|f_\\theta|綜合損失|正則化懲罰|模型參數權重/i.test(combined);
-            if (isFabricatedML && !isMLPaper) continue;
 
             const norm = f.latexText.trim().replace(/\s+/g, '');
             if (!seenLatex.has(norm)) {
