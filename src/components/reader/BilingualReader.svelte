@@ -11,6 +11,17 @@
   import BilingualParagraphItem from './bilingual/BilingualParagraphItem.svelte';
   import SectionFormulaChips from './bilingual/SectionFormulaChips.svelte';
   import ImageLightboxModal from '../common/ImageLightboxModal.svelte';
+  import SmearCursorOverlay from './SmearCursorOverlay.svelte';
+  import VimStatusBar from './VimStatusBar.svelte';
+  import {
+    vimConfigStore,
+    vimCursorState,
+    updateCursorPosition,
+    adjustCursorForScroll,
+    setVimHelpOpen,
+    setVimStatusMessage,
+    type CursorRect
+  } from '../../stores/vimCursorStore';
 
   export let paper: PaperDocument | null = null;
   export let activeSectionId: string = '3.2.1';
@@ -53,6 +64,24 @@
   export let focusedParagraphKey: string = '';
   export let focusedParagraphText: string = '';
   export let selectedText: string = '';
+
+  onMount(() => {
+    // 初始化捲動追蹤基準點
+    if (scrollContainer) lastScrollTop = scrollContainer.scrollTop;
+
+    // 預先於首段初始化 Vim 閃爍方塊游標
+    setTimeout(() => {
+      if ($vimConfigStore.isVimEnabled && !$vimCursorState.active) {
+        const paras = getAllRenderedParas();
+        if (paras.length > 0) {
+          const first = paras[0];
+          focusedParagraphKey = first.key;
+          focusedParagraphText = first.text;
+          syncVimCursor(first.secId, first.pIndex, 0, false);
+        }
+      }
+    }, 400);
+  });
 
   // Paragraph Translation States
   let paragraphTranslations: Record<string, string> = {};
@@ -108,6 +137,8 @@
   let lastScrollCheck = 0;
   let scrollTimeout: any = null;
   let isProgrammaticScrolling = false;
+  let scrollSyncRafId: number | null = null; // 捐動游標同步 rAF ID
+  let lastScrollTop = 0;                     // 上一幀的 scrollTop，用於計算捐動差値
 
   // 過濾與去重章節內的結構化公式
   function getDeduplicatedFormulas(sec: ChapterSection): FormulaItem[] {
@@ -448,17 +479,24 @@
     }
   }
 
-  function handleParagraphClick(secId: string, pIndex: number, text: string) {
+  function handleParagraphClick(secId: string, pIndex: number, text: string, clickCharIdx?: number) {
     const key = `${secId}_${pIndex}`;
     focusedParagraphKey = key;
     focusedParagraphText = text;
     activeSectionId = secId;
+
+    if (clickCharIdx !== undefined) {
+      currentVimCharIndex = clickCharIdx;
+    }
+    preferredColLeft = null;
 
     markParagraphAsRead(secId, pIndex, text);
 
     flowStore.touchActivity();
     const pWords = countWords(text);
     flowStore.recordReadingActivity(Math.min(20, Math.round(pWords * 0.2)), 'skim');
+
+    syncVimCursor(secId, pIndex, currentVimCharIndex, true);
 
     dispatch('paragraphFocused', {
       sectionId: secId,
@@ -467,6 +505,637 @@
       text,
       selectedText
     });
+  }
+
+  // --- Vim 游標導引與 Neovim Smear-Cursor 殘影核心邏輯 ---
+  let currentVimCharIndex = 0;
+  let preferredColLeft: number | null = null;
+  let lastGPressTime = 0;
+
+  function isTypingContext(target: EventTarget | null): boolean {
+    if (!target || !(target instanceof HTMLElement)) return false;
+    const tag = target.tagName.toLowerCase();
+    return tag === 'input' || tag === 'textarea' || target.isContentEditable || target.closest('[contenteditable="true"]') !== null;
+  }
+
+  interface CharMetric {
+    index: number;
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    centerX: number;
+  }
+
+  function getTextElement(el: HTMLElement): HTMLElement {
+    return el.querySelector<HTMLElement>('.para-main-text') || el.querySelector<HTMLElement>('p') || el;
+  }
+
+  function getParagraphVisualLines(
+    el: HTMLElement,
+    containerRect: DOMRect,
+    scrollLeft: number,
+    scrollTop: number
+  ): CharMetric[][] {
+    const textRoot = getTextElement(el);
+    const walker = document.createTreeWalker(textRoot, NodeFilter.SHOW_TEXT);
+    let node: Text | null = null;
+    const allChars: CharMetric[] = [];
+    let charCount = 0;
+
+    while ((node = walker.nextNode() as Text)) {
+      const val = node.nodeValue || '';
+      const len = val.length;
+      for (let i = 0; i < len; i++) {
+        const range = document.createRange();
+        try {
+          range.setStart(node, i);
+          range.setEnd(node, i + 1);
+          const r = range.getBoundingClientRect();
+          if (r.width > 0 && r.height > 0) {
+            // 使用 viewport 相對座標（不加 scroll offset）
+            const left = r.left;
+            const top = r.top;
+            allChars.push({
+              index: charCount + i,
+              left,
+              top,
+              width: r.width,
+              height: r.height,
+              centerX: left + r.width / 2
+            });
+          }
+        } catch (e) {}
+      }
+      charCount += len;
+    }
+
+    if (allChars.length === 0) {
+      const pRect = textRoot.getBoundingClientRect();
+      const fallback: CharMetric = {
+        index: 0,
+        left: pRect.left,
+        top: pRect.top,
+        width: 10,
+        height: 22,
+        centerX: pRect.left + 5
+      };
+      return [[fallback]];
+    }
+
+    // 依據字元 top 座標分群為視覺行 (閾值 8px)
+    const lines: CharMetric[][] = [];
+    let currentLine: CharMetric[] = [];
+    let curLineTop = allChars[0].top;
+
+    for (const c of allChars) {
+      if (currentLine.length === 0 || Math.abs(c.top - curLineTop) < 8) {
+        currentLine.push(c);
+        curLineTop = (curLineTop * (currentLine.length - 1) + c.top) / currentLine.length;
+      } else {
+        lines.push(currentLine);
+        currentLine = [c];
+        curLineTop = c.top;
+      }
+    }
+    if (currentLine.length > 0) {
+      lines.push(currentLine);
+    }
+
+    return lines;
+  }
+
+  /**
+   * 取得段落中所有「真正具備可見渲染尺寸」的字元全局索引清單，
+   * 用於讓 h / l 自然穿透跳過行尾折行空格，不再產生多停一格的突兀感
+   */
+  function getParagraphVisibleCharIndices(el: HTMLElement): number[] {
+    const textRoot = getTextElement(el);
+    const walker = document.createTreeWalker(textRoot, NodeFilter.SHOW_TEXT);
+    let node: Text | null = null;
+    const indices: number[] = [];
+    let charCount = 0;
+
+    while ((node = walker.nextNode() as Text)) {
+      const val = node.nodeValue || '';
+      const len = val.length;
+      for (let i = 0; i < len; i++) {
+        const range = document.createRange();
+        try {
+          range.setStart(node, i);
+          range.setEnd(node, i + 1);
+          const r = range.getBoundingClientRect();
+          if (r.width > 0 && r.height > 0) {
+            indices.push(charCount + i);
+          }
+        } catch (e) {}
+      }
+      charCount += len;
+    }
+    return indices;
+  }
+
+  function getAllRenderedParas(): Array<{ el: HTMLElement; key: string; secId: string; pIndex: number; text: string }> {
+    if (!scrollContainer) return [];
+    const elements = Array.from(scrollContainer.querySelectorAll<HTMLElement>('[data-para-key]'));
+    return elements.map(el => {
+      const key = el.getAttribute('data-para-key') || '';
+      const secId = el.getAttribute('data-sec-id') || activeSectionId;
+      const text = el.getAttribute('data-para-text') || '';
+      const pIndex = parseInt(key.split('_').pop() || '0', 10);
+      return { el, key, secId, pIndex, text };
+    });
+  }
+
+  function computeCharRect(el: HTMLElement, charIdx: number): CursorRect | null {
+    if (!scrollContainer) return null;
+    const textRoot = getTextElement(el);
+
+    const walker = document.createTreeWalker(textRoot, NodeFilter.SHOW_TEXT);
+    let node: Text | null = null;
+    let accumulated = 0;
+    let targetRange: Range | null = null;
+    let lastValidNode: Text | null = null;
+    let lastValidLen = 0;
+
+    // 單純走訪文字節點，嚴禁在條件判斷內呼叫 walker.nextNode() 造成指針推進副作用
+    while ((node = walker.nextNode() as Text)) {
+      const val = node.nodeValue || '';
+      const len = val.length;
+      if (len > 0) {
+        lastValidNode = node;
+        lastValidLen = len;
+      }
+
+      if (accumulated + len > charIdx) {
+        const offset = Math.max(0, Math.min(len - 1, charIdx - accumulated));
+        const r = document.createRange();
+        try {
+          r.setStart(node, offset);
+          r.setEnd(node, Math.min(len, offset + 1));
+          targetRange = r;
+          break;
+        } catch (e) {}
+      }
+      accumulated += len;
+    }
+
+    // 若 charIdx 位於段落最末或超出長度，定位在最後一個文字節點的最後一個字元
+    if (!targetRange && lastValidNode && lastValidLen > 0) {
+      const r = document.createRange();
+      try {
+        r.setStart(lastValidNode, lastValidLen - 1);
+        r.setEnd(lastValidNode, lastValidLen);
+        targetRange = r;
+      } catch (e) {}
+    }
+
+    if (targetRange) {
+      const r = targetRange.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        return {
+          left: r.left,
+          top: r.top,
+          width: r.width,
+          height: r.height
+        };
+      }
+
+      // ── 行尾折行空格（Wrap Space）專門修復 ────────────────────────
+      // 瀏覽器在單字折行時，行尾空格的 getBoundingClientRect 寬高經常為 0。
+      // 先嘗試從 getClientRects() 取得第一塊文字盒
+      const rects = targetRange.getClientRects();
+      if (rects.length > 0 && rects[0].height > 0) {
+        return {
+          left: rects[0].left,
+          top: rects[0].top,
+          width: Math.max(9, rects[0].width),
+          height: rects[0].height
+        };
+      }
+
+      // 若依然為 0，向前回溯尋找上一可見字元，將游標緊貼於該字元右側（保持在該行行尾）
+      if (charIdx > 0) {
+        const prevRange = document.createRange();
+        // 往前探測 1~3 個字元直到找到有高度的字元
+        for (let back = 1; back <= Math.min(3, charIdx); back++) {
+          const testIdx = charIdx - back;
+          let testAcc = 0;
+          const testWalker = document.createTreeWalker(textRoot, NodeFilter.SHOW_TEXT);
+          let testNode: Text | null = null;
+          while ((testNode = testWalker.nextNode() as Text)) {
+            const tLen = (testNode.nodeValue || '').length;
+            if (testAcc + tLen > testIdx) {
+              const tOff = Math.max(0, testIdx - testAcc);
+              try {
+                prevRange.setStart(testNode, tOff);
+                prevRange.setEnd(testNode, Math.min(tLen, tOff + 1));
+                const prevR = prevRange.getBoundingClientRect();
+                if (prevR.width > 0 && prevR.height > 0) {
+                  return {
+                    left: prevR.left + prevR.width,
+                    top: prevR.top,
+                    width: 9,
+                    height: prevR.height
+                  };
+                }
+              } catch (e) {}
+              break;
+            }
+            testAcc += tLen;
+          }
+        }
+      }
+    }
+
+    // 若完全沒有文字節點或段落為空，才回傳段落預設區域
+    const pRect = textRoot.getBoundingClientRect();
+    return {
+      left: pRect.left,
+      top: pRect.top,
+      width: 10,
+      height: 22
+    };
+  }
+
+  function ensureCursorInComfortView(rect: CursorRect) {
+    if (!scrollContainer) return;
+    // rect 現在是 viewport 相對座標，直接用視窗高度計算是否在舒適閱讀區
+    const viewHeight = scrollContainer.clientHeight;
+    const containerRect = scrollContainer.getBoundingClientRect();
+
+    // rect.top 是 viewport 相對值，需換算為容器內的相對位置
+    const curTopInContainer = rect.top - containerRect.top;
+    const curBottomInContainer = rect.top + rect.height - containerRect.top;
+
+    if (curTopInContainer < viewHeight * 0.18) {
+      scrollContainer.scrollTo({
+        top: Math.max(0, scrollContainer.scrollTop + curTopInContainer - viewHeight * 0.28),
+        behavior: 'smooth'
+      });
+    } else if (curBottomInContainer > viewHeight * 0.72) {
+      scrollContainer.scrollTo({
+        top: scrollContainer.scrollTop + curBottomInContainer - viewHeight * 0.65,
+        behavior: 'smooth'
+      });
+    }
+  }
+
+  function syncVimCursor(
+    secId: string,
+    pIndex: number,
+    charIdx: number,
+    triggerAnimation: boolean = true,
+    skipComfortScroll: boolean = false
+  ) {
+    const key = `${secId}_${pIndex}`;
+    // 立即雙向同步焦點段落鍵值與章節 ID，避免鍵盤換行時段落狀態丟失
+    focusedParagraphKey = key;
+    activeSectionId = secId;
+
+    const el = document.getElementById(`para-${key}`);
+    if (!el) return;
+
+    const rect = computeCharRect(el, charIdx);
+    if (rect) {
+      updateCursorPosition(rect, secId, pIndex, charIdx, triggerAnimation);
+      if (!skipComfortScroll) {
+        ensureCursorInComfortView(rect);
+      }
+    }
+  }
+
+  function handleVimKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      if (activeLightboxImg) {
+        closeLightbox();
+        return;
+      }
+      if ($vimCursorState.isHelpOpen) {
+        setVimHelpOpen(false);
+        return;
+      }
+    }
+
+    // 若未啟用 Vim 模式或在輸入框/選單中，不攔截
+    if (!$vimConfigStore.isVimEnabled) return;
+    if (isTypingContext(e.target)) return;
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+    const paras = getAllRenderedParas();
+    if (paras.length === 0) return;
+
+    // 優先以 focusedParagraphKey 尋找；若未命中，嘗試以游標狀態的 sectionId 與 paraIndex 回溯定位
+    let curIdx = paras.findIndex(p => p.key === focusedParagraphKey);
+    if (curIdx === -1 && $vimCursorState.active) {
+      const stateKey = `${$vimCursorState.sectionId}_${$vimCursorState.paraIndex}`;
+      curIdx = paras.findIndex(p => p.key === stateKey);
+    }
+    if (curIdx === -1) {
+      curIdx = 0;
+    }
+    const curPara = paras[curIdx];
+
+    const key = e.key;
+
+    // 快捷鍵指南切換
+    if (key === '?') {
+      e.preventDefault();
+      setVimHelpOpen(!$vimCursorState.isHelpOpen);
+      return;
+    }
+
+    // t: 切換當前段落繁中譯文展開/收合
+    if (key === 't' || key === 'T') {
+      e.preventDefault();
+      toggleParagraphTranslation(curPara.secId, curPara.pIndex, curPara.text);
+      return;
+    }
+
+    // a: 喚醒 AI 伴讀助理
+    if (key === 'a' || key === 'A') {
+      e.preventDefault();
+      const sec = allSections.find(s => s.id === curPara.secId) || { id: curPara.secId, title: curPara.secId };
+      askCompanionAboutParagraph(sec as ChapterSection, curPara.pIndex, curPara.text);
+      return;
+    }
+
+    // y: 複製當前段落原文
+    if (key === 'y' || key === 'Y') {
+      e.preventDefault();
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        navigator.clipboard.writeText(curPara.text);
+        showToast('已複製當前段落原文');
+      }
+      return;
+    }
+
+    // gg: 跳至文首 / G: 跳至文末
+    if (key === 'g') {
+      const now = Date.now();
+      if (now - lastGPressTime < 450) {
+        e.preventDefault();
+        const first = paras[0];
+        currentVimCharIndex = 0;
+        handleParagraphClick(first.secId, first.pIndex, first.text, 0);
+        lastGPressTime = 0;
+        return;
+      }
+      lastGPressTime = now;
+      return;
+    }
+
+    if (key === 'G') {
+      e.preventDefault();
+      const last = paras[paras.length - 1];
+      currentVimCharIndex = Math.max(0, last.text.length - 1);
+      handleParagraphClick(last.secId, last.pIndex, last.text, currentVimCharIndex);
+      return;
+    }
+
+    // 0: 跳至段首 / $: 跳至段末
+    if (key === '0') {
+      e.preventDefault();
+      currentVimCharIndex = 0;
+      preferredColLeft = null;
+      syncVimCursor(curPara.secId, curPara.pIndex, 0, true);
+      return;
+    }
+    if (key === '$') {
+      e.preventDefault();
+      currentVimCharIndex = Math.max(0, curPara.text.length - 1);
+      preferredColLeft = null;
+      syncVimCursor(curPara.secId, curPara.pIndex, currentVimCharIndex, true);
+      return;
+    }
+
+    // w: 跳至下一詞
+    if (key === 'w') {
+      e.preventDefault();
+      preferredColLeft = null;
+      const after = curPara.text.slice(currentVimCharIndex);
+      const match = after.match(/\s+\S/);
+      if (match && match.index !== undefined) {
+        currentVimCharIndex += match.index + match[0].length - 1;
+        syncVimCursor(curPara.secId, curPara.pIndex, currentVimCharIndex, true);
+      } else if (curIdx < paras.length - 1) {
+        const next = paras[curIdx + 1];
+        currentVimCharIndex = 0;
+        handleParagraphClick(next.secId, next.pIndex, next.text, 0);
+      }
+      return;
+    }
+
+    // b: 跳至上一詞
+    if (key === 'b') {
+      e.preventDefault();
+      preferredColLeft = null;
+      const before = curPara.text.slice(0, currentVimCharIndex);
+      const match = before.match(/\S+\s*$/);
+      if (match && match.index !== undefined && match.index < currentVimCharIndex) {
+        currentVimCharIndex = match.index;
+        syncVimCursor(curPara.secId, curPara.pIndex, currentVimCharIndex, true);
+      } else if (currentVimCharIndex > 0) {
+        currentVimCharIndex = 0;
+        syncVimCursor(curPara.secId, curPara.pIndex, 0, true);
+      } else if (curIdx > 0) {
+        const prev = paras[curIdx - 1];
+        currentVimCharIndex = Math.max(0, prev.text.length - 1);
+        handleParagraphClick(prev.secId, prev.pIndex, prev.text, currentVimCharIndex);
+      }
+      return;
+    }
+
+    // l: 向右移動至下一個可見字元（自動穿透跳過行尾折行空格，直接抵達下一行首字）
+    if (key === 'l' || key === 'L') {
+      e.preventDefault();
+      preferredColLeft = null;
+      const visibleIndices = getParagraphVisibleCharIndices(curPara.el);
+      if (visibleIndices.length > 0) {
+        const nextIdx = visibleIndices.find(idx => idx > currentVimCharIndex);
+        if (nextIdx !== undefined) {
+          currentVimCharIndex = nextIdx;
+          syncVimCursor(curPara.secId, curPara.pIndex, currentVimCharIndex, true);
+        } else if (curIdx < paras.length - 1) {
+          // 本段可見字元已至末尾，跨段落跳至下一段首字
+          const next = paras[curIdx + 1];
+          const nextVis = getParagraphVisibleCharIndices(next.el);
+          currentVimCharIndex = nextVis.length > 0 ? nextVis[0] : 0;
+          handleParagraphClick(next.secId, next.pIndex, next.text, currentVimCharIndex);
+        }
+      } else if (curIdx < paras.length - 1) {
+        const next = paras[curIdx + 1];
+        currentVimCharIndex = 0;
+        handleParagraphClick(next.secId, next.pIndex, next.text, 0);
+      }
+      return;
+    }
+
+    // h: 向左移動至上一個可見字元（自動穿透跳過行尾折行空格，直接退回上一行末字）
+    if (key === 'h' || key === 'H') {
+      e.preventDefault();
+      preferredColLeft = null;
+      const visibleIndices = getParagraphVisibleCharIndices(curPara.el);
+      if (visibleIndices.length > 0) {
+        let prevIdx: number | undefined = undefined;
+        for (let i = visibleIndices.length - 1; i >= 0; i--) {
+          if (visibleIndices[i] < currentVimCharIndex) {
+            prevIdx = visibleIndices[i];
+            break;
+          }
+        }
+        if (prevIdx !== undefined) {
+          currentVimCharIndex = prevIdx;
+          syncVimCursor(curPara.secId, curPara.pIndex, currentVimCharIndex, true);
+        } else if (curIdx > 0) {
+          // 本段可見字元已至開頭，退回上一段末尾實體字元
+          const prev = paras[curIdx - 1];
+          const prevVis = getParagraphVisibleCharIndices(prev.el);
+          currentVimCharIndex = prevVis.length > 0 ? prevVis[prevVis.length - 1] : 0;
+          handleParagraphClick(prev.secId, prev.pIndex, prev.text, currentVimCharIndex);
+        }
+      } else if (curIdx > 0) {
+        const prev = paras[curIdx - 1];
+        currentVimCharIndex = Math.max(0, prev.text.length - 1);
+        handleParagraphClick(prev.secId, prev.pIndex, prev.text, currentVimCharIndex);
+      }
+      return;
+    }
+
+    // j: 垂直下移一行（段落內視覺行移動，若在段落末行則跳至下一段）
+    if (key === 'j' || key === 'J') {
+      e.preventDefault();
+      flowStore.recordReadingActivity(15, 'skim');
+
+      if (!scrollContainer) return;
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const lines = getParagraphVisualLines(curPara.el, containerRect, scrollContainer.scrollLeft, scrollContainer.scrollTop);
+
+      // 找出當前字元所在的行
+      let curLineIdx = 0;
+      let minDiff = Infinity;
+      for (let l = 0; l < lines.length; l++) {
+        for (const c of lines[l]) {
+          const diff = Math.abs(c.index - currentVimCharIndex);
+          if (diff < minDiff) {
+            minDiff = diff;
+            curLineIdx = l;
+          }
+        }
+      }
+
+      // 如果尚未鎖定欄位，以當前字元中心為準
+      if (preferredColLeft === null) {
+        const curChar = lines[curLineIdx].find(c => c.index === currentVimCharIndex) || lines[curLineIdx][0];
+        preferredColLeft = curChar.centerX;
+      }
+
+      if (curLineIdx < lines.length - 1) {
+        // 在下一行中，挑選 centerX 最接近 preferredColLeft 的字元
+        const nextLine = lines[curLineIdx + 1];
+        let bestChar = nextLine[0];
+        let bestDist = Math.abs(bestChar.centerX - preferredColLeft);
+        for (let i = 1; i < nextLine.length; i++) {
+          const dist = Math.abs(nextLine[i].centerX - preferredColLeft);
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestChar = nextLine[i];
+          }
+        }
+        currentVimCharIndex = bestChar.index;
+        syncVimCursor(curPara.secId, curPara.pIndex, currentVimCharIndex, true);
+      } else {
+        // 已在段落最後一行，跨段落跳至下一段
+        if (curIdx < paras.length - 1) {
+          const nextPara = paras[curIdx + 1];
+          const nextLines = getParagraphVisualLines(nextPara.el, containerRect, scrollContainer.scrollLeft, scrollContainer.scrollTop);
+          const targetLine = nextLines[0];
+          let bestChar = targetLine[0];
+          let bestDist = Math.abs(bestChar.centerX - preferredColLeft);
+          for (let i = 1; i < targetLine.length; i++) {
+            const dist = Math.abs(targetLine[i].centerX - preferredColLeft);
+            if (dist < bestDist) {
+              bestDist = dist;
+              bestChar = targetLine[i];
+            }
+          }
+          currentVimCharIndex = bestChar.index;
+          handleParagraphClick(nextPara.secId, nextPara.pIndex, nextPara.text, currentVimCharIndex);
+        } else {
+          // 已在文章末尾最後一行
+          const lastLine = lines[lines.length - 1];
+          currentVimCharIndex = lastLine[lastLine.length - 1].index;
+          syncVimCursor(curPara.secId, curPara.pIndex, currentVimCharIndex, true);
+        }
+      }
+      return;
+    }
+
+    // k: 垂直上移一行（段落內視覺行移動，若在段落首行則跳至上一段末行）
+    if (key === 'k' || key === 'K') {
+      e.preventDefault();
+      flowStore.recordReadingActivity(15, 'skim');
+
+      if (!scrollContainer) return;
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const lines = getParagraphVisualLines(curPara.el, containerRect, scrollContainer.scrollLeft, scrollContainer.scrollTop);
+
+      let curLineIdx = 0;
+      let minDiff = Infinity;
+      for (let l = 0; l < lines.length; l++) {
+        for (const c of lines[l]) {
+          const diff = Math.abs(c.index - currentVimCharIndex);
+          if (diff < minDiff) {
+            minDiff = diff;
+            curLineIdx = l;
+          }
+        }
+      }
+
+      if (preferredColLeft === null) {
+        const curChar = lines[curLineIdx].find(c => c.index === currentVimCharIndex) || lines[curLineIdx][0];
+        preferredColLeft = curChar.centerX;
+      }
+
+      if (curLineIdx > 0) {
+        // 在上一行中，挑選 centerX 最接近 preferredColLeft 的字元
+        const prevLine = lines[curLineIdx - 1];
+        let bestChar = prevLine[0];
+        let bestDist = Math.abs(bestChar.centerX - preferredColLeft);
+        for (let i = 1; i < prevLine.length; i++) {
+          const dist = Math.abs(prevLine[i].centerX - preferredColLeft);
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestChar = prevLine[i];
+          }
+        }
+        currentVimCharIndex = bestChar.index;
+        syncVimCursor(curPara.secId, curPara.pIndex, currentVimCharIndex, true);
+      } else {
+        // 已在段落首行，跨段落跳至上一段末行
+        if (curIdx > 0) {
+          const prevPara = paras[curIdx - 1];
+          const prevLines = getParagraphVisualLines(prevPara.el, containerRect, scrollContainer.scrollLeft, scrollContainer.scrollTop);
+          const targetLine = prevLines[prevLines.length - 1];
+          let bestChar = targetLine[0];
+          let bestDist = Math.abs(bestChar.centerX - preferredColLeft);
+          for (let i = 1; i < targetLine.length; i++) {
+            const dist = Math.abs(targetLine[i].centerX - preferredColLeft);
+            if (dist < bestDist) {
+              bestDist = dist;
+              bestChar = targetLine[i];
+            }
+          }
+          currentVimCharIndex = bestChar.index;
+          handleParagraphClick(prevPara.secId, prevPara.pIndex, prevPara.text, currentVimCharIndex);
+        } else {
+          // 已在文章首段首行
+          currentVimCharIndex = 0;
+          syncVimCursor(curPara.secId, curPara.pIndex, 0, true);
+        }
+      }
+      return;
+    }
   }
 
   function askCompanionAboutParagraph(sec: ChapterSection, pIndex: number, text: string) {
@@ -514,7 +1183,31 @@
 
   function handleContainerScroll() {
     flowStore.touchActivity();
-    if (isProgrammaticScrolling || !scrollContainer) return;
+    if (!scrollContainer) return;
+
+    // Programmatic scroll：不移動游標，但要更新 lastScrollTop 避免下次捐動用舊差値跳位
+    if (isProgrammaticScrolling) {
+      lastScrollTop = scrollContainer.scrollTop;
+      return;
+    }
+
+    // 游標跟隨捐動：用 rAF 讀取最新 scrollTop，計算差値就地調整 fixed 游標 top
+    if ($vimConfigStore.isVimEnabled && $vimCursorState.active) {
+      if (scrollSyncRafId !== null) cancelAnimationFrame(scrollSyncRafId);
+      scrollSyncRafId = requestAnimationFrame(() => {
+        if (!scrollContainer) { scrollSyncRafId = null; return; }
+        const newScrollTop = scrollContainer.scrollTop;
+        const delta = newScrollTop - lastScrollTop;
+        if (delta !== 0) {
+          adjustCursorForScroll(delta); // O(1)：直接調整 rect.top
+          lastScrollTop = newScrollTop;
+        }
+        scrollSyncRafId = null;
+      });
+    } else {
+      lastScrollTop = scrollContainer.scrollTop;
+    }
+
     const now = Date.now();
     if (now - lastScrollCheck < 60) return;
     lastScrollCheck = now;
@@ -765,7 +1458,7 @@
   }
 </script>
 
-<svelte:window on:keydown={(e) => { if (e.key === 'Escape' && activeLightboxImg) closeLightbox(); }} />
+<svelte:window on:keydown={handleVimKeydown} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions a11y_no_noninteractive_element_interactions -->
 <main
@@ -773,7 +1466,7 @@
   on:scroll={handleContainerScroll}
   on:click={handleContainerClick}
   on:mouseup={handleMouseUp}
-  class="h-full w-full overflow-y-auto overflow-x-hidden {readingMode === 'split' ? 'px-3 sm:px-5' : 'px-4 sm:px-8'} py-6 flex justify-center items-start bg-[#282828]"
+  class="relative h-full w-full overflow-y-auto overflow-x-hidden {readingMode === 'split' ? 'px-3 sm:px-5' : 'px-4 sm:px-8'} py-6 flex justify-center items-start bg-[#282828]"
 >
   <div class="w-full {readingMode === 'split' ? 'max-w-none' : (readingMode === 'zen' ? 'max-w-[980px]' : 'max-w-[880px] xl:max-w-[940px]')} flex flex-col gap-6 pb-[65vh] transition-[max-width] duration-300 mx-auto">
 
@@ -1087,7 +1780,7 @@
                     translationSource={translationSourceMap[key] || ''}
                     translationNotice={translationNoticeMap[key] || ''}
                     {copyToastText}
-                    on:paragraphClick={(e) => handleParagraphClick(e.detail.secId, e.detail.pIndex, e.detail.text)}
+                    on:paragraphClick={(e) => handleParagraphClick(e.detail.secId, e.detail.pIndex, e.detail.text, e.detail.clickCharIdx)}
                     on:askCompanion={(e) => askCompanionAboutParagraph(e.detail.sec, e.detail.pIndex, e.detail.text)}
                     on:toggleTranslation={(e) => toggleParagraphTranslation(e.detail.secId, e.detail.pIndex, e.detail.text)}
                     on:retranslate={(e) => toggleParagraphTranslation(e.detail.secId, e.detail.pIndex, e.detail.text, true)}
@@ -1170,6 +1863,9 @@
     {/if}
 
   </div>
+
+  <!-- Neovim Smear-Cursor 物理殘影與閃爍方塊游標層 (置於 main 內容末尾，永遠浮在文字之上) -->
+  <SmearCursorOverlay containerEl={scrollContainer} />
 </main>
 
 <!-- High-Resolution Image Lightbox Modal (共用燈箱元件) -->
@@ -1179,6 +1875,9 @@
   caption={activeLightboxCaption}
   on:close={closeLightbox}
 />
+
+<!-- Neovim 閱讀狀態列與快捷鍵浮動指示器 -->
+<VimStatusBar {readingMode} />
 
 <style>
   /* 核心目標函數、章節跳轉與公式高亮脈衝動畫 */

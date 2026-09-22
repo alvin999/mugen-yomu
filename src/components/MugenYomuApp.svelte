@@ -6,7 +6,7 @@
   import PaperRepositoryView from './repository/PaperRepositoryView.svelte';
   import CitationGraphView from './citation/CitationGraphView.svelte';
   import CognitiveNotesView from './notes/CognitiveNotesView.svelte';
-  import ByokModal from './byok/ByokModal.svelte';
+  import SettingsModal from './settings/SettingsModal.svelte';
   import ImportPaperModal from './repository/ImportPaperModal.svelte';
 
   import {
@@ -306,8 +306,8 @@
     on:close={() => isImportOpen = false}
   />
 
-  <!-- BYOK Setting Modal -->
-  <ByokModal
+  <!-- System & LLM Settings Modal -->
+  <SettingsModal
     bind:isOpen={isByokOpen}
     on:save={handleByokSave}
     on:close={() => isByokOpen = false}

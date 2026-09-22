@@ -21,7 +21,7 @@
   export let copyToastText: string | null = null;
 
   const dispatch = createEventDispatcher<{
-    paragraphClick: { secId: string; pIndex: number; text: string };
+    paragraphClick: { secId: string; pIndex: number; text: string; clickCharIdx?: number };
     askCompanion: { sec: ChapterSection; pIndex: number; text: string };
     toggleTranslation: { secId: string; pIndex: number; text: string };
     retranslate: { secId: string; pIndex: number; text: string };
@@ -94,6 +94,49 @@
     return parts.join('');
   }
 
+  /**
+   * 對段落內一個點按事件，計算點擊位置最接近的字元 index
+   * 利用 caretRangeFromPoint / caretPositionFromPoint 準確定位
+   */
+  function getClickCharIdx(e: MouseEvent, textRootEl: HTMLElement | null): number {
+    if (!textRootEl) return 0;
+    try {
+      // 標準方法 (Chrome/Safari)
+      if ((document as any).caretRangeFromPoint) {
+        const range = (document as any).caretRangeFromPoint(e.clientX, e.clientY) as Range | null;
+        if (range && range.startContainer.nodeType === Node.TEXT_NODE) {
+          return getCharIndexInTextRoot(textRootEl, range.startContainer as Text, range.startOffset);
+        }
+      }
+      // Firefox 備案
+      if ((document as any).caretPositionFromPoint) {
+        const pos = (document as any).caretPositionFromPoint(e.clientX, e.clientY);
+        if (pos && pos.offsetNode && pos.offsetNode.nodeType === Node.TEXT_NODE) {
+          return getCharIndexInTextRoot(textRootEl, pos.offsetNode as Text, pos.offset);
+        }
+      }
+    } catch (err) {
+      // 靜默失敗回到 0
+    }
+    return 0;
+  }
+
+  /**
+   * 計算特定文字節點 (textNode) 內 offset 在整個 textRoot 下所有文字節點累積的全局 char index
+   */
+  function getCharIndexInTextRoot(root: HTMLElement, targetNode: Text, targetOffset: number): number {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let charCount = 0;
+    let node: Text | null;
+    while ((node = walker.nextNode() as Text)) {
+      if (node === targetNode) {
+        return charCount + Math.max(0, targetOffset);
+      }
+      charCount += (node.nodeValue || '').length;
+    }
+    return charCount;
+  }
+
   function handleParagraphWrapperClick(e: MouseEvent, pIndex: number, paraText: string) {
     e.stopPropagation();
     // 若正在選取文字（滑鼠拖曳反白），不觸發段落焦點切換，保護選取狀態
@@ -103,7 +146,11 @@
         return;
       }
     }
-    dispatch('paragraphClick', { secId: sec.id, pIndex, text: paraText });
+    // 計算點擊字元 index：尋找段落內 .para-main-text 元素
+    const paraEl = (e.currentTarget as HTMLElement);
+    const textRoot = paraEl.querySelector<HTMLElement>('.para-main-text') || paraEl.querySelector<HTMLElement>('p');
+    const clickCharIdx = getClickCharIdx(e, textRoot);
+    dispatch('paragraphClick', { secId: sec.id, pIndex, text: paraText, clickCharIdx });
   }
 </script>
 
@@ -275,7 +322,7 @@
     </div>
 
     <!-- English paragraph with inline KaTeX math and typography -->
-    <p class="font-serif text-[17px] text-[#ebdbb2]/95 leading-[33px] text-justify w-full tracking-[0.01em] select-text break-words">
+    <p class="para-main-text font-serif text-[17px] text-[#ebdbb2]/95 leading-[33px] text-justify w-full tracking-[0.01em] select-text break-words">
       {@html formatParagraphWithMath(para, readingMode)}
     </p>
 
