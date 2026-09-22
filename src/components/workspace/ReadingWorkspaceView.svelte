@@ -2,7 +2,7 @@
   import { createEventDispatcher, onDestroy } from 'svelte';
   import DensityRibbon from '../layout/DensityRibbon.svelte';
   import ReadingMap from '../reading-map/ReadingMap.svelte';
-  import BilingualReader from '../reader/BilingualReader.svelte';
+  import MugenReader from '../reader/MugenReader.svelte';
   import DerivationsFiguresView from '../reader/DerivationsFiguresView.svelte';
   import CognitiveCompanion from '../companion/CognitiveCompanion.svelte';
   import OriginalDocumentViewer from '../reader/OriginalDocumentViewer.svelte';
@@ -528,9 +528,9 @@
         <div class="w-1 h-8 bg-[#504945] group-hover:bg-[#1d2021] rounded-full"></div>
       </div>
 
-      <!-- Right Track: Bilingual Academic Reader (Zoomable) -->
+      <!-- Right Track: Mugen Academic Reader (Zoomable) -->
       <div class="h-full min-w-0 overflow-hidden flex-1 flex flex-col" style="zoom: {zoomLevel}%">
-        <BilingualReader
+        <MugenReader
           bind:this={readerRef}
           paper={activePaper}
           {activeSectionId}
@@ -587,9 +587,9 @@
         />
       {/if}
 
-      <!-- Column 2: Bilingual Paper Reader (Scaled by zoomLevel) -->
+      <!-- Column 2: Mugen Paper Reader (Scaled by zoomLevel) -->
       <div class="h-full w-full min-w-0 overflow-hidden flex flex-col" style="zoom: {zoomLevel}%">
-        <BilingualReader
+        <MugenReader
           bind:this={readerRef}
           paper={activePaper}
           {activeSectionId}
