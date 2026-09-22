@@ -2,9 +2,6 @@
   import { onMount, onDestroy } from 'svelte';
   import { vimCursorState, vimConfigStore } from '../../stores/vimCursorStore';
 
-  // 向後相容
-  export let containerEl: HTMLElement | null = null;
-
   // ── DOM 元素 ──────────────────────────────────────────────────
   let cursorDiv: HTMLDivElement | null = null;
 
@@ -167,7 +164,7 @@
     cursorDiv.style.width  = `${w}px`;
     cursorDiv.style.height = `${h}px`;
 
-    // 透過 3D 透視產生自然梯形動態
+    // 透過 3D 透視產生自然動態
     if (rotX !== 0 || rotY !== 0) {
       cursorDiv.style.transform = `perspective(200px) rotateX(${rotX.toFixed(1)}deg) rotateY(${rotY.toFixed(1)}deg)`;
     } else {
@@ -194,7 +191,7 @@
 
 <!--
   游標方塊：動態屬性由 applyDivStyle() 直接操作 DOM 更新，
-  結合呼吸閃爍與 3D 梯形透視動態
+  結合呼吸閃爍與物理平滑動態
 -->
 <div
   bind:this={cursorDiv}

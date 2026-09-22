@@ -11,7 +11,7 @@
   import BilingualParagraphItem from './bilingual/BilingualParagraphItem.svelte';
   import SectionFormulaChips from './bilingual/SectionFormulaChips.svelte';
   import ImageLightboxModal from '../common/ImageLightboxModal.svelte';
-  import SmearCursorOverlay from './SmearCursorOverlay.svelte';
+  import VimCursorOverlay from './VimCursorOverlay.svelte';
   import VimStatusBar from './VimStatusBar.svelte';
   import {
     vimConfigStore,
@@ -422,6 +422,14 @@
         setTimeout(() => {
           el.classList.remove('formula-target-highlight');
         }, 3200);
+
+        // 若為章節導航（非單一公式定位），游標位置跟著移動到新章節第一段
+        const isFormula = targetId.startsWith('eq-') || targetId.includes('formula') || Boolean(formulaNumber);
+        if (!isFormula) {
+          const secIdToFocus = sectionId || (targetId.startsWith('sec-') ? targetId.replace(/^sec-/, '') : targetId);
+          focusSectionFirstParagraph(secIdToFocus, { syncImmediately: false });
+        }
+
         return true;
       }
       return false;
@@ -434,6 +442,85 @@
         }
       }, 100);
     }
+  }
+
+  let sectionJumpTimer: any = null;
+
+  /**
+   * 將研讀焦點與游標定位至指定章節的第一個文字段落開頭
+   */
+  export function focusSectionFirstParagraph(
+    targetSecId: string,
+    options: { syncImmediately?: boolean } = {}
+  ): boolean {
+    if (typeof document === 'undefined' || !targetSecId) return false;
+
+    const cleanSecId = targetSecId.replace(/^sec-/, '');
+    const secEl = document.getElementById('sec-' + cleanSecId);
+
+    let targetParaEl: HTMLElement | null = null;
+    if (secEl) {
+      targetParaEl = secEl.querySelector<HTMLElement>('[data-para-key]');
+    }
+
+    // 若未在當前 section element 內找到（例如無內文之純目錄標題），從所有渲染段落中比對符合前綴
+    if (!targetParaEl) {
+      const allParas = getAllRenderedParas();
+      const matched = allParas.find(
+        p => p.secId === cleanSecId || p.secId.startsWith(cleanSecId + '.') || p.secId.startsWith(cleanSecId + '_')
+      );
+      if (matched) {
+        targetParaEl = matched.el;
+      }
+    }
+
+    if (!targetParaEl) return false;
+
+    const pKey = targetParaEl.getAttribute('data-para-key') || '';
+    const pText = targetParaEl.getAttribute('data-para-text') || '';
+    const pSecId = targetParaEl.getAttribute('data-sec-id') || cleanSecId;
+    const pIndex = parseInt(pKey.split('_').pop() || '0', 10);
+
+    // 立即綁定研讀焦點與文字，防止後續鍵盤操作回彈至舊章節
+    focusedParagraphKey = pKey;
+    focusedParagraphText = pText;
+    activeSectionId = pSecId;
+    currentVimCharIndex = 0;
+    preferredColLeft = null;
+
+    markParagraphAsRead(pSecId, pIndex, pText);
+
+    dispatch('paragraphFocused', {
+      sectionId: pSecId,
+      paragraphIndex: pIndex,
+      paragraphKey: pKey,
+      text: pText,
+      selectedText: ''
+    });
+
+    const performSync = () => {
+      // 乾淨瞬移定位，不干擾主視窗平滑捲動
+      syncVimCursor(pSecId, pIndex, 0, false, true);
+    };
+
+    if (options.syncImmediately) {
+      performSync();
+    } else {
+      if (sectionJumpTimer) clearTimeout(sectionJumpTimer);
+      // 在平滑捲動抵達新章節後精準校準游標 DOM 坐標
+      sectionJumpTimer = setTimeout(performSync, 380);
+
+      if (scrollContainer && 'onscrollend' in window) {
+        const onEnd = () => {
+          scrollContainer?.removeEventListener('scrollend', onEnd);
+          if (sectionJumpTimer) clearTimeout(sectionJumpTimer);
+          performSync();
+        };
+        scrollContainer.addEventListener('scrollend', onEnd, { once: true });
+      }
+    }
+
+    return true;
   }
 
   export function resetScrollAndProgress() {
@@ -507,7 +594,7 @@
     });
   }
 
-  // --- Vim 游標導引與 Neovim Smear-Cursor 殘影核心邏輯 ---
+  // --- Vim 游標導引與物理動態核心邏輯 ---
   let currentVimCharIndex = 0;
   let preferredColLeft: number | null = null;
   let lastGPressTime = 0;
@@ -1864,8 +1951,8 @@
 
   </div>
 
-  <!-- Neovim Smear-Cursor 物理殘影與閃爍方塊游標層 (置於 main 內容末尾，永遠浮在文字之上) -->
-  <SmearCursorOverlay containerEl={scrollContainer} />
+  <!-- Vim 物理動態與閃爍方塊游標層 (置於 main 內容末尾，永遠浮在文字之上) -->
+  <VimCursorOverlay />
 </main>
 
 <!-- High-Resolution Image Lightbox Modal (共用燈箱元件) -->

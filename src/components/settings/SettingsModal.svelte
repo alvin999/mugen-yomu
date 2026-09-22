@@ -145,7 +145,7 @@
           </div>
           <div class="flex flex-col">
             <h3 class="text-sm font-bold text-[#ebdbb2]">系統偏好與模型設定 (Settings)</h3>
-            <span class="font-mono text-[10px] text-[#a89984]">自訂 AI 密鑰、閱讀主題、Vim 瀏覽與 Smear 殘影</span>
+            <span class="font-mono text-[10px] text-[#a89984]">自訂 AI 密鑰、閱讀主題與 Vim 導航</span>
           </div>
         </div>
 
