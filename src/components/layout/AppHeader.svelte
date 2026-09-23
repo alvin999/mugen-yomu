@@ -67,12 +67,6 @@
       on:click={openRepository}
       title="開啟文獻庫"
     >
-      <div
-        class="w-8 h-8 rounded-md bg-gradient-to-br from-[#d65d0e] to-[#9d0006] border border-[#fe8019]/60 ring-1 ring-inset ring-[#fbf1c7]/20 flex items-center justify-center text-[#fbf1c7] font-serif font-bold text-base shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.3),0_2px_4px_rgba(0,0,0,0.4)] select-none shrink-0"
-        title="MUGEN YOMU · 無限"
-      >
-        <span class="drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]">無</span>
-      </div>
       <div class="flex flex-col">
         <span class="text-sm font-bold tracking-tight text-[#fe8019] leading-none">MUGEN YOMU</span>
         <span class="font-mono text-[9px] text-[#a89984] leading-tight mt-0.5">無限閱讀 · 伴讀工作台</span>
@@ -83,16 +77,6 @@
 
     <!-- Repository & Import Buttons -->
     <div class="flex items-center gap-1.5 shrink-0">
-      <button
-        class="transition-colors flex items-center gap-1 font-mono text-xs px-2 py-1 rounded {currentMainView === 'repository' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#fe8019] bg-[#282828] hover:bg-[#32302f] border border-[#3c3836]'}"
-        on:click={openRepository}
-        title="切換至文獻庫"
-        id="btn-header-library"
-      >
-        <span class="material-symbols-outlined text-[14px]">library_books</span>
-        <span>文獻庫</span>
-      </button>
-
       <button
         class="font-mono text-xs bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] px-2.5 py-1 rounded font-semibold transition-all flex items-center gap-1 shadow-sm shrink-0"
         on:click={openImport}
