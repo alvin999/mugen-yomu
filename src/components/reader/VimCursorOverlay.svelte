@@ -101,13 +101,13 @@
     const pullX = Math.sign(dx) * (absDx <= 35 ? absDx : (35 + Math.pow(absDx - 35, 0.65) * 2.8));
     const pullY = Math.sign(dy) * (absDy <= 30 ? absDy : (30 + Math.pow(absDy - 30, 0.65) * 2.5));
 
-    // 非對稱阻尼：
-    // Y 軸（上下垂直）提高阻尼，消除上下跳行時的視覺震盪，乾脆貼行；
-    // X 軸長距離時加大阻尼迅速煞車，短距離則保留靈活彈性
-    const stiffnessX = 0.18 + 0.14 * strength;
-    const stiffnessY = 0.22 + 0.12 * strength;
-    const dampingX   = (0.86 - 0.18 * strength) * (1 - longDistRatio * 0.36);
-    const dampingY   = (0.76 - 0.10 * strength) * (1 - longDistRatio * 0.28);
+    // 依據強度調配剛性與速度保留率：
+    // 低強度 (如 5%) 呈現「過阻尼快速吸附」（零震盪、零回彈、平滑俐落）；
+    // 中高強度平滑過渡至「彈簧欠阻尼」（活潑彈跳與果凍回彈）
+    const stiffnessX = 0.52 - 0.24 * strength;
+    const stiffnessY = 0.56 - 0.22 * strength;
+    const dampingX   = (0.24 + 0.58 * Math.pow(strength, 0.9)) * (1 - longDistRatio * 0.35);
+    const dampingY   = (0.22 + 0.54 * Math.pow(strength, 0.9)) * (1 - longDistRatio * 0.25);
 
     velX = (velX + pullX * stiffnessX) * dampingX;
     velY = (velY + pullY * stiffnessY) * dampingY;
@@ -132,9 +132,11 @@
 
     applyDivStyle(sx, sy, rotX, rotY);
 
-    // 收斂判斷
-    const converged = Math.abs(dx) < 0.15 && Math.abs(dy) < 0.15 &&
-                      Math.abs(velX) < 0.04 && Math.abs(velY) < 0.04;
+    // 收斂判斷：低強度時適度放寬次像素收斂門檻，避免尾端拖延，就位更乾脆俐落
+    const tolDist = 0.15 + (1 - strength) * 0.22;
+    const tolVel  = 0.04 + (1 - strength) * 0.05;
+    const converged = absDx < tolDist && absDy < tolDist &&
+                      absVX < tolVel  && absVY < tolVel;
     if (converged) {
       dispX = targetX; dispY = targetY;
       velX  = 0;       velY  = 0;
