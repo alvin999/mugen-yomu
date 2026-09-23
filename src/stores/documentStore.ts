@@ -53,14 +53,17 @@ export function getInitialLibrary(): PaperDocument[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Ensure userManualDocument is present if missing from older storage
-        const hasManual = parsed.some((p: any) => p.id === userManualDocument.id);
-        if (!hasManual) {
+        // Ensure userManualDocument is present and always synced with the latest version
+        const manualIdx = parsed.findIndex((p: any) => p.id === userManualDocument.id);
+        if (manualIdx === -1) {
           const updated = [userManualDocument, ...parsed];
           saveLibraryToStorage(updated);
           return updated;
+        } else {
+          parsed[manualIdx] = userManualDocument;
+          saveLibraryToStorage(parsed);
+          return parsed;
         }
-        return parsed;
       }
     }
   } catch (e) {

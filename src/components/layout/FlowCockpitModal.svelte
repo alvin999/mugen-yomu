@@ -122,13 +122,24 @@
               </span>
             </div>
             <div class="space-y-1 text-left">
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 flex-wrap">
                 <span
                   class="px-2.5 py-0.5 rounded-full text-xs font-semibold tracking-wide border shadow-xs"
                   style="background-color: {telemetry.stateColor}18; color: {telemetry.stateColor}; border-color: {telemetry.stateColor}40;"
                 >
                   {telemetry.stateLabel}
                 </span>
+                {#if telemetry.calculationMode === 'cursor'}
+                  <span class="text-[11px] text-[#fe8019] bg-[#fe8019]/15 border border-[#fe8019]/40 px-2 py-0.5 rounded flex items-center gap-1 font-mono">
+                    <span class="material-symbols-outlined text-[12px]">ads_click</span>
+                    游標導向精準遙測
+                  </span>
+                {:else}
+                  <span class="text-[11px] text-[#8ec07c] bg-[#8ec07c]/15 border border-[#8ec07c]/40 px-2 py-0.5 rounded flex items-center gap-1 font-mono">
+                    <span class="material-symbols-outlined text-[12px]">view_stream</span>
+                    頁重視窗滾動遙測
+                  </span>
+                {/if}
                 {#if telemetry.isPaused}
                   <span class="text-[11px] text-[#fe8019] bg-[#fe8019]/10 border border-[#fe8019]/30 px-1.5 py-0.2 rounded">
                     閒置暫停

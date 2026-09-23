@@ -104,9 +104,17 @@
 
       <!-- 心流速率動態指標 -->
       <div class="h-3 w-px bg-[#504945]"></div>
-      <div class="flex items-center gap-1 text-[#8ec07c]" title="即時心流閱讀速率">
-        <span class="material-symbols-outlined text-[12px] animate-pulse">speed</span>
-        <span>{$flowStore.currentWpm} wpm</span>
+      <div
+        class="flex items-center gap-1 {$flowStore.calculationMode === 'cursor' ? 'text-[#fe8019]' : 'text-[#8ec07c]'}"
+        title={$flowStore.calculationMode === 'cursor' ? '🎯 游標導向精準心流速率' : '📜 視窗滾動心流速率'}
+      >
+        <span class="material-symbols-outlined text-[12px] animate-pulse">
+          {$flowStore.calculationMode === 'cursor' ? 'ads_click' : 'speed'}
+        </span>
+        <span class="font-mono">{$flowStore.currentWpm} wpm</span>
+        {#if $flowStore.calculationMode === 'cursor'}
+          <span class="text-[9px] px-1 py-0.2 rounded bg-[#fe8019]/20 text-[#fabd2f] font-semibold">游標</span>
+        {/if}
       </div>
 
       <!-- 快捷鍵幫助按鈕 -->

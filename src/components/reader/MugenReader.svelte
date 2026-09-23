@@ -139,6 +139,10 @@
   let abstractGenError: string = '';
 
   $: allSections = flattenSections(paper?.sections || []);
+  $: isCursorModeActive = Boolean($vimConfigStore.isVimEnabled && $vimCursorState.active);
+  $: {
+    flowStore.setCalculationMode(isCursorModeActive ? 'cursor' : 'page');
+  }
 
   $: if (paper) {
     const isNewPaper = paper.id !== currentPaperId;
@@ -148,16 +152,14 @@
     }
     const allSecs = paper.sections ? flattenSections(paper.sections) : [];
     const totalReadCount = allSecs.reduce((sum, s) => sum + (s.readParaIndices?.length || 0), 0);
-    const anySectionRead = allSecs.some(s => s.isRead || (s.progress && s.progress > 0));
-
-    if (!anySectionRead && totalReadCount === 0) {
+    if (totalReadCount === 0 && passedParaKeys.size > 0) {
       passedParaKeys = new Set<string>();
-    } else if (isNewPaper) {
-      for (const s of allSecs) {
-        if (s.readParaIndices && s.readParaIndices.length > 0) {
-          for (const idx of s.readParaIndices) {
-            passedParaKeys.add(`${s.id}_${idx}`);
-          }
+    }
+    // 同步歷史已讀段落到 passedParaKeys
+    for (const s of allSecs) {
+      if (s.readParaIndices && s.readParaIndices.length > 0) {
+        for (const idx of s.readParaIndices) {
+          passedParaKeys.add(`${s.id}_${idx}`);
         }
       }
     }
@@ -194,7 +196,9 @@
     if (!passedParaKeys.has(key)) {
       passedParaKeys.add(key);
       const words = countWords(text);
-      flowStore.recordReadingActivity(Math.max(15, words), 'skim');
+      if (!isCursorModeActive) {
+        flowStore.recordReadingActivity(Math.max(15, words), 'skim');
+      }
       dispatch('paragraphsRead', {
         paragraphs: [{ sectionId: secId, paraIndex: pIndex, words }]
       });
@@ -215,8 +219,21 @@
     markParagraphAsRead(secId, pIndex, text);
 
     flowStore.touchActivity();
-    const pWords = countWords(text);
-    flowStore.recordReadingActivity(Math.min(20, Math.round(pWords * 0.2)), 'skim');
+
+    if ($vimConfigStore.isVimEnabled) {
+      vimController.recordPositionChange(
+        secId,
+        pIndex,
+        vimController.currentCharIndex,
+        text,
+        (deltaWords, moveType, elapsedMs) => {
+          flowStore.recordCursorProgress(deltaWords, moveType, elapsedMs);
+        }
+      );
+    } else {
+      const pWords = countWords(text);
+      flowStore.recordReadingActivity(Math.min(20, Math.round(pWords * 0.2)), 'skim');
+    }
 
     vimController.syncCursor(secId, pIndex, vimController.currentCharIndex, true);
 
@@ -565,7 +582,9 @@
 
     if (newlyReadParas.length > 0) {
       const totalWords = newlyReadParas.reduce((acc, p) => acc + p.words, 0);
-      flowStore.recordReadingActivity(totalWords, 'scroll');
+      if (!isCursorModeActive) {
+        flowStore.recordReadingActivity(totalWords, 'scroll');
+      }
       dispatch('paragraphsRead', { paragraphs: newlyReadParas });
     }
 
@@ -633,6 +652,9 @@
       },
       onShowToast: (text) => showToast(text),
       onRecordActivity: (words, type) => flowStore.recordReadingActivity(words, type),
+      onCursorProgress: (deltaWords, moveType, elapsedMs) => {
+        flowStore.recordCursorProgress(deltaWords, moveType, elapsedMs);
+      },
       onCloseLightbox: closeLightbox,
       isLightboxOpen: Boolean(activeLightboxImg)
     });

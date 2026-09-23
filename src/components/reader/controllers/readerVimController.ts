@@ -5,7 +5,16 @@ import {
   updateCursorPosition,
   setVimHelpOpen
 } from '../../../stores/vimCursorStore';
+import { countWords, countPreciseWords } from '../../../stores/flowStore';
 import { get } from 'svelte/store';
+
+export interface CursorReadingPos {
+  secId: string;
+  pIndex: number;
+  charIndex: number;
+  timestamp: number;
+  textSnippet: string;
+}
 
 export interface CharMetric {
   index: number;
@@ -281,7 +290,9 @@ export class ReaderVimController {
   public currentParaKey: string = '';
   /** 在 ensureCursorInComfortView 捲動前呼叫，用於設定 isProgrammaticScrolling 旗標 */
   private onBeforeComfortScroll: (() => void) | null = null;
-  private lastGPressTime: number = 0;
+  public lastGPressTime: number = 0;
+  public lastReadingPos: CursorReadingPos | null = null;
+  private lastHLTime: number = 0;
 
   constructor(scrollContainer?: HTMLElement | null) {
     this.scrollContainer = scrollContainer || null;
@@ -294,6 +305,92 @@ export class ReaderVimController {
   /** 設定在投入换行捲動前的鐘彾（一次設定即永久生效） */
   public setBeforeScrollHook(hook: () => void) {
     this.onBeforeComfortScroll = hook;
+  }
+
+  /**
+   * 計算並回報游標行進差分（字數、推進/回跳/跳躍、時間差）
+   */
+  public recordPositionChange(
+    secId: string,
+    pIndex: number,
+    charIdx: number,
+    text: string,
+    onCursorProgress?: (deltaWords: number, moveType: 'forward' | 'regression' | 'jump', elapsedMs?: number) => void,
+    forcedType?: 'jump' | 'regression' | 'forward'
+  ) {
+    const now = Date.now();
+    if (!this.lastReadingPos) {
+      this.lastReadingPos = {
+        secId,
+        pIndex,
+        charIndex: charIdx,
+        timestamp: now,
+        textSnippet: text
+      };
+      onCursorProgress?.(0, 'jump', 0);
+      return;
+    }
+
+    const prev = this.lastReadingPos;
+    const elapsedMs = Math.max(1, now - prev.timestamp);
+
+    if (forcedType === 'jump') {
+      this.lastReadingPos = { secId, pIndex, charIndex: charIdx, timestamp: now, textSnippet: text };
+      onCursorProgress?.(0, 'jump', elapsedMs);
+      return;
+    }
+
+    if (forcedType === 'regression') {
+      this.lastReadingPos = { secId, pIndex, charIndex: charIdx, timestamp: now, textSnippet: text };
+      onCursorProgress?.(0, 'regression', elapsedMs);
+      return;
+    }
+
+    // 若同一段落內移動
+    if (prev.secId === secId && prev.pIndex === pIndex) {
+      if (charIdx > prev.charIndex) {
+        // 正向推進（以真實字元長度計算等效單詞，不再粗暴強制保底 1 詞）
+        const slice = text.slice(prev.charIndex, charIdx);
+        const words = countPreciseWords(slice);
+        this.lastReadingPos = { secId, pIndex, charIndex: charIdx, timestamp: now, textSnippet: text };
+        onCursorProgress?.(words, 'forward', elapsedMs);
+      } else if (charIdx < prev.charIndex) {
+        // 回跳複讀
+        this.lastReadingPos = { secId, pIndex, charIndex: charIdx, timestamp: now, textSnippet: text };
+        onCursorProgress?.(0, 'regression', elapsedMs);
+      }
+      return;
+    }
+
+    // 跨段落移動
+    const paras = getAllRenderedParas(this.scrollContainer, secId);
+    const prevIdx = paras.findIndex(p => p.secId === prev.secId && p.pIndex === prev.pIndex);
+    const curIdx = paras.findIndex(p => p.secId === secId && p.pIndex === pIndex);
+
+    if (prevIdx !== -1 && curIdx !== -1) {
+      if (curIdx === prevIdx + 1) {
+        // 正向下移到緊接的下一段
+        const prevRemaining = prev.textSnippet.slice(prev.charIndex);
+        const curHead = text.slice(0, charIdx);
+        const words = countPreciseWords(prevRemaining) + countPreciseWords(curHead);
+        this.lastReadingPos = { secId, pIndex, charIndex: charIdx, timestamp: now, textSnippet: text };
+        if (words > 80) {
+          onCursorProgress?.(0, 'jump', elapsedMs);
+        } else {
+          onCursorProgress?.(words, 'forward', elapsedMs);
+        }
+        return;
+      } else if (curIdx < prevIdx) {
+        // 回跳到前面的段落
+        this.lastReadingPos = { secId, pIndex, charIndex: charIdx, timestamp: now, textSnippet: text };
+        onCursorProgress?.(0, 'regression', elapsedMs);
+        return;
+      }
+    }
+
+    // 大跨度跳躍或未知順序
+    this.lastReadingPos = { secId, pIndex, charIndex: charIdx, timestamp: now, textSnippet: text };
+    onCursorProgress?.(0, 'jump', elapsedMs);
   }
 
   public syncCursor(
@@ -331,6 +428,7 @@ export class ReaderVimController {
       onAskCompanion: (secId: string, pIndex: number, text: string) => void;
       onShowToast: (text: string) => void;
       onRecordActivity: (words: number, type: 'skim' | 'interact' | 'scroll') => void;
+      onCursorProgress?: (deltaWords: number, moveType: 'forward' | 'regression' | 'jump', elapsedMs?: number) => void;
       onCloseLightbox?: () => void;
       isLightboxOpen?: boolean;
     }
@@ -416,6 +514,7 @@ export class ReaderVimController {
         const first = paras[0];
         this.currentCharIndex = 0;
         this.preferredColLeft = null;
+        this.recordPositionChange(first.secId, first.pIndex, 0, first.text, callbacks.onCursorProgress, 'jump');
         callbacks.onParagraphClick(first.secId, first.pIndex, first.text, 0);
         this.lastGPressTime = 0;
         return;
@@ -430,6 +529,7 @@ export class ReaderVimController {
       const last = paras[paras.length - 1];
       this.currentCharIndex = Math.max(0, last.text.length - 1);
       this.preferredColLeft = null;
+      this.recordPositionChange(last.secId, last.pIndex, this.currentCharIndex, last.text, callbacks.onCursorProgress, 'jump');
       callbacks.onParagraphClick(last.secId, last.pIndex, last.text, this.currentCharIndex);
       return;
     }
@@ -440,6 +540,7 @@ export class ReaderVimController {
       this.currentCharIndex = 0;
       this.preferredColLeft = null;
       this.syncCursor(curPara.secId, curPara.pIndex, 0, true);
+      this.recordPositionChange(curPara.secId, curPara.pIndex, 0, curPara.text, callbacks.onCursorProgress, 'regression');
       callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
       return;
     }
@@ -450,6 +551,7 @@ export class ReaderVimController {
       this.currentCharIndex = Math.max(0, curPara.text.length - 1);
       this.preferredColLeft = null;
       this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
+      this.recordPositionChange(curPara.secId, curPara.pIndex, this.currentCharIndex, curPara.text, callbacks.onCursorProgress);
       callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
       return;
     }
@@ -463,10 +565,12 @@ export class ReaderVimController {
       if (match && match.index !== undefined) {
         this.currentCharIndex += match.index + match[0].length - 1;
         this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
+        this.recordPositionChange(curPara.secId, curPara.pIndex, this.currentCharIndex, curPara.text, callbacks.onCursorProgress);
         callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
       } else if (curIdx < paras.length - 1) {
         const next = paras[curIdx + 1];
         this.currentCharIndex = 0;
+        this.recordPositionChange(next.secId, next.pIndex, 0, next.text, callbacks.onCursorProgress);
         callbacks.onParagraphClick(next.secId, next.pIndex, next.text, 0);
       }
       return;
@@ -481,14 +585,17 @@ export class ReaderVimController {
       if (match && match.index !== undefined && match.index < this.currentCharIndex) {
         this.currentCharIndex = match.index;
         this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
+        this.recordPositionChange(curPara.secId, curPara.pIndex, this.currentCharIndex, curPara.text, callbacks.onCursorProgress, 'regression');
         callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
       } else if (this.currentCharIndex > 0) {
         this.currentCharIndex = 0;
         this.syncCursor(curPara.secId, curPara.pIndex, 0, true);
+        this.recordPositionChange(curPara.secId, curPara.pIndex, 0, curPara.text, callbacks.onCursorProgress, 'regression');
         callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
       } else if (curIdx > 0) {
         const prev = paras[curIdx - 1];
         this.currentCharIndex = Math.max(0, prev.text.length - 1);
+        this.recordPositionChange(prev.secId, prev.pIndex, this.currentCharIndex, prev.text, callbacks.onCursorProgress, 'regression');
         callbacks.onParagraphClick(prev.secId, prev.pIndex, prev.text, this.currentCharIndex);
       }
       return;
@@ -497,6 +604,10 @@ export class ReaderVimController {
     // l: 向右移動至下一個可見字元
     if (key === 'l' || key === 'L') {
       e.preventDefault();
+      const now = Date.now();
+      if (now - this.lastHLTime < 40) return;
+      this.lastHLTime = now;
+
       this.preferredColLeft = null;
       const visibleIndices = getParagraphVisibleCharIndices(curPara.el);
       if (visibleIndices.length > 0) {
@@ -504,16 +615,19 @@ export class ReaderVimController {
         if (nextIdx !== undefined) {
           this.currentCharIndex = nextIdx;
           this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
+          this.recordPositionChange(curPara.secId, curPara.pIndex, this.currentCharIndex, curPara.text, callbacks.onCursorProgress);
           callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
         } else if (curIdx < paras.length - 1) {
           const next = paras[curIdx + 1];
           const nextVis = getParagraphVisibleCharIndices(next.el);
           this.currentCharIndex = nextVis.length > 0 ? nextVis[0] : 0;
+          this.recordPositionChange(next.secId, next.pIndex, this.currentCharIndex, next.text, callbacks.onCursorProgress);
           callbacks.onParagraphClick(next.secId, next.pIndex, next.text, this.currentCharIndex);
         }
       } else if (curIdx < paras.length - 1) {
         const next = paras[curIdx + 1];
         this.currentCharIndex = 0;
+        this.recordPositionChange(next.secId, next.pIndex, 0, next.text, callbacks.onCursorProgress);
         callbacks.onParagraphClick(next.secId, next.pIndex, next.text, 0);
       }
       return;
@@ -522,6 +636,10 @@ export class ReaderVimController {
     // h: 向左移動至上一個可見字元
     if (key === 'h' || key === 'H') {
       e.preventDefault();
+      const now = Date.now();
+      if (now - this.lastHLTime < 40) return;
+      this.lastHLTime = now;
+
       this.preferredColLeft = null;
       const visibleIndices = getParagraphVisibleCharIndices(curPara.el);
       if (visibleIndices.length > 0) {
@@ -535,16 +653,19 @@ export class ReaderVimController {
         if (prevIdx !== undefined) {
           this.currentCharIndex = prevIdx;
           this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
+          this.recordPositionChange(curPara.secId, curPara.pIndex, this.currentCharIndex, curPara.text, callbacks.onCursorProgress, 'regression');
           callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
         } else if (curIdx > 0) {
           const prev = paras[curIdx - 1];
           const prevVis = getParagraphVisibleCharIndices(prev.el);
           this.currentCharIndex = prevVis.length > 0 ? prevVis[prevVis.length - 1] : 0;
+          this.recordPositionChange(prev.secId, prev.pIndex, this.currentCharIndex, prev.text, callbacks.onCursorProgress, 'regression');
           callbacks.onParagraphClick(prev.secId, prev.pIndex, prev.text, this.currentCharIndex);
         }
       } else if (curIdx > 0) {
         const prev = paras[curIdx - 1];
         this.currentCharIndex = Math.max(0, prev.text.length - 1);
+        this.recordPositionChange(prev.secId, prev.pIndex, this.currentCharIndex, prev.text, callbacks.onCursorProgress, 'regression');
         callbacks.onParagraphClick(prev.secId, prev.pIndex, prev.text, this.currentCharIndex);
       }
       return;
@@ -553,7 +674,6 @@ export class ReaderVimController {
     // j: 垂直下移一行
     if (key === 'j' || key === 'J') {
       e.preventDefault();
-      callbacks.onRecordActivity(15, 'skim');
       if (!this.scrollContainer) return;
 
       const containerRect = this.scrollContainer.getBoundingClientRect();
@@ -589,6 +709,7 @@ export class ReaderVimController {
         }
         this.currentCharIndex = bestChar.index;
         this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
+        this.recordPositionChange(curPara.secId, curPara.pIndex, this.currentCharIndex, curPara.text, callbacks.onCursorProgress);
         callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
       } else {
         if (curIdx < paras.length - 1) {
@@ -605,11 +726,13 @@ export class ReaderVimController {
             }
           }
           this.currentCharIndex = bestChar.index;
+          this.recordPositionChange(nextPara.secId, nextPara.pIndex, this.currentCharIndex, nextPara.text, callbacks.onCursorProgress);
           callbacks.onParagraphClick(nextPara.secId, nextPara.pIndex, nextPara.text, this.currentCharIndex);
         } else {
           const lastLine = lines[lines.length - 1];
           this.currentCharIndex = lastLine[lastLine.length - 1].index;
           this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
+          this.recordPositionChange(curPara.secId, curPara.pIndex, this.currentCharIndex, curPara.text, callbacks.onCursorProgress);
           callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
         }
       }
@@ -619,7 +742,6 @@ export class ReaderVimController {
     // k: 垂直上移一行
     if (key === 'k' || key === 'K') {
       e.preventDefault();
-      callbacks.onRecordActivity(15, 'skim');
       if (!this.scrollContainer) return;
 
       const containerRect = this.scrollContainer.getBoundingClientRect();
@@ -655,6 +777,7 @@ export class ReaderVimController {
         }
         this.currentCharIndex = bestChar.index;
         this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
+        this.recordPositionChange(curPara.secId, curPara.pIndex, this.currentCharIndex, curPara.text, callbacks.onCursorProgress, 'regression');
         callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
       } else {
         if (curIdx > 0) {
@@ -671,10 +794,12 @@ export class ReaderVimController {
             }
           }
           this.currentCharIndex = bestChar.index;
+          this.recordPositionChange(prevPara.secId, prevPara.pIndex, this.currentCharIndex, prevPara.text, callbacks.onCursorProgress, 'regression');
           callbacks.onParagraphClick(prevPara.secId, prevPara.pIndex, prevPara.text, this.currentCharIndex);
         } else {
           this.currentCharIndex = 0;
           this.syncCursor(curPara.secId, curPara.pIndex, 0, true);
+          this.recordPositionChange(curPara.secId, curPara.pIndex, 0, curPara.text, callbacks.onCursorProgress, 'regression');
           callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
         }
       }

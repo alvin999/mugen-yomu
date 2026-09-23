@@ -43,7 +43,10 @@
       <span class="material-symbols-outlined text-[13px] animate-pulse" style="color: {activeColor};">
         {isPaused ? 'pause_circle' : 'speed'}
       </span>
-      <span class="text-[#ebdbb2]">
+      <span class="text-[#ebdbb2] flex items-center gap-1">
+        {#if currentTelemetry?.calculationMode === 'cursor'}
+          <span class="material-symbols-outlined text-[12px] text-[#fe8019]" title="🎯 游標引導精準計算">ads_click</span>
+        {/if}
         心流速率: <strong class="font-semibold" style="color: {activeColor};">{displayWpm} wpm</strong>
       </span>
       <span
