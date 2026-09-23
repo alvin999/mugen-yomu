@@ -53,6 +53,84 @@
   let uploadError: string = '';
   let previewUploadPaper: PaperDocument | null = null;
 
+  // --- Clipboard Helper & Paste Handlers ---
+  let clipboardToast: string = '';
+  let toastTimeout: any = null;
+
+  function showToast(msg: string) {
+    clipboardToast = msg;
+    if (toastTimeout) clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => {
+      clipboardToast = '';
+    }, 2800);
+  }
+
+  async function getClipboardText(): Promise<string | null> {
+    if (!navigator.clipboard || !navigator.clipboard.readText) {
+      showToast('瀏覽器限制讀取剪貼簿，請使用 Ctrl+V 貼上');
+      return null;
+    }
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text || !text.trim()) {
+        showToast('剪貼簿目前沒有文字內容');
+        return null;
+      }
+      return text;
+    } catch (err: any) {
+      showToast('無法讀取剪貼簿（可能需要允許瀏覽器權限）');
+      return null;
+    }
+  }
+
+  async function handlePasteArxiv() {
+    const text = await getClipboardText();
+    if (!text) return;
+    let cleaned = text.trim();
+    // 自動辨識 arXiv URL 或 ID
+    const match = cleaned.match(/(?:arxiv\.org\/(?:abs|pdf|html)\/|arxiv:)?([0-9]{4}\.[0-9]{4,5}(?:v[0-9]+)?)/i);
+    if (match && match[1]) {
+      arxivInput = match[1];
+      showToast(`已貼上 arXiv ID: ${arxivInput}`);
+    } else {
+      arxivInput = cleaned;
+      showToast('已從剪貼簿貼上');
+    }
+    arxivError = '';
+  }
+
+  async function handlePasteWebUrl() {
+    const text = await getClipboardText();
+    if (!text) return;
+    webUrl = text.trim();
+    webError = '';
+    showToast('已從剪貼簿貼上網址');
+  }
+
+  async function handlePasteTitle() {
+    const text = await getClipboardText();
+    if (!text) return;
+    pasteTitle = text.trim().replace(/^#+\s*/, '');
+    showToast('已從剪貼簿貼上標題');
+  }
+
+  async function handlePasteContent() {
+    const text = await getClipboardText();
+    if (!text) return;
+    const contentToUse = autoSanitizePaste ? cleanPaperText(text) : text;
+    pasteContent = contentToUse;
+    pasteError = '';
+
+    // 若標題空白，嘗試自動擷取首行作為標題
+    if (!pasteTitle.trim()) {
+      const firstLine = text.trim().split('\n')[0].replace(/^#+\s*/, '').trim();
+      if (firstLine && firstLine.length < 80) {
+        pasteTitle = firstLine;
+      }
+    }
+    showToast(`已貼上內容 (${contentToUse.length.toLocaleString()} 字元)`);
+  }
+
   function close() {
     isOpen = false;
     dispatch('close');
@@ -237,7 +315,14 @@
 
 {#if isOpen}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 select-none" aria-modal="true" role="dialog">
-    <div class="w-full max-w-3xl bg-[#282828] border border-[#504945] rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div class="w-full max-w-3xl bg-[#282828] border border-[#504945] rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] relative">
+      
+      {#if clipboardToast}
+        <div class="absolute top-16 left-1/2 -translate-x-1/2 z-50 px-3.5 py-1.5 bg-[#32302f] border border-[#fe8019] text-[#fabd2f] text-xs font-mono rounded-lg shadow-xl flex items-center gap-1.5 animate-pulse">
+          <span class="material-symbols-outlined text-[15px] text-[#fe8019]">info</span>
+          <span>{clipboardToast}</span>
+        </div>
+      {/if}
       
       <!-- Modal Header -->
       <div class="p-4 bg-[#1d2021] border-b border-[#3c3836] flex items-center justify-between">
@@ -345,6 +430,15 @@
                   bind:value={arxivInput}
                   on:keydown={(e) => e.key === 'Enter' && handleFetchArxiv()}
                 />
+                <button
+                  type="button"
+                  class="px-2.5 py-2 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019] text-[#ebdbb2] rounded-lg transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+                  title="從剪貼簿貼上"
+                  on:click={handlePasteArxiv}
+                >
+                  <span class="material-symbols-outlined text-[15px] text-[#fe8019]">content_paste</span>
+                  <span class="font-mono text-[11px]">貼上</span>
+                </button>
                 <button
                   class="px-4 py-2 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-bold rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shrink-0"
                   disabled={isFetchingArxiv}
@@ -589,6 +683,15 @@
                   on:keydown={(e) => e.key === 'Enter' && handleFetchWeb()}
                 />
                 <button
+                  type="button"
+                  class="px-2.5 py-2 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019] text-[#ebdbb2] rounded-lg transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+                  title="從剪貼簿貼上網址"
+                  on:click={handlePasteWebUrl}
+                >
+                  <span class="material-symbols-outlined text-[15px] text-[#fe8019]">content_paste</span>
+                  <span class="font-mono text-[11px]">貼上</span>
+                </button>
+                <button
                   class="px-4 py-2 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold rounded-lg flex items-center gap-1.5 transition-colors shrink-0 disabled:opacity-50"
                   disabled={isFetchingWeb}
                   on:click={handleFetchWeb}
@@ -782,7 +885,18 @@
         {:else if activeTab === 'paste'}
           <div class="flex flex-col gap-3">
             <div class="flex flex-col gap-1">
-              <label for="import-paste-title" class="font-mono text-[11px] text-[#d5c4a1]">文獻標題 (Title)</label>
+              <div class="flex items-center justify-between">
+                <label for="import-paste-title" class="font-mono text-[11px] text-[#d5c4a1]">文獻標題 (Title)</label>
+                <button
+                  type="button"
+                  class="text-[10px] font-mono text-[#a89984] hover:text-[#ebdbb2] flex items-center gap-0.5 cursor-pointer transition-colors"
+                  title="貼上剪貼簿內容至標題"
+                  on:click={handlePasteTitle}
+                >
+                  <span class="material-symbols-outlined text-[12px] text-[#fe8019]">content_paste</span>
+                  <span>貼上標題</span>
+                </button>
+              </div>
               <input
                 id="import-paste-title"
                 class="w-full bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] px-3 py-2 rounded-lg focus:outline-none focus:border-[#fe8019] text-xs"
@@ -793,7 +907,7 @@
             </div>
 
             <div class="flex flex-col gap-1">
-              <div class="flex items-center justify-between">
+              <div class="flex items-center justify-between flex-wrap gap-2">
                 <div class="flex items-center gap-2">
                   <label for="import-paste-content" class="font-mono text-[11px] text-[#d5c4a1]">正文內容或 Markdown</label>
                   <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono text-[#b8bb26] bg-[#b8bb26]/10 px-1.5 py-0.5 rounded border border-[#b8bb26]/30 hover:bg-[#b8bb26]/20 transition-colors" title="自動將 PDF 複製之硬換行、斷詞連字號 (如 Sys-tem) 與連字分離修復為乾淨段落">
@@ -801,17 +915,28 @@
                     <span>自動淨化 PDF 換行與連字號</span>
                   </label>
                 </div>
-                {#if pasteContent.trim()}
+                <div class="flex items-center gap-2">
                   <button
                     type="button"
-                    class="text-[10px] font-mono text-[#fe8019] hover:text-[#fabd2f] flex items-center gap-0.5 hover:underline cursor-pointer"
-                    on:click={handleCleanPasteText}
-                    title="立即在文字框內預覽淨化後的排版"
+                    class="text-[10px] font-mono text-[#ebdbb2] bg-[#32302f] hover:bg-[#3c3836] border border-[#504945] hover:border-[#fe8019] px-2 py-0.5 rounded flex items-center gap-1 transition-colors cursor-pointer"
+                    title="從剪貼簿貼上完整文章內容"
+                    on:click={handlePasteContent}
                   >
-                    <span class="material-symbols-outlined text-[13px]">cleaning_services</span>
-                    預先淨化文字框
+                    <span class="material-symbols-outlined text-[13px] text-[#fe8019]">content_paste_go</span>
+                    <span>貼上剪貼簿內容</span>
                   </button>
-                {/if}
+                  {#if pasteContent.trim()}
+                    <button
+                      type="button"
+                      class="text-[10px] font-mono text-[#fe8019] hover:text-[#fabd2f] flex items-center gap-0.5 hover:underline cursor-pointer"
+                      on:click={handleCleanPasteText}
+                      title="立即在文字框內預覽淨化後的排版"
+                    >
+                      <span class="material-symbols-outlined text-[13px]">cleaning_services</span>
+                      預先淨化文字框
+                    </button>
+                  {/if}
+                </div>
               </div>
               <textarea
                 id="import-paste-content"
