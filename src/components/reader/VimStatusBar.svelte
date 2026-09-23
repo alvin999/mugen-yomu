@@ -24,7 +24,7 @@
   <div class="fixed bottom-3 right-6 z-40 flex flex-col items-end gap-1.5 font-mono select-none pointer-events-auto animate-fade-in">
     <!-- 快捷鍵速查卡 (Floating Cheat Sheet Modal) -->
     {#if isHelpOpen}
-      <div class="mb-2 w-80 bg-[#1d2021]/95 backdrop-blur-md border border-[#504945] rounded-xl shadow-2xl p-3.5 text-[11px] text-[#ebdbb2] animate-scale-in">
+      <div class="mb-2 w-80 bg-[#1d2021]/95 backdrop-blur-md border border-[#504945] rounded-xl shadow-2xl p-3.5 text-[11px] text-[#ebdbb2] animate-scale-in" role="dialog" aria-modal="true">
         <div class="flex items-center justify-between border-b border-[#3c3836] pb-2 mb-2.5">
           <div class="flex items-center gap-1.5 font-bold text-[#fe8019]">
             <span class="material-symbols-outlined text-[16px]">terminal</span>

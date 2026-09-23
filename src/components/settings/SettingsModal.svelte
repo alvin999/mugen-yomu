@@ -133,7 +133,7 @@
 </script>
 
 {#if isOpen}
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 select-none animate-fade-in">
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 select-none animate-fade-in" aria-modal="true" role="dialog">
     <!-- 主彈窗容器：嚴格限制 max-h-[85vh]，內容可捲動，Header/Footer 永不被擠壓遮擋 -->
     <div class="w-full max-w-xl max-h-[85vh] bg-[#282828] border border-[#504945] rounded-xl shadow-2xl overflow-hidden flex flex-col">
       

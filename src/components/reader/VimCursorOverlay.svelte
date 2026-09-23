@@ -199,7 +199,7 @@
   bind:this={cursorDiv}
   class="fixed pointer-events-none select-none {isBlinking ? 'animate-vim-blink' : ''}"
   style="
-    z-index: 9999;
+    z-index: 35;
     display: none;
     left: 0;
     top: 0;

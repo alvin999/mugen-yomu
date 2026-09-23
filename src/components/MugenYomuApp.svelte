@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import NavigationRail from './layout/NavigationRail.svelte';
   import AppHeader from './layout/AppHeader.svelte';
   import ReadingWorkspaceView from './workspace/ReadingWorkspaceView.svelte';
@@ -24,6 +24,7 @@
   import { flowStore } from '../stores/flowStore';
   import { getCacheStats, getStorageEstimate, type CacheStats } from '../services/cacheService';
   import { formatModelDisplayName } from '../services/aiService';
+  import { deactivateCursor, activateCursor } from '../stores/vimCursorStore';
 
   // --- App View & Studio Modes ---
   let currentMainView: 'workspace' | 'repository' | 'citation-graph' | 'notes' = 'workspace';
@@ -54,6 +55,24 @@
     cachedInfo = `$${cacheStats.costSavedUsd.toFixed(2)} / ${tokensK}k cached (省 ${cacheStats.savingsPercent}%)`;
   }
 
+  let modalObserver: MutationObserver | null = null;
+  let hadModalOpen = false;
+
+  function checkModalState() {
+    if (typeof document === 'undefined') return;
+    const activeModals = document.querySelectorAll(
+      '[aria-modal="true"], [role="dialog"], .modal-container, .modal-backdrop, .modal-overlay, [data-modal="true"]'
+    );
+    const hasModal = activeModals.length > 0;
+    if (hasModal && !hadModalOpen) {
+      hadModalOpen = true;
+      deactivateCursor();
+    } else if (!hasModal && hadModalOpen) {
+      hadModalOpen = false;
+      activateCursor();
+    }
+  }
+
   onMount(() => {
     paperLibrary = getInitialLibrary();
     activePaperId = getActivePaperId();
@@ -63,6 +82,22 @@
     }
     loadActiveModel();
     refreshCacheStats();
+
+    // 監聽 DOM 樹變化，當任何 Modal 被打開或完全關閉時自動同步 Vim 游標生命週期
+    modalObserver = new MutationObserver(() => {
+      checkModalState();
+    });
+    modalObserver.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+  });
+
+  onDestroy(() => {
+    if (modalObserver) {
+      modalObserver.disconnect();
+      modalObserver = null;
+    }
   });
 
   function loadActiveModel() {
@@ -116,6 +151,30 @@
       isPdfDrawerOpen = !isPdfDrawerOpen;
     } else if (e.key === 'Escape' && isPdfDrawerOpen) {
       isPdfDrawerOpen = false;
+    }
+  }
+
+  let prevByokOrImport = false;
+  // 彈窗開啟時立即關閉 Vim 游標；關閉時自動恢復游標
+  $: {
+    const isAnyAppModalOpen = isByokOpen || isImportOpen;
+    if (isAnyAppModalOpen && !prevByokOrImport) {
+      deactivateCursor();
+    } else if (!isAnyAppModalOpen && prevByokOrImport) {
+      activateCursor();
+    }
+    prevByokOrImport = isAnyAppModalOpen;
+  }
+
+  // 全域事件委派：點擊任何 Modal 或遮罩層時，立即隱藏/關閉 Vim 游標
+  function handleGlobalPointerDown(e: PointerEvent) {
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+    const isInsideModal = target.closest(
+      '[aria-modal="true"], [role="dialog"], .modal-container, .modal-backdrop, .modal-overlay, [data-modal="true"]'
+    );
+    if (isInsideModal) {
+      deactivateCursor();
     }
   }
 
@@ -314,4 +373,7 @@
   />
 </div>
 
-<svelte:window on:keydown={handleGlobalKeydown} />
+<svelte:window
+  on:keydown={handleGlobalKeydown}
+  on:pointerdown={handleGlobalPointerDown}
+/>

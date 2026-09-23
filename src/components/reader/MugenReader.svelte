@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount } from 'svelte';
+  import { createEventDispatcher, onMount, onDestroy } from 'svelte';
   import type { PaperDocument, ChapterSection, FormulaItem } from '../../types/document';
   import { flattenSections } from '../../stores/readingStore';
   import { flowStore, countWords } from '../../stores/flowStore';
@@ -124,6 +124,7 @@
   let scrollSyncRafId: number | null = null;
   let lastScrollTop = 0;
   let sectionJumpTimer: any = null;
+  let scrollDebounceTimer: any = null;
 
   // Paragraph Translation State
   let paragraphTranslations: Record<string, string> = {};
@@ -142,6 +143,27 @@
   $: isCursorModeActive = Boolean($vimConfigStore.isVimEnabled && $vimCursorState.active);
   $: {
     flowStore.setCalculationMode(isCursorModeActive ? 'cursor' : 'page');
+  }
+
+  let prevVimActive = false;
+  // 當游標由非活躍恢復為活躍（例如關閉 Modal）時，自動重新吸附就位
+  $: {
+    const curVimActive = Boolean($vimConfigStore.isVimEnabled && $vimCursorState.active);
+    if (curVimActive && !prevVimActive) {
+      if ($vimCursorState.sectionId && $vimCursorState.paraIndex !== undefined) {
+        requestAnimationFrame(() => {
+          if (scrollContainer) lastScrollTop = scrollContainer.scrollTop;
+          vimController.syncCursor(
+            $vimCursorState.sectionId,
+            $vimCursorState.paraIndex,
+            vimController.currentCharIndex || 0,
+            false,
+            true
+          );
+        });
+      }
+    }
+    prevVimActive = curVimActive;
   }
 
   $: if (paper) {
@@ -188,6 +210,13 @@
         }
       }
     }, 400);
+  });
+
+  onDestroy(() => {
+    if (scrollSyncRafId !== null) cancelAnimationFrame(scrollSyncRafId);
+    if (sectionJumpTimer) clearTimeout(sectionJumpTimer);
+    if (scrollDebounceTimer) clearTimeout(scrollDebounceTimer);
+    if (scrollTimeout) clearTimeout(scrollTimeout);
   });
 
   // --- Paragraph Progress & Click Handlers ---
@@ -323,14 +352,17 @@
     });
 
     const performSync = () => {
+      if (scrollContainer) lastScrollTop = scrollContainer.scrollTop;
       vimController.syncCursor(pSecId, pIndex, 0, false, true);
     };
 
-    if (options.syncImmediately) {
-      performSync();
-    } else {
+    // 1. 先行瞬移就位，讓游標與新段落焦點即時同步，並平滑跟隨捲動
+    performSync();
+
+    // 2. 若有平滑捲動，在捲動中途與結束時進行重校防護
+    if (!options.syncImmediately) {
       if (sectionJumpTimer) clearTimeout(sectionJumpTimer);
-      sectionJumpTimer = setTimeout(performSync, 380);
+      sectionJumpTimer = setTimeout(performSync, 450);
 
       if (scrollContainer && 'onscrollend' in window) {
         const onEnd = () => {
@@ -364,6 +396,16 @@
       if (scrollTimeout) clearTimeout(scrollTimeout);
       scrollTimeout = setTimeout(() => { isProgrammaticScrolling = false; }, 500);
     });
+
+    // 同步更新游標至目標段落
+    const cleanKey = paragraphKey.startsWith('para-') ? paragraphKey.replace(/^para-/, '') : paragraphKey;
+    const parts = cleanKey.split('_');
+    const pIndex = parseInt(parts.pop() || '0', 10);
+    const secId = parts.join('_');
+    vimController.currentCharIndex = 0;
+    vimController.preferredColLeft = null;
+    if (scrollContainer) lastScrollTop = scrollContainer.scrollTop;
+    vimController.syncCursor(secId, pIndex, 0, false, true);
   }
 
   // --- Translation Controller Handlers ---
@@ -543,6 +585,20 @@
         }
         scrollSyncRafId = null;
       });
+
+      // ── 捲動結束防手震自動重校（Debounced Re-sync）──
+      // 當平滑捲動或手動捲動停止（80ms 無新捲動事件）時，
+      // 以靜止 DOM 重新量測並精確吸附，徹底防止游標漂移或落入螢幕外
+      if (scrollDebounceTimer) clearTimeout(scrollDebounceTimer);
+      scrollDebounceTimer = setTimeout(() => {
+        if (!scrollContainer) return;
+        lastScrollTop = scrollContainer.scrollTop;
+        if ($vimConfigStore.isVimEnabled && $vimCursorState.active) {
+          if ($vimCursorState.sectionId !== undefined && $vimCursorState.paraIndex !== undefined) {
+            vimController.syncCursor($vimCursorState.sectionId, $vimCursorState.paraIndex, vimController.currentCharIndex, false, true);
+          }
+        }
+      }, 80);
     } else {
       lastScrollTop = scrollContainer.scrollTop;
     }

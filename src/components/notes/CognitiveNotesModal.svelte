@@ -160,7 +160,7 @@
 <svelte:window on:keydown={handleKeydown} />
 
 {#if isOpen}
-  <div class="fixed inset-0 z-50 flex items-center justify-center p-4 select-none">
+  <div class="fixed inset-0 z-50 flex items-center justify-center p-4 select-none" role="dialog" aria-modal="true">
     <!-- Backdrop -->
     <div
       class="fixed inset-0 bg-black/75 backdrop-blur-sm cursor-default"

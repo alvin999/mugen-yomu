@@ -140,3 +140,31 @@ export function adjustCursorForScroll(deltaScrollTop: number) {
     };
   });
 }
+
+/**
+ * 設定游標活躍狀態（true 顯示，false 隱藏）
+ */
+export function setCursorActive(active: boolean) {
+  if (moveTimer) clearTimeout(moveTimer);
+  vimCursorState.update((state) => ({
+    ...state,
+    active,
+    isMoving: false
+  }));
+}
+
+/**
+ * 關閉/隱藏游標（例如點擊 Modal、失焦時）
+ */
+export function deactivateCursor() {
+  setCursorActive(false);
+}
+
+/**
+ * 啟用/恢復游標（例如關閉 Modal、重新聚焦閱讀區）
+ */
+export function activateCursor() {
+  setCursorActive(true);
+}
+
+
