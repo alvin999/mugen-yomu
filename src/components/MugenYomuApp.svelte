@@ -432,6 +432,7 @@
     bind:isOpen={isImportOpen}
     currentLibrary={paperLibrary}
     on:paperLoaded={handlePaperLoaded}
+    on:openSettings={() => { isImportOpen = false; isByokOpen = true; }}
     on:close={() => isImportOpen = false}
   />
 

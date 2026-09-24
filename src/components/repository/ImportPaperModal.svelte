@@ -14,12 +14,17 @@
     type PaperDocument
   } from '../../stores/documentStore';
   import { parsePdfToDocument } from '../../services/pdfParserService';
+  import { getProxiedPdfUrl } from '../../services/pdfService';
+  import { getStoredApiKey } from '../../services/cognitiveDispatcher';
   import { cleanPaperText } from '../../utils/paperTextSanitizer';
+  import { pdfViewerStore } from '../../stores/pdfViewerStore';
 
   export let isOpen: boolean = false;
   export let currentLibrary: PaperDocument[] = [];
 
   const dispatch = createEventDispatcher();
+
+  $: hasGeminiKey = typeof window !== 'undefined' ? Boolean(getStoredApiKey('google') || getStoredApiKey('gemini')) : false;
 
   let activeTab: 'arxiv' | 'pdf' | 'book' | 'web' | 'preset' | 'paste' | 'upload' = 'arxiv';
 
@@ -49,7 +54,8 @@
   let pasteError: string = '';
   let autoSanitizePaste: boolean = true;
 
-  // Tab PDF: Local PDF Parser State
+  // Tab PDF: Local Offline & Online PDF Parser State
+  let pdfUrlInput: string = '';
   let isParsingPdf: boolean = false;
   let pdfParsePercent: number = 0;
   let pdfParseStepText: string = '';
@@ -181,6 +187,15 @@
       webError = '請輸入有效的網頁網址 (URL)';
       return;
     }
+    const trimmed = webUrl.trim();
+    if (trimmed.toLowerCase().endsWith('.pdf') || trimmed.includes('/pdf/')) {
+      activeTab = 'pdf';
+      pdfUrlInput = trimmed;
+      showToast('檢測到此為 PDF 網址，已自動切換至 PDF 解析');
+      handleFetchPdfUrl();
+      return;
+    }
+
     webError = '';
     isFetchingWeb = true;
     previewWebPaper = null;
@@ -271,9 +286,68 @@
     reader.readAsText(file);
   }
 
-  // --- Tab PDF: Local Offline PDF Parser Logic ---
-  async function handlePdfFile(file: File) {
+  // --- Tab PDF: Local Offline & Online PDF Parser Logic ---
+  let currentPdfFile: File | null = null;
+
+  async function handlePastePdfUrl() {
+    const text = await getClipboardText();
+    if (!text) return;
+    pdfUrlInput = text.trim();
+    pdfError = '';
+    showToast('已從剪貼簿貼上 PDF 網址');
+  }
+
+  async function handleFetchPdfUrl() {
+    let url = pdfUrlInput.trim();
+    if (!url) {
+      pdfError = '請輸入有效的 PDF 網址 (URL)';
+      return;
+    }
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://' + url;
+    }
+
+    pdfError = '';
+    isParsingPdf = true;
+    pdfParsePercent = 10;
+    pdfParseStepText = '正在透過安全代理下載遠端 PDF 資料流...';
+    previewPdfPaper = null;
+
+    try {
+      const proxyUrl = getProxiedPdfUrl(url);
+      const res = await fetch(proxyUrl);
+      if (!res.ok) {
+        throw new Error(`遠端連線異常 (${res.status}): ${res.statusText}`);
+      }
+      const arrayBuffer = await res.arrayBuffer();
+      if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+        throw new Error('下載的 PDF 內容為空 (0 bytes)');
+      }
+
+      const fileName = url.split('/').pop()?.split('?')[0] || '遠端 PDF 文獻';
+      const paper = await parsePdfToDocument(
+        arrayBuffer,
+        fileName,
+        (pct, msg) => {
+          pdfParsePercent = pct;
+          pdfParseStepText = msg;
+        }
+      );
+
+      paper.pdfUrl = url;
+      currentPdfFile = new File([arrayBuffer], `${paper.title}.pdf`, { type: 'application/pdf' });
+      previewPdfPaper = paper;
+    } catch (err: any) {
+      console.error('PDF 解析失敗:', err);
+      pdfError = `PDF 解析中斷：${err?.message || '無法下載或解析該網址'}`;
+    } finally {
+      isParsingPdf = false;
+    }
+  }
+
+  async function handlePdfFile(file: File | null) {
     if (!file) return;
+    currentPdfFile = file;
     if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
       pdfError = '請選取標準 PDF 格式檔案 (.pdf)！';
       return;
@@ -281,18 +355,22 @@
     pdfError = '';
     isParsingPdf = true;
     pdfParsePercent = 0;
-    pdfParseStepText = '準備解析本機 PDF...';
+    pdfParseStepText = '準備啟動純前端 PDF.js 本地極速解析引擎...';
     previewPdfPaper = null;
 
     try {
-      const doc = await parsePdfToDocument(file, file.name, (pct, msg) => {
-        pdfParsePercent = pct;
-        pdfParseStepText = msg;
-      });
-      previewPdfPaper = doc;
+      const paper = await parsePdfToDocument(
+        file,
+        file.name,
+        (pct, msg) => {
+          pdfParsePercent = pct;
+          pdfParseStepText = msg;
+        }
+      );
+      previewPdfPaper = paper;
     } catch (err: any) {
       console.error('PDF 解析失敗:', err);
-      pdfError = `PDF 解析失敗: ${err?.message || '未知錯誤'}`;
+      pdfError = `PDF 解析中斷：${err?.message || '未知錯誤'}`;
     } finally {
       isParsingPdf = false;
     }
@@ -313,8 +391,11 @@
     }
   }
 
-  function handleImportPdfPaper() {
+  async function handleImportPdfPaper() {
     if (!previewPdfPaper) return;
+    if (currentPdfFile) {
+      await pdfViewerStore.loadLocalPdf(currentPdfFile, previewPdfPaper.id);
+    }
     importAndActivatePaper(previewPdfPaper);
   }
 
@@ -427,7 +508,6 @@
         >
           <span class="material-symbols-outlined text-[15px] text-[#fabd2f]">auto_stories</span>
           <span>arXiv 一鍵匯入 (原圖)</span>
-          <span class="bg-[#fe8019]/20 text-[#fe8019] text-[9px] px-1 py-0.2 rounded font-bold">推薦</span>
         </button>
 
         <button
@@ -435,8 +515,7 @@
           on:click={() => activeTab = 'pdf'}
         >
           <span class="material-symbols-outlined text-[15px] text-[#fe8019]">picture_as_pdf</span>
-          <span>本機 PDF 解析</span>
-          <span class="bg-[#b8bb26]/20 text-[#b8bb26] text-[9px] px-1 py-0.2 rounded font-bold">離線</span>
+          <span>PDF 文獻解析</span>
         </button>
 
         <button
@@ -445,7 +524,6 @@
         >
           <span class="material-symbols-outlined text-[15px] text-[#8ec07c]">menu_book</span>
           <span>EPUB 電子書</span>
-          <span class="bg-[#8ec07c]/20 text-[#8ec07c] text-[9px] px-1 py-0.2 rounded font-bold">上傳</span>
         </button>
 
         <button
@@ -616,25 +694,61 @@
             {/if}
           </div>
 
-        <!-- ==================== TAB PDF: LOCAL OFFLINE PDF PARSER ==================== -->
+        <!-- ==================== TAB PDF: LOCAL & ONLINE PDF PARSER ==================== -->
         {:else if activeTab === 'pdf'}
           <div class="flex flex-col gap-3.5">
-            <div class="bg-[#32302f] border border-[#3c3836] p-3 rounded-lg flex items-start gap-2.5 shadow-inner">
-              <span class="material-symbols-outlined text-[20px] text-[#fe8019] shrink-0 mt-0.5">lock</span>
-              <div class="flex flex-col gap-0.5">
-                <span class="font-semibold text-[#ebdbb2] flex items-center gap-1.5">
-                  100% 瀏覽器本機離線解析 (Zero-Server Privacy)
-                  <span class="font-mono text-[10px] text-[#b8bb26] bg-[#282828] px-1.5 py-0.2 rounded border border-[#504945]">極致隱私</span>
-                </span>
-                <span class="text-[#a89984] leading-relaxed">
-                  拖入任何學術論文或技術文獻 PDF，系統將在您的瀏覽器端直接由底層二進制流抽取大綱目錄、雙欄重排、去斷字並建立雙語伴讀工作台。文獻絕不離開您的裝置。
-                </span>
+            <!-- Online PDF URL Input -->
+            <div class="flex flex-col gap-1.5">
+              <label for="import-pdf-url-input" class="font-mono text-[11px] text-[#d5c4a1] flex items-center justify-between">
+                <span>線上 PDF 網址 (URL)</span>
+                <span class="text-[#a89984]">支援 arXiv、OpenReview、各研討會與學術平台 PDF</span>
+              </label>
+              <div class="flex items-center gap-2">
+                <input
+                  id="import-pdf-url-input"
+                  class="flex-1 bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] px-3 py-2 rounded-lg focus:outline-none focus:border-[#fe8019] font-mono text-xs placeholder:text-[#a89984]/50"
+                  type="text"
+                  placeholder="例如: https://arxiv.org/pdf/1512.03385.pdf 或任意 PDF 網址"
+                  bind:value={pdfUrlInput}
+                  on:keydown={(e) => e.key === 'Enter' && handleFetchPdfUrl()}
+                />
+                <button
+                  type="button"
+                  class="px-2.5 py-2 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019] text-[#ebdbb2] rounded-lg transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+                  title="從剪貼簿貼上"
+                  on:click={handlePastePdfUrl}
+                >
+                  <span class="material-symbols-outlined text-[15px] text-[#fe8019]">content_paste</span>
+                  <span class="font-mono text-[11px]">貼上</span>
+                </button>
+                <button
+                  class="px-4 py-2 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-bold rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shrink-0"
+                  disabled={isParsingPdf}
+                  on:click={handleFetchPdfUrl}
+                >
+                  {#if isParsingPdf && pdfUrlInput}
+                    <span class="material-symbols-outlined text-[15px] animate-spin">sync</span>
+                    <span>解析中...</span>
+                  {:else}
+                    <span class="material-symbols-outlined text-[15px]">download</span>
+                    <span>下載並解析</span>
+                  {/if}
+                </button>
               </div>
+            </div>
+
+            <!-- 分隔線 -->
+            <div class="flex items-center gap-3 my-0.5">
+              <div class="flex-1 h-px bg-[#3c3836]"></div>
+              <span class="text-[10px] font-mono text-[#a89984]">或選擇本機檔案</span>
+              <div class="flex-1 h-px bg-[#3c3836]"></div>
             </div>
 
             <!-- PDF Upload Drop Zone -->
             <div
               class="border-2 border-dashed {pdfDragOver ? 'border-[#fe8019] bg-[#fe8019]/10' : 'border-[#504945] hover:border-[#fe8019] bg-[#1d2021]'} p-6 rounded-xl flex flex-col items-center justify-center gap-2 text-center transition-all cursor-pointer relative"
+              role="region"
+              aria-label="PDF 上傳拖曳區"
               on:dragover|preventDefault={() => pdfDragOver = true}
               on:dragleave|preventDefault={() => pdfDragOver = false}
               on:drop|preventDefault={handlePdfDrop}
@@ -675,9 +789,22 @@
             {/if}
 
             {#if pdfError}
-              <div class="p-2.5 rounded bg-[#fb4934]/15 border border-[#fb4934]/40 text-[#fb4934] font-mono text-[11px] flex items-center gap-1.5">
-                <span class="material-symbols-outlined text-[14px]">error</span>
-                <span>{pdfError}</span>
+              <div class="p-3 rounded-lg bg-[#fb4934]/15 border border-[#fb4934]/40 text-[#fb4934] font-mono text-[11px] flex flex-col gap-2 animate-fade-in">
+                <div class="flex items-start gap-2">
+                  <span class="material-symbols-outlined text-[16px] shrink-0 mt-0.5">error</span>
+                  <span class="leading-relaxed">{pdfError}</span>
+                </div>
+                {#if currentPdfFile}
+                  <div class="flex items-center gap-2 pt-2 border-t border-[#fb4934]/20">
+                    <button
+                      class="px-2.5 py-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#504945] hover:border-[#b8bb26] text-[#b8bb26] rounded text-[11px] font-sans font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                      on:click={() => handlePdfFile(currentPdfFile)}
+                    >
+                      <span class="material-symbols-outlined text-[13px]">refresh</span>
+                      重試本機離線解析
+                    </button>
+                  </div>
+                {/if}
               </div>
             {/if}
 

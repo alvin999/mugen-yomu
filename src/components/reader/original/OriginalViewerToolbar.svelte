@@ -134,39 +134,17 @@
       </div>
     {/if}
 
-    <!-- Engine Switcher Pill -->
-    <div class="flex items-center bg-[#282828] border border-[#3c3836] rounded p-0.5 gap-0.5 text-[10px]">
-      {#if isPdf}
-        <button
-          class="px-1.5 py-0.5 rounded transition-colors cursor-pointer flex items-center gap-0.5 {viewerMode === 'canvas' ? 'bg-[#fe8019] text-[#1d2021] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
-          on:click={() => dispatch('setViewerMode', { mode: 'canvas' })}
-          title="PDF.js 向量畫布渲染模式"
-        >
-          <span class="material-symbols-outlined text-[11px]">brush</span>
-          <span>畫布</span>
-        </button>
-      {/if}
-
-      <button
-        class="px-1.5 py-0.5 rounded transition-colors cursor-pointer flex items-center gap-0.5 {viewerMode === 'text' ? 'bg-[#fe8019] text-[#1d2021] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
-        on:click={() => dispatch('setViewerMode', { mode: 'text' })}
-        title="擬真學術排版期刊視圖（含圖表與 KaTeX 算式）"
-      >
-        <span class="material-symbols-outlined text-[11px]">menu_book</span>
-        <span>排版</span>
-      </button>
-
-      {#if paper?.sourceUrl}
-        <button
-          class="px-1.5 py-0.5 rounded transition-colors cursor-pointer flex items-center gap-0.5 {viewerMode === 'native' ? 'bg-[#fe8019] text-[#1d2021] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
-          on:click={() => dispatch('setViewerMode', { mode: 'native' })}
-          title={paper?.type === 'web' ? '原始網站視圖' : '原生 PDF 檢視器'}
-        >
-          <span class="material-symbols-outlined text-[11px]">language</span>
-          <span>{paper?.type === 'web' ? '原站' : '原生'}</span>
-        </button>
-      {/if}
-    </div>
+    {#if isPdf}
+      <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#282828] border border-[#3c3836] text-[10px] font-mono text-[#fabd2f]">
+        <span class="material-symbols-outlined text-[12px] text-[#fe8019]">brush</span>
+        <span>JavaScript 單頁畫布</span>
+      </div>
+    {:else}
+      <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#282828] border border-[#3c3836] text-[10px] font-mono text-[#83a598]">
+        <span class="material-symbols-outlined text-[12px] text-[#83a598]">public</span>
+        <span>原始網頁視圖</span>
+      </div>
+    {/if}
 
     <!-- PDF Only Controls: Retry, Local PDF Upload -->
     {#if isPdf}
@@ -246,18 +224,8 @@
 <div class="h-9 bg-[#181a1b] border-b border-[#3c3836] px-3 flex items-center justify-between shrink-0 text-xs font-mono text-[#a89984] z-10">
   <!-- Left: Sync Lock Toggle & Chapter Dropdown -->
   <div class="flex items-center gap-2 min-w-0 flex-1 mr-2">
-    {#if viewerMode === 'native'}
-      <!-- 原站模式：受瀏覽器同源安全性 (CORS) 限制無法連動，明確標示並引導切換至排版模式 -->
-      <button
-        class="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono transition-all cursor-pointer border shrink-0 bg-[#282828] border-[#3c3836] text-[#928374] hover:text-[#ebdbb2] hover:border-[#fe8019]/60"
-        on:click={() => dispatch('setViewerMode', { mode: 'text' })}
-        title="原站模式受瀏覽器跨網域安全限制 (CORS)，外部網頁無法跨域同步滾動。點擊可切換至「排版」模式開啟雙向進度連動與主題高亮。"
-      >
-        <span class="material-symbols-outlined text-[13px] text-[#fb4934]">link_off</span>
-        <span class="font-bold hidden sm:inline">原站未連動 (點擊切換)</span>
-      </button>
-    {:else}
-      <!-- 畫布或結構化排版模式：支援正常雙向連動開關 -->
+    {#if isPdf}
+      <!-- 雙向連動開關 (PDF 專用) -->
       <button
         class="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono transition-all cursor-pointer border shrink-0 {
           isSyncEnabled
@@ -270,6 +238,15 @@
         <span class="material-symbols-outlined text-[13px]">{isSyncEnabled ? 'link' : 'link_off'}</span>
         <span class="font-bold hidden sm:inline">{isSyncEnabled ? '聯動中' : '獨立閱讀'}</span>
       </button>
+    {:else}
+      <!-- 網頁來源時，提示無法連動 -->
+      <div
+        class="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono border shrink-0 bg-[#3c3836]/30 border-[#504945] text-[#fabd2f]"
+        title="外部網頁受瀏覽器跨網域安全機制保護，無法與右側章節連動"
+      >
+        <span class="material-symbols-outlined text-[13px] text-[#fe8019]">link_off</span>
+        <span class="font-bold hidden sm:inline">無法連動</span>
+      </div>
     {/if}
 
     <div class="h-3.5 w-px bg-[#3c3836]"></div>

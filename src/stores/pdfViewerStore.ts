@@ -112,7 +112,7 @@ function createPdfViewerStore() {
     /**
      * 載入本機選取或拖入的 PDF 檔案
      */
-    async loadLocalPdf(file: File) {
+    async loadLocalPdf(file: File, paperId?: string) {
       const current = get({ subscribe });
       if (current.localPdfBlobUrl) {
         URL.revokeObjectURL(current.localPdfBlobUrl);
@@ -120,7 +120,7 @@ function createPdfViewerStore() {
 
       const blobUrl = URL.createObjectURL(file);
       const arrayBuffer = await file.arrayBuffer();
-      const savedPage = getSavedPage(file.name);
+      const savedPage = paperId ? getSavedPage(paperId) : getSavedPage(file.name);
 
       update(state => ({
         ...state,
@@ -128,6 +128,35 @@ function createPdfViewerStore() {
         localPdfBlobUrl: blobUrl,
         localPdfArrayBuffer: arrayBuffer,
         localPdfName: file.name,
+        activePaperId: paperId || state.activePaperId,
+        currentPage: savedPage,
+        viewerMode: 'canvas',
+        matchResults: {},
+        pageTextIndex: [],
+        isStringMatchActive: false
+      }));
+    },
+
+    /**
+     * 從 IndexedDB 或記憶體 ArrayBuffer 直接載入 PDF（重新整理後還原）
+     */
+    loadLocalPdfBuffer(buffer: ArrayBuffer, name: string, paperId?: string) {
+      const current = get({ subscribe });
+      if (current.localPdfBlobUrl) {
+        URL.revokeObjectURL(current.localPdfBlobUrl);
+      }
+
+      const blob = new Blob([buffer], { type: 'application/pdf' });
+      const blobUrl = URL.createObjectURL(blob);
+      const savedPage = paperId ? getSavedPage(paperId) : getSavedPage(name);
+
+      update(state => ({
+        ...state,
+        localPdfFile: null,
+        localPdfBlobUrl: blobUrl,
+        localPdfArrayBuffer: buffer,
+        localPdfName: name,
+        activePaperId: paperId || state.activePaperId,
         currentPage: savedPage,
         viewerMode: 'canvas',
         matchResults: {},
@@ -245,7 +274,7 @@ function createPdfViewerStore() {
     },
 
     setZoomLevel(zoom: number) {
-      const zoomLevel = Math.max(0.6, Math.min(2.5, Number(zoom.toFixed(2))));
+      const zoomLevel = Math.max(0.6, Math.min(3.0, Number(zoom.toFixed(2))));
       update(state => ({ ...state, zoomLevel }));
     },
 

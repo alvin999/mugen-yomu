@@ -5,6 +5,8 @@ import * as pdfjsLib from 'pdfjs-dist';
 // Use local bundled worker via Vite ?url to avoid external CDN failures and SSL issues
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import type { ChapterSection } from '../stores/documentStore';
+import type { PaperDocument } from '../types/document';
+import { saveLocalPdfBinary } from './pdfStorageService';
 
 if (typeof window !== 'undefined') {
   pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
