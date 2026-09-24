@@ -80,6 +80,19 @@
     selectSection({ id: sectionId, source });
   }
 
+  // 跨模式（例如雙語伴讀 ↔ 雙軌對照）切換時，確保視野自動捲動對齊當前 activeSectionId
+  let lastReadingMode = readingMode;
+  $: if (readingMode !== lastReadingMode) {
+    lastReadingMode = readingMode;
+    if (activeSectionId) {
+      setTimeout(() => {
+        if (readerRef && readerRef.scrollToTarget) {
+          readerRef.scrollToTarget('sec-' + activeSectionId);
+        }
+      }, 120);
+    }
+  }
+
   export function refreshCompanionKey() {
     if (companionRef && companionRef.refreshKeyFromStorage) {
       companionRef.refreshKeyFromStorage();
@@ -194,7 +207,7 @@
       readingMode = 'bilingual';
     }
 
-    const isNavigation = source === 'outline' || source === 'nav' || source === 'pdf';
+    const isNavigation = source === 'outline' || source === 'nav' || source === 'pdf' || source === 'web';
     if (isNavigation && !noScroll) {
       setTimeout(() => {
         if (readerRef && readerRef.scrollToTarget) {

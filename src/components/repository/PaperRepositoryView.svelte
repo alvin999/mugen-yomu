@@ -45,7 +45,8 @@
     const pMap: Record<string, number> = {};
     const nMap: Record<string, number> = {};
 
-    papers.forEach(p => {
+    (papers || []).forEach(p => {
+      if (!p || !p.id) return;
       // 1. 進度計算
       const saved = loadPaperReadingState(p.id);
       if (saved && p.sections) {
@@ -76,7 +77,8 @@
   $: inProgressCount = Object.values(progressMap).filter(p => p > 0 && p < 100).length;
 
   // 根據分類與搜尋條件動態過濾清單
-  $: filteredPapers = library.filter(p => {
+  $: filteredPapers = (library || []).filter(p => {
+    if (!p) return false;
     // 1. 分類過濾
     if (categoryFilter === 'paper' && p.type === 'web') return false;
     if (categoryFilter === 'web' && p.type !== 'web') return false;
@@ -88,18 +90,21 @@
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchTitle = (p.title || '').toLowerCase().includes(q);
-      const matchAuthors = (p.authors || []).some(a => a.toLowerCase().includes(q));
+      const matchAuthors = Array.isArray(p.authors)
+        ? p.authors.some(a => (a || '').toLowerCase().includes(q))
+        : (typeof p.authors === 'string' && (p.authors as string).toLowerCase().includes(q));
       const matchVenue = (p.venue || '').toLowerCase().includes(q);
       const matchArxiv = (p.arxivId || '').toLowerCase().includes(q);
       return matchTitle || matchAuthors || matchVenue || matchArxiv;
     }
     return true;
   }).sort((a, b) => {
+    if (!a || !b) return 0;
     if (sortBy === 'progress') {
       return (progressMap[b.id] || 0) - (progressMap[a.id] || 0);
     }
     if (sortBy === 'title') {
-      return a.title.localeCompare(b.title);
+      return (a.title || '').localeCompare(b.title || '');
     }
     if (sortBy === 'sections') {
       return (b.sections?.length || 0) - (a.sections?.length || 0);
@@ -164,7 +169,7 @@
 <div class="h-full w-full flex flex-col bg-[#282828] text-[#ebdbb2] overflow-hidden select-text">
   <!-- 1. Top Stat & Search Hero Ribbon -->
   <PaperHeroStats
-    totalPapers={library.length}
+    totalPapers={(library || []).length}
     readCount={completedCount}
     {inProgressCount}
     {localMemoryMb}

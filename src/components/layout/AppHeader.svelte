@@ -157,58 +157,64 @@
     </div>
   </div>
 
-  <!-- Center Reading Mode Selector (Compact styling) -->
-  <div class="flex items-center justify-center shrink-0">
-    <nav class="flex items-center bg-[#282828] border border-[#3c3836] p-1 rounded-xl gap-1 shadow-inner">
-      <button
-        class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 {readingMode === 'bilingual' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
-        on:click={() => setMode('bilingual')}
-      >
-        <span class="material-symbols-outlined text-[13px]">chrome_reader_mode</span>
-        <span>雙語伴讀</span>
-      </button>
+  <!-- Center Reading Mode Selector (Only shown in Workspace) -->
+  {#if currentMainView === 'workspace'}
+    <div class="flex items-center justify-center shrink-0">
+      <nav class="flex items-center bg-[#282828] border border-[#3c3836] p-1 rounded-xl gap-1 shadow-inner">
+        <button
+          class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 {readingMode === 'bilingual' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
+          on:click={() => setMode('bilingual')}
+        >
+          <span class="material-symbols-outlined text-[13px]">chrome_reader_mode</span>
+          <span>雙語伴讀</span>
+        </button>
 
-      <button
-        class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 {readingMode === 'split' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
-        on:click={() => setMode('split')}
-        title="左右 50/50 雙軌並列：左側原始論文/網頁，右側雙語伴讀"
-      >
-        <span class="material-symbols-outlined text-[13px]">view_column</span>
-        <span>雙軌對照</span>
-      </button>
+        <button
+          class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 {readingMode === 'split' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
+          on:click={() => setMode('split')}
+          title="左右 50/50 雙軌並列：左側原始論文/網頁，右側雙語伴讀"
+        >
+          <span class="material-symbols-outlined text-[13px]">view_column</span>
+          <span>雙軌對照</span>
+        </button>
 
-      <button
-        class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 {readingMode === 'zen' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
-        on:click={() => setMode('zen')}
-      >
-        <span class="material-symbols-outlined text-[13px]">self_improvement</span>
-        <span>純沉浸</span>
-      </button>
+        <button
+          class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 {readingMode === 'zen' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
+          on:click={() => setMode('zen')}
+        >
+          <span class="material-symbols-outlined text-[13px]">self_improvement</span>
+          <span>純沉浸</span>
+        </button>
 
-      <button
-        id="btn-nav-figures"
-        class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 {readingMode === 'figures' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
-        on:click={() => setMode('figures')}
-        title="圖表與公式推導工作室"
-      >
-        <span class="material-symbols-outlined text-[13px]">schema</span>
-        <span>圖表推導</span>
-      </button>
-    </nav>
-  </div>
+        <button
+          id="btn-nav-figures"
+          class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 {readingMode === 'figures' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
+          on:click={() => setMode('figures')}
+          title="圖表與公式推導工作室"
+        >
+          <span class="material-symbols-outlined text-[13px]">schema</span>
+          <span>圖表推導</span>
+        </button>
+      </nav>
+    </div>
+  {:else}
+    <div class="flex-1"></div>
+  {/if}
 
   <!-- Right BYOK & Utilities -->
   <div class="flex items-center gap-2 shrink-0">
-    <!-- Slide-out PDF / Web Drawer Toggle Button -->
-    <button
-      class="px-2.5 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 text-[#fabd2f] hover:text-[#fe8019] rounded-lg text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm {isPdfDrawerOpen ? '!bg-[#fe8019] !text-[#1d2021] font-semibold' : ''}"
-      on:click={() => dispatch('togglePdfDrawer')}
-      title="開啟/收合原檔或原站側邊抽屜 (快捷鍵: Alt+P)"
-    >
-      <span class="material-symbols-outlined text-[14px]">{activePaper?.type === 'web' ? 'web' : 'picture_as_pdf'}</span>
-      <span class="hidden md:inline">{activePaper?.type === 'web' ? '原檔抽屜' : '原檔抽屜'}</span>
-      <span class="font-mono text-[9px] opacity-70">Alt+P</span>
-    </button>
+    {#if currentMainView === 'workspace'}
+      <!-- Slide-out PDF / Web Drawer Toggle Button -->
+      <button
+        class="px-2.5 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 text-[#fabd2f] hover:text-[#fe8019] rounded-lg text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm {isPdfDrawerOpen ? '!bg-[#fe8019] !text-[#1d2021] font-semibold' : ''}"
+        on:click={() => dispatch('togglePdfDrawer')}
+        title="開啟/收合原檔或原站側邊抽屜 (快捷鍵: Alt+P)"
+      >
+        <span class="material-symbols-outlined text-[14px]">{activePaper?.type === 'web' ? 'web' : 'picture_as_pdf'}</span>
+        <span class="hidden md:inline">{activePaper?.type === 'web' ? '原檔抽屜' : '原檔抽屜'}</span>
+        <span class="font-mono text-[9px] opacity-70">Alt+P</span>
+      </button>
+    {/if}
     <!-- BYOK Status Pill -->
     <button
       class="flex items-center gap-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#504945] px-2 py-1 rounded-lg transition-colors text-left"
@@ -227,16 +233,18 @@
       </span>
     </button>
 
-    <!-- Zoom Controller -->
-    <div class="flex items-center bg-[#282828] border border-[#3c3836] rounded-lg p-0.5 text-[#d5c4a1]">
-      <button class="w-5 h-5 flex items-center justify-center hover:bg-[#3c3836] hover:text-[#ebdbb2] rounded transition-colors" on:click={() => adjustZoom(-10)}>
-        <span class="material-symbols-outlined text-[13px]">remove</span>
-      </button>
-      <span class="font-mono text-[10px] px-1 text-[#ebdbb2] select-none font-medium">{zoomLevel}%</span>
-      <button class="w-5 h-5 flex items-center justify-center hover:bg-[#3c3836] hover:text-[#ebdbb2] rounded transition-colors" on:click={() => adjustZoom(10)}>
-        <span class="material-symbols-outlined text-[13px]">add</span>
-      </button>
-    </div>
+    {#if currentMainView === 'workspace'}
+      <!-- Zoom Controller -->
+      <div class="flex items-center bg-[#282828] border border-[#3c3836] rounded-lg p-0.5 text-[#d5c4a1]">
+        <button class="w-5 h-5 flex items-center justify-center hover:bg-[#3c3836] hover:text-[#ebdbb2] rounded transition-colors" on:click={() => adjustZoom(-10)}>
+          <span class="material-symbols-outlined text-[13px]">remove</span>
+        </button>
+        <span class="font-mono text-[10px] px-1 text-[#ebdbb2] select-none font-medium">{zoomLevel}%</span>
+        <button class="w-5 h-5 flex items-center justify-center hover:bg-[#3c3836] hover:text-[#ebdbb2] rounded transition-colors" on:click={() => adjustZoom(10)}>
+          <span class="material-symbols-outlined text-[13px]">add</span>
+        </button>
+      </div>
+    {/if}
 
     <!-- Actions -->
     <div class="flex items-center gap-1">

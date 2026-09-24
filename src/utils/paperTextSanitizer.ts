@@ -226,8 +226,13 @@ export function unwrapParagraphLines(text: string): string {
     const trimmedBlock = block.trim();
     if (!trimmedBlock) continue;
 
-    // 若區塊開頭為 Markdown 標題（可能緊跟正文而無雙換行）
-    if (/^#{1,6}\s+/.test(trimmedBlock)) {
+    // 檢查是否包含代碼特徵（如 def, class, import, $, 4空格縮排）避免被當作 Markdown 標題或拍平
+    const hasCodeCharacteristics =
+      /^(?:\$|>|def\s+|class\s+|import\s+|from\s+|function\s+|const\s+|let\s+|var\s+|return\s+)/m.test(trimmedBlock) ||
+      /(?:def\s+[a-zA-Z0-9_]+\s*\(|class\s+[a-zA-Z0-9_]+[:\(]|return\s+[a-zA-Z0-9_])/m.test(trimmedBlock);
+
+    // 若區塊開頭為 Markdown 標題（可能緊跟正文而無雙換行，排除 Python/Shell 註解）
+    if (/^#{1,6}\s+/.test(trimmedBlock) && !hasCodeCharacteristics) {
       const lines = trimmedBlock.split(/\r?\n/);
       let headingLine = '';
       const bodyLines: string[] = [];
@@ -246,17 +251,18 @@ export function unwrapParagraphLines(text: string): string {
       continue;
     }
 
-    // 檢查是否為特殊 Markdown 結構區塊（如 Display Math、代碼塊、表格、清單、引用）
+    // 檢查是否為特殊結構區塊（如 Display Math、代碼塊、表格、清單、引用、Shell 命令、程式碼片段）
     const isSpecialBlock =
       trimmedBlock.startsWith('$$') ||
       trimmedBlock.startsWith('```') ||
       trimmedBlock.startsWith('|') ||
       /^(?:[-*+]|\d+\.)\s/.test(trimmedBlock) ||
-      trimmedBlock.startsWith('>');
+      trimmedBlock.startsWith('>') ||
+      hasCodeCharacteristics;
 
     if (isSpecialBlock) {
-      // 特殊結構保持行結構，僅作基本行修整
-      unwrappedParagraphs.push(trimmedBlock);
+      // 特殊結構保持行結構，完整保留換行與縮排，絕對不拍平！
+      unwrappedParagraphs.push(block);
     } else {
       // 一般內文段落：將內部的單一換行接合為空格
       const singleLine = trimmedBlock

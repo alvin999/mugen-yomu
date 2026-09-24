@@ -14,6 +14,7 @@
     getActivePaperId,
     setActivePaperId,
     saveLibraryToStorage,
+    normalizePaper,
     type PaperDocument
   } from '../stores/documentStore';
   import {
@@ -187,7 +188,7 @@
   }
 
   function handleDirectImportPaper(e: CustomEvent<{ paper: PaperDocument }>) {
-    const paper = e.detail.paper;
+    const paper = normalizePaper(e.detail.paper);
     const exists = paperLibrary.some(p => p.id === paper.id);
     const updatedLibrary = exists
       ? paperLibrary.map(p => p.id === paper.id ? paper : p)
@@ -198,8 +199,8 @@
   }
 
   function handlePaperLoaded(event: CustomEvent<{ paper: PaperDocument; library: PaperDocument[] }>) {
-    paperLibrary = event.detail.library;
-    setPaper(event.detail.paper);
+    paperLibrary = (event.detail.library || []).map(normalizePaper);
+    setPaper(normalizePaper(event.detail.paper));
   }
 
   function handleLoadPaperFromCitation(e: CustomEvent<{ paperId: string }>) {

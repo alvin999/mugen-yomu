@@ -12,6 +12,7 @@
   } from '../../services/pdfService';
   import type * as pdfjsLib from 'pdfjs-dist';
   import { parsePdfToDocument } from '../../services/pdfParserService';
+  import { pdfViewerStore } from '../../stores/pdfViewerStore';
   import OriginalViewerToolbar from './original/OriginalViewerToolbar.svelte';
   import PdfCanvasRenderer from './original/PdfCanvasRenderer.svelte';
   import StructuredTextRenderer from './original/StructuredTextRenderer.svelte';
@@ -31,12 +32,23 @@
   let isRenderingPage: boolean = false;
   let renderError: string | null = null;
   let currentLoadedSource: string | null = null;
+  let renderedPage: number = 0;
 
-  // Viewer Mode: 'canvas' (PDF.js 畫布) | 'text' (擬真排版) | 'native' (原生 Iframe)
-  let viewerMode: 'canvas' | 'text' | 'native' = 'canvas';
-
-  // Paper Sheet Theme: 'parchment' (米白論文紙張) | 'dark' (深邃學者模式)
-  let paperTheme: 'parchment' | 'dark' = 'parchment';
+  // 訂閱全域集中 PDF 閱讀狀態與本機 PDF 資源
+  $: localPdfFile = $pdfViewerStore.localPdfFile;
+  $: localPdfBlobUrl = $pdfViewerStore.localPdfBlobUrl;
+  $: localPdfArrayBuffer = $pdfViewerStore.localPdfArrayBuffer;
+  $: currentPage = $pdfViewerStore.currentPage;
+  $: totalPages = $pdfViewerStore.totalPages;
+  $: zoomLevel = $pdfViewerStore.zoomLevel;
+  $: viewerMode = $pdfViewerStore.viewerMode;
+  $: paperTheme = $pdfViewerStore.paperTheme;
+  $: isSyncEnabled = $pdfViewerStore.isSyncEnabled;
+  $: matchResults = $pdfViewerStore.matchResults;
+  $: pageTextIndex = $pdfViewerStore.pageTextIndex;
+  $: isStringMatchActive = $pdfViewerStore.isStringMatchActive;
+  $: isStringIndexing = $pdfViewerStore.isStringIndexing;
+  $: stringIndexProgress = $pdfViewerStore.stringIndexProgress;
 
   // Lightbox State for Academic Figures
   let activeLightboxImg: string | null = null;
@@ -52,47 +64,43 @@
     activeLightboxImg = null;
   }
 
-  // Local File Upload & Drag-and-Drop
-  let localPdfFile: File | null = null;
-  let localPdfBlobUrl: string | null = null;
-  let localPdfArrayBuffer: ArrayBuffer | null = null;
+  // Local Drag-and-Drop & Convert State
   let isDraggingOver: boolean = false;
   let isConvertingToPaper: boolean = false;
   let convertProgress: number = 0;
 
-  // Pagination & Zoom
-  let currentPage: number = 1;
-  let totalPages: number = 1;
-  let zoomLevel: number = 1.0;
-
-  // Bidirectional Synchronization State
-  let isSyncEnabled: boolean = true;
   let lastSyncedSectionId: string = '';
 
-  // Full-Text Search & Page Alignment Indexing
-  let pageTextIndex: PageTextEntry[] = [];
-  let isStringIndexing: boolean = false;
-  let stringIndexProgress: number = 0;
-  let matchResults: Record<string, MatchResult> = {};
-  let isStringMatchActive: boolean = false;
-
   $: allSections = sections && sections.length > 0 ? flattenSections(sections) : flattenSections(paper?.sections || []);
-
   $: activeSection = allSections.find(s => s.id === activeSectionId) || null;
 
   $: isPdf = Boolean(
     localPdfArrayBuffer ||
-    (paper?.pdfUrl && paper.pdfUrl.trim().length > 0) ||
-    (paper?.arxivId && paper.arxivId.trim().length > 0)
+    (paper?.type !== 'web' && (
+      (paper?.pdfUrl && paper.pdfUrl.trim().length > 0) ||
+      (paper?.arxivId && paper.arxivId.trim().length > 0)
+    ))
   );
 
   $: activeBaseUrl = (() => {
     if (localPdfBlobUrl) return localPdfBlobUrl;
-    if (paper?.pdfUrl) return paper.pdfUrl;
-    if (paper?.arxivId) return `https://arxiv.org/pdf/${paper.arxivId}.pdf`;
+    if (paper?.type !== 'web' && paper?.pdfUrl) return paper.pdfUrl;
+    if (paper?.type !== 'web' && paper?.arxivId) return `https://arxiv.org/pdf/${paper.arxivId}.pdf`;
     if (paper?.sourceUrl) return paper.sourceUrl;
     return '';
   })();
+
+  // 監聽 Paper 變動，更新 Store 當前 Paper ID 並維護網頁模式安全預設
+  $: if (paper) {
+    if (paper.id) {
+      pdfViewerStore.setActivePaperId(paper.id);
+    }
+    if (paper.type === 'web' || !isPdf) {
+      if (viewerMode === 'canvas') {
+        pdfViewerStore.setViewerMode('text');
+      }
+    }
+  }
 
   // 監聽外部傳入的焦點章節變更，自動對齊 PDF 頁面
   $: if (isSyncEnabled && activeSectionId && activeSectionId !== lastSyncedSectionId) {
@@ -117,13 +125,18 @@
     }
   }
 
-  $: if (activeBaseUrl && activeBaseUrl !== currentLoadedSource) {
+  $: if (isPdf && activeBaseUrl && activeBaseUrl !== currentLoadedSource) {
     currentLoadedSource = activeBaseUrl;
     initAndLoadPdf();
   }
 
   $: if (!isPdf && viewerMode === 'canvas') {
-    viewerMode = 'text';
+    pdfViewerStore.setViewerMode('text');
+  }
+
+  // 當 Store 中的頁碼在其他地方改變 (例如抽屜或雙軌對照另一端切換)，自動觸發畫布渲染
+  $: if (isPdf && pdfDoc && viewerMode === 'canvas' && currentPage !== renderedPage && !isRenderingPage) {
+    triggerPageRender(currentPage);
   }
 
   onMount(() => {
@@ -133,9 +146,7 @@
   });
 
   onDestroy(() => {
-    if (localPdfBlobUrl) {
-      URL.revokeObjectURL(localPdfBlobUrl);
-    }
+    // 資源由全域 store 管理，組件卸載時無需 revoke Blob URL
   });
 
   async function initAndLoadPdf() {
@@ -154,18 +165,20 @@
       }
 
       if (pdfDoc) {
-        totalPages = pdfDoc.numPages;
-        viewerMode = 'canvas';
+        pdfViewerStore.setTotalPages(pdfDoc.numPages);
+        pdfViewerStore.setViewerMode('canvas');
 
         await tick();
         await triggerPageRender(currentPage);
 
-        runStringMatchingPipeline();
+        if (!isStringMatchActive && !isStringIndexing) {
+          runStringMatchingPipeline();
+        }
       }
     } catch (err: any) {
       console.warn('PDF.js 載入失敗，降級至擬真排版模式:', err);
       renderError = err?.message || 'PDF 載入失敗';
-      viewerMode = 'text';
+      pdfViewerStore.setViewerMode('text');
     } finally {
       isLoadingPdf = false;
     }
@@ -175,29 +188,27 @@
     currentLoadedSource = null;
     renderError = null;
     isLoadingPdf = true;
-    viewerMode = 'canvas';
+    pdfViewerStore.setViewerMode('canvas');
     initAndLoadPdf();
   }
 
   async function runStringMatchingPipeline() {
-    if (!pdfDoc) return;
-    isStringIndexing = true;
-    stringIndexProgress = 0;
+    if (!pdfDoc || isStringIndexing) return;
+    pdfViewerStore.setStringIndexingState(true, 0);
 
     try {
-      pageTextIndex = await buildPdfTextIndex(pdfDoc, (progress) => {
-        stringIndexProgress = progress;
+      const textIndex = await buildPdfTextIndex(pdfDoc, (progress) => {
+        pdfViewerStore.setStringIndexingState(true, progress);
       });
 
-      if (allSections && allSections.length > 0 && pageTextIndex.length > 0) {
-        const { updatedSections, matchResults: res } = alignAllSectionsWithPdf(allSections, pageTextIndex);
+      if (allSections && allSections.length > 0 && textIndex.length > 0) {
+        const { updatedSections, matchResults: res } = alignAllSectionsWithPdf(allSections, textIndex);
         const resultMap: Record<string, MatchResult> = {};
         for (const r of res) {
           resultMap[r.sectionId] = r;
         }
-        matchResults = resultMap;
-        isStringMatchActive = true;
 
+        pdfViewerStore.setMatchResults(resultMap, textIndex);
         dispatch('sectionsAligned', { sections: updatedSections });
 
         if (activeSectionId) {
@@ -211,7 +222,7 @@
     } catch (err) {
       console.warn('全文比對管線執行異常:', err);
     } finally {
-      isStringIndexing = false;
+      pdfViewerStore.setStringIndexingState(false, 100);
     }
   }
 
@@ -227,6 +238,7 @@
       const maxPage = totalPages > 0 ? totalPages : 1;
       const validPage = Math.max(1, Math.min(maxPage, pageToRender));
       await renderPageToCanvas(pdfDoc, validPage, canvasElement, zoomLevel);
+      renderedPage = validPage;
     } catch (err: any) {
       console.warn('Canvas 繪圖異常:', err);
       renderError = `Canvas 繪圖異常: ${err?.message || err}`;
@@ -238,13 +250,43 @@
   function jumpToPage(targetPage: number, options: { fromUser?: boolean } = {}) {
     const maxPage = totalPages > 1 ? totalPages : 999;
     const validPage = Math.max(1, Math.min(maxPage, Math.round(Number(targetPage) || 1)));
-    currentPage = validPage;
+    
+    // 更新集中 Store 中的進度，自動保存至 LocalStorage
+    pdfViewerStore.setCurrentPage(validPage, paper?.id);
 
     if (options.fromUser) {
-      const matchingSec = allSections.find(s => s.page === validPage);
+      // 1. 若有全文精準比對結果，優先反查對應章節
+      let matchingSec: ChapterSection | undefined = undefined;
+      if (isStringMatchActive && matchResults) {
+        for (const [secId, res] of Object.entries(matchResults)) {
+          if (res.matchedPage === validPage) {
+            matchingSec = allSections.find(s => s.id === secId);
+            if (matchingSec) break;
+          }
+        }
+      }
+
+      // 2. 若無比對結果，尋找定義頁碼為該頁的章節
+      if (!matchingSec) {
+        matchingSec = allSections.find(s => s.page === validPage);
+      }
+
+      // 3. 若仍無，尋找在該頁之前的最接近章節（小於等於該頁且頁碼最大者）
+      if (!matchingSec) {
+        const candidates = allSections.filter(s => s.page && s.page <= validPage);
+        if (candidates.length > 0) {
+          candidates.sort((a, b) => (b.page || 0) - (a.page || 0));
+          matchingSec = candidates[0];
+        }
+      }
+
       if (matchingSec) {
         lastSyncedSectionId = matchingSec.id;
         activeSectionId = matchingSec.id;
+        // 使用者主動翻頁時，向外廣播章節選定事件，讓 MugenReader 滾動對齊
+        if (isSyncEnabled) {
+          dispatch('selectSection', { id: matchingSec.id, sectionId: matchingSec.id, source: 'pdf' });
+        }
       }
     }
 
@@ -266,8 +308,9 @@
   }
 
   function toggleSync() {
-    isSyncEnabled = !isSyncEnabled;
-    if (isSyncEnabled && activeSection) {
+    const nextSync = !isSyncEnabled;
+    pdfViewerStore.setSyncEnabled(nextSync);
+    if (nextSync && activeSection) {
       lastSyncedSectionId = activeSection.id;
       const targetPage = activeSection.page ?? 1;
       jumpToPage(targetPage);
@@ -277,7 +320,7 @@
   function handleSectionSelect(secId: string) {
     lastSyncedSectionId = secId;
     activeSectionId = secId;
-    dispatch('selectSection', { id: secId });
+    dispatch('selectSection', { id: secId, sectionId: secId });
     const found = allSections.find(s => s.id === secId);
     if (found && found.page && viewerMode === 'canvas') {
       jumpToPage(found.page);
@@ -285,7 +328,7 @@
   }
 
   function setZoom(newZoom: number) {
-    zoomLevel = Math.max(0.7, Math.min(2.5, Number(newZoom.toFixed(2))));
+    pdfViewerStore.setZoomLevel(newZoom);
     if (viewerMode === 'canvas') {
       triggerPageRender(currentPage);
     }
@@ -311,30 +354,16 @@
     }
   }
 
-  function loadLocalFile(file: File) {
-    localPdfFile = file;
-    if (localPdfBlobUrl) URL.revokeObjectURL(localPdfBlobUrl);
-    localPdfBlobUrl = URL.createObjectURL(file);
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      localPdfArrayBuffer = e.target?.result as ArrayBuffer;
-      currentPage = 1;
-      currentLoadedSource = 'local_buffer_' + Date.now();
-      initAndLoadPdf();
-    };
-    reader.readAsArrayBuffer(file);
+  async function loadLocalFile(file: File) {
+    await pdfViewerStore.loadLocalPdf(file);
+    currentLoadedSource = 'local_buffer_' + Date.now();
+    await initAndLoadPdf();
   }
 
   function clearLocalPdf() {
-    localPdfFile = null;
-    if (localPdfBlobUrl) {
-      URL.revokeObjectURL(localPdfBlobUrl);
-      localPdfBlobUrl = null;
-    }
-    localPdfArrayBuffer = null;
-    currentPage = 1;
+    pdfViewerStore.clearLocalPdf();
     currentLoadedSource = null;
+    initAndLoadPdf();
   }
 
   async function handleConvertToPaper() {
@@ -366,6 +395,19 @@
       window.open(activeBaseUrl, '_blank');
     }
   }
+  function handleWebSectionScroll(secId: string) {
+    if (!secId || secId === activeSectionId) return;
+    lastSyncedSectionId = secId;
+    activeSectionId = secId;
+    if (isSyncEnabled) {
+      dispatch('selectSection', { id: secId, sectionId: secId, source: 'web' });
+    }
+  }
+
+  $: nativeIframeSrc = (() => {
+    if (!activeBaseUrl) return '';
+    return activeBaseUrl;
+  })();
 </script>
 
 <aside
@@ -397,8 +439,8 @@
     {mode}
     on:setZoom={(e) => setZoom(e.detail.zoom)}
     on:setViewerMode={(e) => {
-      viewerMode = e.detail.mode;
-      if (viewerMode === 'canvas') {
+      pdfViewerStore.setViewerMode(e.detail.mode);
+      if (e.detail.mode === 'canvas') {
         if (pdfDoc) triggerPageRender(currentPage);
         else handleRetry();
       }
@@ -428,7 +470,7 @@
 
   <!-- Viewports Area -->
   <div class="flex-1 w-full overflow-hidden relative bg-[#141617]">
-    {#if viewerMode === 'canvas'}
+    {#if isPdf && viewerMode === 'canvas'}
       <PdfCanvasRenderer
         {pdfDoc}
         {currentPage}
@@ -436,7 +478,7 @@
         {isRenderingPage}
         {renderError}
         bind:canvasElement
-        on:switchToText={() => viewerMode = 'text'}
+        on:switchToText={() => pdfViewerStore.setViewerMode('text')}
         on:retry={handleRetry}
         on:openExternal={handleOpenExternal}
         on:canvasReady={() => {
@@ -445,7 +487,37 @@
           }
         }}
       />
-    {:else if viewerMode === 'text'}
+    {:else if viewerMode === 'native'}
+      {#if activeBaseUrl}
+        <div class="w-full h-full flex flex-col">
+          <div class="bg-[#181a1b] border-b border-[#3c3836] px-3 py-1 flex items-center justify-between text-[11px] font-mono text-[#a89984] shrink-0">
+            <span class="flex items-center gap-1.5 text-[#fabd2f]">
+              <span class="material-symbols-outlined text-[13px]">info</span>
+              <span>受瀏覽器同源安全性限制，原站無法跨域同步滾動</span>
+            </span>
+            <button
+              type="button"
+              class="text-[#8ec07c] hover:text-[#b8bb26] hover:underline cursor-pointer flex items-center gap-0.5 text-[11px]"
+              on:click={() => pdfViewerStore.setViewerMode('text')}
+              title="切換至擬真排版模式"
+            >
+              <span>切換至排版模式（支援雙向進度同步與主題）</span>
+              <span class="material-symbols-outlined text-[12px]">arrow_forward</span>
+            </button>
+          </div>
+          <iframe
+            src={nativeIframeSrc}
+            title="原生學術文件檢視器"
+            class="w-full flex-1 border-0 bg-white"
+          ></iframe>
+        </div>
+      {:else}
+        <div class="w-full h-full flex flex-col items-center justify-center p-6 text-center gap-3">
+          <span class="material-symbols-outlined text-4xl text-[#a89984]">language</span>
+          <span class="text-xs text-[#a89984] font-mono">未指定有效原生網頁或 PDF 來源網址</span>
+        </div>
+      {/if}
+    {:else}
       <StructuredTextRenderer
         {paper}
         {allSections}
@@ -454,22 +526,10 @@
         {isPdf}
         bind:paperTheme
         on:sectionClick={(e) => handleSectionSelect(e.detail.sectionId)}
+        on:sectionScroll={(e) => handleWebSectionScroll(e.detail.sectionId)}
         on:openLightbox={(e) => openLightbox(e.detail.url, e.detail.caption)}
         on:retryPdf={handleRetry}
       />
-    {:else if viewerMode === 'native'}
-      {#if activeBaseUrl}
-        <iframe
-          src={activeBaseUrl}
-          title="原生學術文件檢視器"
-          class="w-full h-full border-0 bg-white"
-        ></iframe>
-      {:else}
-        <div class="w-full h-full flex flex-col items-center justify-center p-6 text-center gap-3">
-          <span class="material-symbols-outlined text-4xl text-[#a89984]">language</span>
-          <span class="text-xs text-[#a89984] font-mono">未指定有效原生網頁或 PDF 來源網址</span>
-        </div>
-      {/if}
     {/if}
   </div>
 

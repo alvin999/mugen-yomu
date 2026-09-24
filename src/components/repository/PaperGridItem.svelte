@@ -16,9 +16,9 @@
   }>();
 
   // 計算圖表與公式數量
-  $: formulaCount = paper.sections?.reduce((sum, s) => sum + (s.formulas?.length || 0), 0) || 0;
-  $: figureCount = paper.sections?.reduce((sum, s) => sum + (s.figures?.length || 0), 0) || 0;
-  $: sectionCount = paper.sections?.length || 0;
+  $: formulaCount = (paper?.sections || []).reduce((sum, s) => sum + (s?.formulas?.length || 0), 0);
+  $: figureCount = (paper?.sections || []).reduce((sum, s) => sum + (s?.figures?.length || 0), 0);
+  $: sectionCount = paper?.sections?.length || 0;
 </script>
 
 <div
@@ -78,13 +78,15 @@
     </h3>
 
     <span class="text-xs text-[#a89984] truncate select-text">
-      {paper.authors.join(', ')}
+      {Array.isArray(paper.authors) ? paper.authors.join(', ') : (paper.authors || '未知作者')}
     </span>
 
     <!-- Abstract Snippet (if available) -->
     {#if paper.abstract}
       <p class="text-[11px] text-[#7c6f64] line-clamp-2 leading-relaxed mt-1 select-text">
-        {paper.abstract}
+        {typeof paper.abstract === 'object' && paper.abstract
+          ? (paper.abstract.chineseSummary || paper.abstract.english || '')
+          : (paper.abstract || '')}
       </p>
     {/if}
   </div>

@@ -86,7 +86,7 @@
         </h2>
 
         <span class="text-xs text-[#a89984]">
-          {paper.authors.join(', ')}
+          {Array.isArray(paper.authors) ? paper.authors.join(', ') : (paper.authors || '未知作者')}
         </span>
       </div>
 
@@ -114,7 +114,9 @@
             文獻白話核心摘要
           </span>
           <p class="text-xs text-[#d5c4a1] leading-relaxed">
-            {paper.abstract}
+            {typeof paper.abstract === 'object' && paper.abstract
+              ? (paper.abstract.chineseSummary || paper.abstract.english || '')
+              : (paper.abstract || '')}
           </p>
         </div>
       {/if}

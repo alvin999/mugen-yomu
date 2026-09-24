@@ -199,6 +199,17 @@
       scrollTimeout = setTimeout(() => { isProgrammaticScrolling = false; }, 650);
     });
 
+    // 自動復原或捲動至當前焦點章節 (例如從雙語伴讀切換至雙軌對照時)
+    if (activeSectionId) {
+      isProgrammaticScrolling = true;
+      setTimeout(() => {
+        scrollToTarget('sec-' + activeSectionId);
+        setTimeout(() => {
+          isProgrammaticScrolling = false;
+        }, 500);
+      }, 100);
+    }
+
     setTimeout(() => {
       if ($vimConfigStore.isVimEnabled && !$vimCursorState.active) {
         const paras = getAllRenderedParas(scrollContainer, activeSectionId);

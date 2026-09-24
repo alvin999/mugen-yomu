@@ -60,6 +60,45 @@ function pdfProxyPlugin() {
           res.end(`Proxy error: ${isAbort ? '遠端 PDF 下載逾時 (15s)' : (err?.message || err)}`);
         }
       });
+
+      server.middlewares.use('/api/html-proxy', async (req, res) => {
+        try {
+          const reqUrl = new URL(req.url, 'http://localhost');
+          const targetUrl = reqUrl.searchParams.get('url');
+          if (!targetUrl) {
+            res.statusCode = 400;
+            res.end('Missing url parameter');
+            return;
+          }
+
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+          const response = await fetch(targetUrl, {
+            signal: controller.signal,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+            }
+          });
+
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            res.statusCode = response.status;
+            res.end(`Failed to fetch HTML (HTTP ${response.status})`);
+            return;
+          }
+
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          const htmlText = await response.text();
+          res.end(htmlText);
+        } catch (err) {
+          res.statusCode = 500;
+          res.end(`HTML Proxy error: ${err?.message || err}`);
+        }
+      });
     }
   };
 }

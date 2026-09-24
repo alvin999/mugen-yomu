@@ -168,42 +168,45 @@
       {/if}
     </div>
 
-    <!-- Retry Button -->
-    <button
-      class="px-2 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 rounded text-[11px] text-[#fabd2f] flex items-center gap-1 transition-colors cursor-pointer"
-      on:click={() => dispatch('retry')}
-      disabled={isLoadingPdf}
-      title="重新載入 PDF 來源"
-    >
-      <span class="material-symbols-outlined text-[13px] {isLoadingPdf ? 'animate-spin text-[#fe8019]' : ''}">sync</span>
-      <span class="hidden sm:inline">重試</span>
-    </button>
-
-    <!-- Local PDF Upload -->
-    <button
-      class="px-2 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#504945] rounded text-[11px] text-[#d5c4a1] flex items-center gap-1 transition-colors cursor-pointer"
-      on:click={() => fileInputRef?.click()}
-      title="選取本機 PDF 檔案進行比對"
-    >
-      <span class="material-symbols-outlined text-[13px] text-[#fe8019]">upload_file</span>
-      <span class="hidden sm:inline">本地 PDF</span>
-    </button>
-    <input
-      type="file"
-      accept="application/pdf,.pdf"
-      class="hidden"
-      bind:this={fileInputRef}
-      on:change={(e) => dispatch('fileSelect', { event: e })}
-    />
-
-    {#if localPdfArrayBuffer || localPdfBlobUrl}
+    <!-- PDF Only Controls: Retry, Local PDF Upload -->
+    {#if isPdf}
+      <!-- Retry Button -->
       <button
-        class="px-1.5 py-1 text-[#fb4934] hover:bg-[#282828] rounded text-[10px] cursor-pointer"
-        on:click={() => dispatch('clearLocalPdf')}
-        title="清除本地自訂 PDF"
+        class="px-2 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 rounded text-[11px] text-[#fabd2f] flex items-center gap-1 transition-colors cursor-pointer"
+        on:click={() => dispatch('retry')}
+        disabled={isLoadingPdf}
+        title="重新載入 PDF 來源"
       >
-        復原預設
+        <span class="material-symbols-outlined text-[13px] {isLoadingPdf ? 'animate-spin text-[#fe8019]' : ''}">sync</span>
+        <span class="hidden sm:inline">重試</span>
       </button>
+
+      <!-- Local PDF Upload -->
+      <button
+        class="px-2 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#504945] rounded text-[11px] text-[#d5c4a1] flex items-center gap-1 transition-colors cursor-pointer"
+        on:click={() => fileInputRef?.click()}
+        title="選取本機 PDF 檔案進行比對"
+      >
+        <span class="material-symbols-outlined text-[13px] text-[#fe8019]">upload_file</span>
+        <span class="hidden sm:inline">本地 PDF</span>
+      </button>
+      <input
+        type="file"
+        accept="application/pdf,.pdf"
+        class="hidden"
+        bind:this={fileInputRef}
+        on:change={(e) => dispatch('fileSelect', { event: e })}
+      />
+
+      {#if localPdfArrayBuffer || localPdfBlobUrl}
+        <button
+          class="px-1.5 py-1 text-[#fb4934] hover:bg-[#282828] rounded text-[10px] cursor-pointer"
+          on:click={() => dispatch('clearLocalPdf')}
+          title="清除本地自訂 PDF"
+        >
+          復原預設
+        </button>
+      {/if}
     {/if}
 
     <div class="h-4 w-px bg-[#3c3836] mx-0.5"></div>
@@ -243,30 +246,44 @@
 <div class="h-9 bg-[#181a1b] border-b border-[#3c3836] px-3 flex items-center justify-between shrink-0 text-xs font-mono text-[#a89984] z-10">
   <!-- Left: Sync Lock Toggle & Chapter Dropdown -->
   <div class="flex items-center gap-2 min-w-0 flex-1 mr-2">
-    <button
-      class="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono transition-all cursor-pointer border shrink-0 {
-        isSyncEnabled
-          ? 'bg-[#b8bb26]/15 border-[#b8bb26]/50 text-[#b8bb26] hover:bg-[#b8bb26]/25'
-          : 'bg-[#3c3836]/40 border-[#504945] text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#3c3836]'
-      }"
-      on:click={() => dispatch('toggleSync')}
-      title={isSyncEnabled ? '目前已開啟雙向閱讀聯動（點擊以自由翻閱）' : '目前處於獨立模式（點擊重新鎖定進度）'}
-    >
-      <span class="material-symbols-outlined text-[13px]">{isSyncEnabled ? 'link' : 'link_off'}</span>
-      <span class="font-bold hidden sm:inline">{isSyncEnabled ? '聯動中' : '獨立閱讀'}</span>
-    </button>
+    {#if viewerMode === 'native'}
+      <!-- 原站模式：受瀏覽器同源安全性 (CORS) 限制無法連動，明確標示並引導切換至排版模式 -->
+      <button
+        class="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono transition-all cursor-pointer border shrink-0 bg-[#282828] border-[#3c3836] text-[#928374] hover:text-[#ebdbb2] hover:border-[#fe8019]/60"
+        on:click={() => dispatch('setViewerMode', { mode: 'text' })}
+        title="原站模式受瀏覽器跨網域安全限制 (CORS)，外部網頁無法跨域同步滾動。點擊可切換至「排版」模式開啟雙向進度連動與主題高亮。"
+      >
+        <span class="material-symbols-outlined text-[13px] text-[#fb4934]">link_off</span>
+        <span class="font-bold hidden sm:inline">原站未連動 (點擊切換)</span>
+      </button>
+    {:else}
+      <!-- 畫布或結構化排版模式：支援正常雙向連動開關 -->
+      <button
+        class="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono transition-all cursor-pointer border shrink-0 {
+          isSyncEnabled
+            ? 'bg-[#b8bb26]/15 border-[#b8bb26]/50 text-[#b8bb26] hover:bg-[#b8bb26]/25'
+            : 'bg-[#3c3836]/40 border-[#504945] text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#3c3836]'
+        }"
+        on:click={() => dispatch('toggleSync')}
+        title={isSyncEnabled ? '目前已開啟雙向閱讀聯動（點擊以自由翻閱）' : '目前處於獨立模式（點擊重新鎖定進度）'}
+      >
+        <span class="material-symbols-outlined text-[13px]">{isSyncEnabled ? 'link' : 'link_off'}</span>
+        <span class="font-bold hidden sm:inline">{isSyncEnabled ? '聯動中' : '獨立閱讀'}</span>
+      </button>
+    {/if}
 
     <div class="h-3.5 w-px bg-[#3c3836]"></div>
 
     <!-- Chapter Dropdown -->
     {#if allSections.length > 0}
-      <div class="flex items-center gap-1 min-w-0">
+      <div class="flex items-center gap-1 min-w-0 {viewerMode === 'native' ? 'opacity-40' : ''}">
         <span class="text-[#a89984] text-[10px] hidden md:inline shrink-0">章節:</span>
         <select
-          class="bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#ebdbb2] text-[11px] rounded px-2 py-0.5 font-sans truncate max-w-[170px] sm:max-w-[240px] cursor-pointer focus:outline-none focus:border-[#fe8019]"
+          class="bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#ebdbb2] text-[11px] rounded px-2 py-0.5 font-sans truncate max-w-[170px] sm:max-w-[240px] cursor-pointer focus:outline-none focus:border-[#fe8019] disabled:cursor-not-allowed"
           value={activeSectionId}
+          disabled={viewerMode === 'native'}
           on:change={(e) => dispatch('selectSection', { sectionId: e.currentTarget.value })}
-          title="章節快速跳轉對應 PDF 頁面"
+          title={viewerMode === 'native' ? '原站受瀏覽器限制無法跨域跳轉章節，請切換至「排版」模式' : '章節快速跳轉對應頁面/區塊'}
         >
           {#each allSections as sec}
             <option value={sec.id}>
@@ -278,38 +295,40 @@
     {/if}
   </div>
 
-  <!-- Right: Page Stepper & Instant Jump -->
-  <div class="flex items-center gap-1 shrink-0 font-mono text-[11px]">
-    <button
-      class="w-6 h-6 bg-[#282828] hover:bg-[#3c3836] disabled:opacity-30 border border-[#3c3836] rounded flex items-center justify-center text-[#d5c4a1] transition-colors cursor-pointer"
-      on:click={() => dispatch('prevPage')}
-      disabled={currentPage <= 1}
-      title="上一頁"
-    >
-      <span class="material-symbols-outlined text-[14px]">chevron_left</span>
-    </button>
+  <!-- Right: Page Stepper & Instant Jump (PDF Only) -->
+  {#if isPdf}
+    <div class="flex items-center gap-1 shrink-0 font-mono text-[11px]">
+      <button
+        class="w-6 h-6 bg-[#282828] hover:bg-[#3c3836] disabled:opacity-30 border border-[#3c3836] rounded flex items-center justify-center text-[#d5c4a1] transition-colors cursor-pointer"
+        on:click={() => dispatch('prevPage')}
+        disabled={currentPage <= 1}
+        title="上一頁"
+      >
+        <span class="material-symbols-outlined text-[14px]">chevron_left</span>
+      </button>
 
-    <div class="flex items-center gap-1 px-1">
-      <span class="text-[#a89984] text-[10px]">第</span>
-      <input
-        type="number"
-        min="1"
-        max={totalPages}
-        bind:value={pageInputVal}
-        on:keydown={(e) => { if (e.key === 'Enter') handlePageCommit(); }}
-        on:blur={handlePageCommit}
-        class="w-9 bg-[#282828] border border-[#504945] rounded text-center text-[#fabd2f] font-bold text-xs py-0.5 focus:outline-none focus:border-[#fe8019]"
-      />
-      <span class="text-[#a89984] text-[10px]">/ {totalPages} 頁</span>
+      <div class="flex items-center gap-1 px-1">
+        <span class="text-[#a89984] text-[10px]">第</span>
+        <input
+          type="number"
+          min="1"
+          max={totalPages}
+          bind:value={pageInputVal}
+          on:keydown={(e) => { if (e.key === 'Enter') handlePageCommit(); }}
+          on:blur={handlePageCommit}
+          class="w-9 bg-[#282828] border border-[#504945] rounded text-center text-[#fabd2f] font-bold text-xs py-0.5 focus:outline-none focus:border-[#fe8019]"
+        />
+        <span class="text-[#a89984] text-[10px]">/ {totalPages} 頁</span>
+      </div>
+
+      <button
+        class="w-6 h-6 bg-[#282828] hover:bg-[#3c3836] disabled:opacity-30 border border-[#3c3836] rounded flex items-center justify-center text-[#d5c4a1] transition-colors cursor-pointer"
+        on:click={() => dispatch('nextPage')}
+        disabled={currentPage >= totalPages}
+        title="下一頁"
+      >
+        <span class="material-symbols-outlined text-[14px]">chevron_right</span>
+      </button>
     </div>
-
-    <button
-      class="w-6 h-6 bg-[#282828] hover:bg-[#3c3836] disabled:opacity-30 border border-[#3c3836] rounded flex items-center justify-center text-[#d5c4a1] transition-colors cursor-pointer"
-      on:click={() => dispatch('nextPage')}
-      disabled={currentPage >= totalPages}
-      title="下一頁"
-    >
-      <span class="material-symbols-outlined text-[14px]">chevron_right</span>
-    </button>
-  </div>
+  {/if}
 </div>

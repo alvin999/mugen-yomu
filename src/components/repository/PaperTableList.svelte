@@ -73,7 +73,7 @@
                 {paper.title}
               </button>
               <span class="text-[11px] text-[#7c6f64] truncate max-w-sm">
-                {paper.authors.join(', ')}
+                {Array.isArray(paper.authors) ? paper.authors.join(', ') : (paper.authors || '未知作者')}
               </span>
             </div>
           </td>

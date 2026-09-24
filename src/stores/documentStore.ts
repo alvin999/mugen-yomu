@@ -41,6 +41,43 @@ export {
 const STORAGE_KEY_PAPERS = 'mugen_paper_library_v3';
 const STORAGE_KEY_ACTIVE_ID = 'mugen_active_paper_id_v3';
 
+export function normalizePaper(p: any): PaperDocument {
+  if (!p) return p;
+  // 1. authors 規範化
+  let authors: string[] = [];
+  if (Array.isArray(p.authors)) {
+    authors = p.authors.filter(Boolean);
+  } else if (typeof p.authors === 'string' && p.authors.trim()) {
+    authors = [p.authors.trim()];
+  }
+  if (authors.length === 0) {
+    authors = ['未知作者'];
+  }
+
+  // 2. abstract 規範化
+  let abstract = { english: '', chineseSummary: '' };
+  if (p.abstract && typeof p.abstract === 'object') {
+    abstract = {
+      english: typeof p.abstract.english === 'string' ? p.abstract.english : '',
+      chineseSummary: typeof p.abstract.chineseSummary === 'string' ? p.abstract.chineseSummary : ''
+    };
+  } else if (typeof p.abstract === 'string') {
+    abstract = {
+      english: p.abstract,
+      chineseSummary: ''
+    };
+  }
+
+  return {
+    ...p,
+    title: p.title || '無標題文獻',
+    authors,
+    abstract,
+    sections: Array.isArray(p.sections) ? p.sections : [],
+    companionData: p.companionData || {}
+  };
+}
+
 export function getInitialLibrary(): PaperDocument[] {
   const defaults = [userManualDocument, attentionPaper, resnetPaper, anthropicCircuitsWeb];
 
@@ -53,16 +90,19 @@ export function getInitialLibrary(): PaperDocument[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
+        // 標準化並自我修復所有文獻
+        const normalizedList: PaperDocument[] = parsed.filter(Boolean).map(normalizePaper);
+
         // Ensure userManualDocument is present and always synced with the latest version
-        const manualIdx = parsed.findIndex((p: any) => p.id === userManualDocument.id);
+        const manualIdx = normalizedList.findIndex((p: any) => p.id === userManualDocument.id);
         if (manualIdx === -1) {
-          const updated = [userManualDocument, ...parsed];
+          const updated = [userManualDocument, ...normalizedList];
           saveLibraryToStorage(updated);
           return updated;
         } else {
-          parsed[manualIdx] = userManualDocument;
-          saveLibraryToStorage(parsed);
-          return parsed;
+          normalizedList[manualIdx] = userManualDocument;
+          saveLibraryToStorage(normalizedList);
+          return normalizedList;
         }
       }
     }

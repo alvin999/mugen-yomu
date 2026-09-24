@@ -1,8 +1,11 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount, tick } from 'svelte';
   import type { PaperDocument, ChapterSection } from '../../../types/document';
   import { normalizeParagraphs } from '../../../utils/paragraphUtils';
   import { renderMath } from '../../../utils/katexUtils';
+  import { pdfViewerStore } from '../../../stores/pdfViewerStore';
+  import ThemeCodeBlock from '../../common/ThemeCodeBlock.svelte';
+  import { marked } from 'marked';
 
   export let paper: PaperDocument | null = null;
   export let allSections: ChapterSection[] = [];
@@ -13,40 +16,162 @@
 
   const dispatch = createEventDispatcher<{
     sectionClick: { sectionId: string };
+    sectionScroll: { sectionId: string };
     openLightbox: { url: string; caption?: string };
     retryPdf: void;
   }>();
 
+  let containerElement: HTMLDivElement | null = null;
   let paperFontSize: 'normal' | 'large' = 'normal';
 
-  function formatParagraphWithMath(text: string): string {
-    if (!text) return '';
-    if (!text.includes('$')) return text;
+  let lastTargetSectionId = '';
+  let isProgrammaticScroll = false;
+  let programmaticScrollTimeout: any = null;
+  let scrollThrottleTimer: any = null;
 
-    const parts: string[] = [];
-    let lastIndex = 0;
-    const regex = /\$([^$\n]+?)\$/g;
-    let match: RegExpExecArray | null;
+  // 監聽閱讀器端傳入的 activeSectionId，自動平滑捲動至該章節
+  $: if (activeSectionId && activeSectionId !== lastTargetSectionId && containerElement) {
+    lastTargetSectionId = activeSectionId;
+    scrollToSection(activeSectionId);
+  }
 
-    while ((match = regex.exec(text)) !== null) {
-      if (match.index > lastIndex) {
-        parts.push(text.slice(lastIndex, match.index));
+  function scrollToSection(secId: string) {
+    if (!containerElement) return;
+    const targetEl = containerElement.querySelector(`#text-sec-${secId}`) as HTMLElement | null;
+    if (!targetEl) return;
+
+    isProgrammaticScroll = true;
+    clearTimeout(programmaticScrollTimeout);
+
+    const containerRect = containerElement.getBoundingClientRect();
+    const targetRect = targetEl.getBoundingClientRect();
+    const relativeTop = targetRect.top - containerRect.top + containerElement.scrollTop;
+    const finalScrollTop = Math.max(0, relativeTop - 30);
+
+    containerElement.scrollTo({
+      top: finalScrollTop,
+      behavior: 'smooth'
+    });
+
+    programmaticScrollTimeout = setTimeout(() => {
+      isProgrammaticScroll = false;
+    }, 450);
+  }
+
+  function handleScroll() {
+    if (!containerElement) return;
+    const currentScrollTop = containerElement.scrollTop;
+    const scrollHeight = containerElement.scrollHeight - containerElement.clientHeight;
+    const percent = scrollHeight > 0 ? (currentScrollTop / scrollHeight) * 100 : 0;
+
+    // 即時同步至 Store，供抽屜或雙軌對照無縫復原
+    pdfViewerStore.setWebScroll(currentScrollTop, percent, paper?.id);
+
+    // 若為外部觸發的程式自動捲動，不反向觸發事件
+    if (isProgrammaticScroll) return;
+
+    if (scrollThrottleTimer) return;
+    scrollThrottleTimer = setTimeout(() => {
+      scrollThrottleTimer = null;
+      detectInViewSection();
+    }, 60);
+  }
+
+  function detectInViewSection() {
+    if (!containerElement || allSections.length === 0) return;
+    const containerRect = containerElement.getBoundingClientRect();
+    const sectionElements = containerElement.querySelectorAll('section[id^="text-sec-"]');
+
+    const READING_LINE_OFFSET = 120; // 視線讀取基準線
+    let currentInViewId = '';
+
+    for (const el of sectionElements) {
+      const elRect = el.getBoundingClientRect();
+      const elTop = elRect.top - containerRect.top;
+      if (elTop <= READING_LINE_OFFSET) {
+        currentInViewId = el.id.replace(/^text-sec-/, '');
+      } else {
+        break;
       }
-      const math = match[1].trim();
-      const rendered = renderMath(math, false);
-      parts.push(`<span class="inline-math px-0.5 align-baseline">${rendered}</span>`);
-      lastIndex = regex.lastIndex;
     }
 
-    if (lastIndex < text.length) {
-      parts.push(text.slice(lastIndex));
+    if (!currentInViewId && sectionElements.length > 0) {
+      currentInViewId = (sectionElements[0] as HTMLElement).id.replace(/^text-sec-/, '');
     }
 
-    return parts.join('');
+    if (currentInViewId && currentInViewId !== activeSectionId) {
+      lastTargetSectionId = currentInViewId;
+      pdfViewerStore.setActiveWebSection(currentInViewId);
+      dispatch('sectionScroll', { sectionId: currentInViewId });
+    }
+  }
+
+  async function restoreScrollPosition() {
+    await tick();
+    if (!containerElement) return;
+    const saved = $pdfViewerStore.webScrollTop;
+    if (saved > 0) {
+      containerElement.scrollTop = saved;
+    } else if (activeSectionId) {
+      scrollToSection(activeSectionId);
+    }
+  }
+
+  onMount(() => {
+    restoreScrollPosition();
+  });
+
+  // 當文獻切換時，自動還原該篇滾動進度
+  let lastPaperId = '';
+  $: if (paper?.id && paper.id !== lastPaperId) {
+    lastPaperId = paper.id;
+    restoreScrollPosition();
+  }
+
+  function renderRichParagraph(text: string): string {
+    if (!text) return '';
+
+    // 1. 先萃取或替換 KaTeX 公式，避免 marked 將公式內的底線 _ 或星號 * 誤判為 Markdown 斜體或粗體
+    const mathTokens: { token: string; html: string }[] = [];
+    let counter = 0;
+    const textWithMathPlaceholders = text.replace(/\$([^$\n]+?)\$/g, (_match, math) => {
+      const placeholder = `%%MATH_TOKEN_${counter++}%%`;
+      const rendered = renderMath(math.trim(), false);
+      mathTokens.push({
+        token: placeholder,
+        html: `<span class="inline-math px-0.5 align-baseline">${rendered}</span>`
+      });
+      return placeholder;
+    });
+
+    // 2. 利用 marked.parseInline 將 Markdown 語法（[鏈結](url), `行內代碼`, **粗體** 等）轉為 HTML
+    let parsedHtml = '';
+    try {
+      parsedHtml = marked.parseInline(textWithMathPlaceholders, { breaks: true, gfm: true }) as string;
+    } catch {
+      parsedHtml = textWithMathPlaceholders;
+    }
+
+    // 3. 還原 KaTeX 公式 HTML
+    for (const { token, html } of mathTokens) {
+      parsedHtml = parsedHtml.replace(token, html);
+    }
+
+    // 4. 美化產生的 <a> 標籤，增加 target="_blank" 與外部鏈結樣式
+    parsedHtml = parsedHtml.replace(
+      /<a\s+(?:[^>]*?\s+)?href=["'](.*?)["']/gi,
+      (_m, href) => `<a href="${href}" target="_blank" rel="noopener noreferrer" class="rich-link"`
+    );
+
+    return parsedHtml;
   }
 </script>
 
-<div class="w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center select-text font-serif">
+<div
+  bind:this={containerElement}
+  on:scroll={handleScroll}
+  class="w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center select-text font-serif scroll-smooth"
+>
   <!-- Structured Reader View Control Header -->
   <div class="w-full max-w-5xl px-4 py-2 border-b border-[#3c3836] flex flex-wrap items-center justify-between gap-2 font-mono text-xs bg-[#181a1b] shrink-0 sticky top-0 z-10">
     <div class="flex items-center gap-2">
@@ -246,13 +371,24 @@
                       </span>
                     {/if}
                   </div>
+                {:else if item.type === 'code' && item.code}
+                  <ThemeCodeBlock
+                    code={item.code}
+                    language={item.language}
+                    {paperTheme}
+                    dataParaKey={`${sec.id}_${item.originalIndex}`}
+                    dataSecId={sec.id}
+                  />
                 {:else if item.type === 'text' && item.text}
-                  <p class="font-serif leading-[1.85] text-justify tracking-normal {
+                  <p
+                    data-para-key={`${sec.id}_${item.originalIndex}`}
+                    data-sec-id={sec.id}
+                    class="structured-para font-serif leading-[1.85] text-justify tracking-normal {
                     paperFontSize === 'large' ? 'text-[16.5px]' : 'text-[14.5px]'
                   } {
                     paperTheme === 'parchment' ? 'text-[#24292f]' : 'text-[#d5c4a1]'
                   }">
-                    {@html formatParagraphWithMath(item.text)}
+                    {@html renderRichParagraph(item.text)}
                   </p>
                 {/if}
               {/each}
@@ -296,3 +432,44 @@
     </div>
   {/if}
 </div>
+
+<style>
+  :global(.rich-link) {
+    color: #0969da;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    font-weight: 500;
+    transition: opacity 0.15s ease;
+  }
+  :global(.rich-link:hover) {
+    opacity: 0.8;
+  }
+
+  /* 行內程式碼標籤樣式 (Inline code) */
+  :global(.structured-para code) {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.88em;
+    padding: 0.15em 0.35em;
+    border-radius: 4px;
+  }
+
+  /* 紙本模式 (Parchment) */
+  article.bg-\[\#fcfbf9\] :global(.rich-link) {
+    color: #0969da;
+  }
+  article.bg-\[\#fcfbf9\] :global(.structured-para code) {
+    background-color: #f0ebe0;
+    color: #af3a03;
+    border: 1px solid #e0d7c7;
+  }
+
+  /* 夜間模式 (Dark) */
+  article.bg-\[\#1d2021\] :global(.rich-link) {
+    color: #8ec07c;
+  }
+  article.bg-\[\#1d2021\] :global(.structured-para code) {
+    background-color: #282828;
+    color: #fabd2f;
+    border: 1px solid #3c3836;
+  }
+</style>

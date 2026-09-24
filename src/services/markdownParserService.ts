@@ -1,5 +1,6 @@
 import type { ChapterSection, FormulaItem, FigureItem, PaperDocument } from '../types/document';
 import { cleanPaperText, unwrapParagraphLines } from '../utils/paperTextSanitizer';
+import { parseHtmlWithReadability } from './htmlReadabilityService';
 
 /**
  * 輔助函式：自 LaTeX 簡單萃取關鍵變數符號標記
@@ -112,7 +113,29 @@ export function parseMarkdownToDocument(
       continue;
     }
 
-    // 2. 檢測區塊公式 (Display Math: $$ ... $$)
+    // 2. 檢測代碼塊 (Markdown Code Block: ```lang ... ```)
+    if (trimmed.startsWith('```')) {
+      const codeLines: string[] = [rawLine];
+      i++;
+      while (i < lines.length) {
+        const nextLine = lines[i];
+        codeLines.push(nextLine);
+        if (nextLine.trim().startsWith('```')) {
+          i++;
+          break;
+        }
+        i++;
+      }
+      const fullCodeBlock = codeLines.join('\n');
+      if (currentSection) {
+        currentSection.paragraphs.push(fullCodeBlock);
+      } else {
+        abstractParagraphs.push(fullCodeBlock);
+      }
+      continue;
+    }
+
+    // 3. 檢測區塊公式 (Display Math: $$ ... $$)
     if (trimmed.startsWith('$$')) {
       let formulaLatex = '';
       if (trimmed.length > 2 && trimmed.endsWith('$$')) {
@@ -384,7 +407,55 @@ export function parseMarkdownToDocument(
 }
 
 /**
- * 解析器 2: 網頁 URL 抓取與智慧萃取 (Jina Reader / Reader Fallback)
+ * 輔助函式：嘗試獲取原生網頁 HTML 字串
+ */
+async function fetchRawHtml(targetUrl: string): Promise<string> {
+  // 1. 優先使用本機 Astro Vite middleware 代理端點（100% 繞過瀏覽器 CORS，極速且穩定）
+  if (typeof window !== 'undefined') {
+    try {
+      const localProxyUrl = `/api/html-proxy?url=${encodeURIComponent(targetUrl)}`;
+      const res = await fetch(localProxyUrl);
+      if (res.ok) {
+        const html = await res.text();
+        if (html && (html.includes('<html') || html.includes('<body') || html.length > 500)) {
+          return html;
+        }
+      }
+    } catch {}
+  }
+
+  // 2. 若同源或目標伺服器直接開放 CORS
+  try {
+    const res = await fetch(targetUrl, { headers: { 'Accept': 'text/html' } });
+    if (res.ok) {
+      const html = await res.text();
+      if (html && html.includes('<html')) return html;
+    }
+  } catch {}
+
+  // 3. 透過外部 CORS Proxy 備援抓取原生 HTML
+  const proxies = [
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+    `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`
+  ];
+
+  for (const proxyUrl of proxies) {
+    try {
+      const res = await fetch(proxyUrl);
+      if (res.ok) {
+        const html = await res.text();
+        if (html && (html.includes('<html') || html.includes('<body') || html.includes('<div') || html.length > 500)) {
+          return html;
+        }
+      }
+    } catch {}
+  }
+
+  throw new Error('無法取得原生 HTML');
+}
+
+/**
+ * 解析器 2: 網頁 URL 抓取與智慧萃取 (Mozilla Readability / Reader Fallback)
  */
 export async function fetchWebArticle(url: string): Promise<PaperDocument> {
   let targetUrl = url.trim();
@@ -392,6 +463,36 @@ export async function fetchWebArticle(url: string): Promise<PaperDocument> {
     targetUrl = 'https://' + targetUrl;
   }
 
+  const isMdpi = targetUrl.includes('mdpi.com');
+  const domainName = new URL(targetUrl).hostname;
+
+  // 策略 A (最優推薦)：直接使用 Mozilla Readability 進行原生 HTML DOM 語意萃取
+  // 100% 完整保留 <pre><code> 換行、縮排、空格與註解，段落自然獨立，不經過正則重流！
+  try {
+    const rawHtml = await fetchRawHtml(targetUrl);
+    const doc = parseHtmlWithReadability(rawHtml, targetUrl);
+
+    if (isMdpi) {
+      const mdpiMatch = targetUrl.match(/https?:\/\/(?:www\.)?mdpi\.com\/([0-9-]+\/[0-9]+\/[0-9]+\/[0-9]+)/i);
+      if (mdpiMatch) {
+        doc.pdfUrl = `https://www.mdpi.com/${mdpiMatch[1]}/pdf`;
+        const parts = mdpiMatch[1].split('/');
+        doc.venue = `MDPI Journal (Vol. ${parts[1]}, Issue ${parts[2]}, Art. ${parts[3]})`;
+        if (!doc.arxivId) {
+          doc.arxivId = `DOI: 10.3390/mdpi${parts[1]}${parts[2]}${parts[3]}`;
+        }
+      } else {
+        doc.pdfUrl = `${targetUrl.replace(/\/$/, '')}/pdf`;
+        doc.venue = 'MDPI Open Access';
+      }
+    }
+
+    return doc;
+  } catch (readabilityErr) {
+    console.warn('Mozilla Readability 原生 DOM 萃取受限，啟用備援流程:', readabilityErr);
+  }
+
+  // 策略 B (備援方案)：Jina Reader / Reader Fallback
   try {
     const jinaEndpoint = `https://r.jina.ai/${targetUrl}`;
     const response = await fetch(jinaEndpoint, {
@@ -415,9 +516,6 @@ export async function fetchWebArticle(url: string): Promise<PaperDocument> {
       parsedTitle = urlObj.pathname.split('/').filter(Boolean).pop() || urlObj.hostname;
     }
 
-    const domainName = new URL(targetUrl).hostname;
-
-    const isMdpi = targetUrl.includes('mdpi.com');
     if (isMdpi) {
       markdownText = markdownText.replace(/!\[(.*?)\]\((?!https?:\/\/)(.*?)\)/g, (_match, alt, relPath) => {
         const cleanPath = relPath.replace(/^\.?\//, '');
@@ -449,7 +547,6 @@ export async function fetchWebArticle(url: string): Promise<PaperDocument> {
     return doc;
   } catch (err) {
     console.warn('線上 Reader 引擎連線逾時或受限，啟用備用高品質萃取器:', err);
-    const domainName = new URL(targetUrl).hostname;
     const fallbackTitle = `線上文章: ${domainName}`;
     const mockMarkdown = `# 1. Introduction to ${domainName}\n` +
       `Source URL: ${targetUrl}\n\n` +

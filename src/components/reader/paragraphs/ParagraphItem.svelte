@@ -4,6 +4,7 @@
   import type { NormalizedParagraphItem } from '../../../utils/paragraphUtils';
   import { renderMath, escapeHtml, copyLatexToClipboard } from '../../../utils/katexUtils';
   import { countWords } from '../../../stores/flowStore';
+  import ThemeCodeBlock from '../../common/ThemeCodeBlock.svelte';
 
   export let item: NormalizedParagraphItem;
   export let sec: ChapterSection;
@@ -258,6 +259,19 @@
         </span>
       {/if}
     </div>
+  </div>
+
+{:else if item.type === 'code' && item.code}
+  {@const pIndex = item.originalIndex}
+  {@const key = `${sec.id}_${pIndex}`}
+  <div class="my-2" id={`para-${key}`}>
+    <ThemeCodeBlock
+      code={item.code}
+      language={item.language}
+      paperTheme="dark"
+      dataParaKey={key}
+      dataSecId={sec.id}
+    />
   </div>
 
 {:else if item.type === 'text' && item.text}
