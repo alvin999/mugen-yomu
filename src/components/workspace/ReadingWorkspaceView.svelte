@@ -8,7 +8,7 @@
   import OriginalDocumentViewer from '../reader/OriginalDocumentViewer.svelte';
 
   import type { PaperDocument, ChapterSection } from '../../types/document';
-  import { flattenSections } from '../../stores/readingStore';
+  import { flattenSections, loadLastReadingPosition } from '../../stores/readingStore';
   import { calculateSplitRatio, adjustSplitRatioByStep } from '../../utils/useSplitPane';
   import { addNoteToPaper } from '../../stores/notesStore';
   import {
@@ -65,7 +65,11 @@
   $: if (activePaper && activePaper.id !== currentPaperId) {
     currentPaperId = activePaper.id;
     const allSecs = flattenSections(activePaper.sections || []);
-    const targetSec = allSecs[0];
+    const lastPos = loadLastReadingPosition(activePaper.id);
+    let targetSec = lastPos?.sectionId ? allSecs.find(s => s.id === lastPos.sectionId) : null;
+    if (!targetSec) {
+      targetSec = allSecs[0];
+    }
     if (targetSec) {
       activeSectionId = targetSec.id;
       activeContextText = `§ ${targetSec.title}`;

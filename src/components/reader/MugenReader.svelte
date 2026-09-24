@@ -1,7 +1,12 @@
 <script lang="ts">
   import { createEventDispatcher, onMount, onDestroy } from 'svelte';
   import type { PaperDocument, ChapterSection, FormulaItem } from '../../types/document';
-  import { flattenSections } from '../../stores/readingStore';
+  import {
+    flattenSections,
+    loadLastReadingPosition,
+    saveLastReadingPosition,
+    type ReadingPositionRecord
+  } from '../../stores/readingStore';
   import { flowStore, countWords } from '../../stores/flowStore';
   import {
     translateAcademicText,
@@ -166,11 +171,161 @@
     prevVimActive = curVimActive;
   }
 
+  // --- 閱讀進度保留 (有游標以游標為主，無游標以段落為主) ---
+  let savePositionTimer: any = null;
+
+  function persistReadingPosition(forcedType?: 'cursor' | 'paragraph') {
+    if (!paper || !paper.id) return;
+
+    const isCursorActive = $vimConfigStore.isVimEnabled && $vimCursorState.active;
+    const targetType = forcedType || (isCursorActive ? 'cursor' : 'paragraph');
+
+    if (targetType === 'cursor' && isCursorActive && $vimCursorState.sectionId) {
+      const cursorPos = vimController.getCurrentCursorReadingPos();
+      const secId = cursorPos?.secId || $vimCursorState.sectionId;
+      const pIndex = cursorPos !== null ? cursorPos.pIndex : $vimCursorState.paraIndex;
+      const charIndex = cursorPos !== null ? cursorPos.charIndex : $vimCursorState.charIndex;
+      const pKey = `${secId}_${pIndex}`;
+
+      const record: ReadingPositionRecord = {
+        paperId: paper.id,
+        type: 'cursor',
+        sectionId: secId,
+        paraIndex: pIndex,
+        paragraphKey: pKey,
+        charIndex,
+        timestamp: Date.now()
+      };
+      saveLastReadingPosition(paper.id, record);
+      return;
+    }
+
+    // 沒有游標或以段落為主
+    let secId = activeSectionId;
+    let pIndex = 0;
+    let pKey = focusedParagraphKey;
+
+    if (pKey) {
+      const parts = pKey.split('_');
+      pIndex = parseInt(parts.pop() || '0', 10);
+      secId = parts.join('_') || secId;
+    } else if (scrollContainer) {
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const paraElements = scrollContainer.querySelectorAll<HTMLElement>('[data-para-key]');
+      const targetLine = containerRect.top + 160;
+      let bestDist = Infinity;
+
+      for (const pEl of paraElements) {
+        const rect = pEl.getBoundingClientRect();
+        if (rect.bottom > containerRect.top && rect.top < containerRect.bottom) {
+          const dist = Math.abs(rect.top - targetLine);
+          if (dist < bestDist) {
+            bestDist = dist;
+            pKey = pEl.getAttribute('data-para-key') || '';
+            secId = pEl.getAttribute('data-sec-id') || secId;
+            pIndex = parseInt(pKey.split('_').pop() || '0', 10);
+          }
+        }
+      }
+    }
+
+    if (secId) {
+      const record: ReadingPositionRecord = {
+        paperId: paper.id,
+        type: 'paragraph',
+        sectionId: secId,
+        paraIndex: pIndex,
+        paragraphKey: pKey || `${secId}_${pIndex}`,
+        timestamp: Date.now()
+      };
+      saveLastReadingPosition(paper.id, record);
+    }
+  }
+
+  function schedulePersistPosition(delay: number = 350, forcedType?: 'cursor' | 'paragraph') {
+    if (savePositionTimer) clearTimeout(savePositionTimer);
+    savePositionTimer = setTimeout(() => {
+      persistReadingPosition(forcedType);
+    }, delay);
+  }
+
+  function restoreLastReadingPosition() {
+    if (!paper || !paper.id) return;
+    const lastPos = loadLastReadingPosition(paper.id);
+    if (!lastPos) {
+      // 若無歷史進度，執行原預設：捲動至焦點章節並在 Vim 啟用時選第一段
+      if (activeSectionId) {
+        isProgrammaticScrolling = true;
+        setTimeout(() => {
+          scrollToTarget('sec-' + activeSectionId);
+          setTimeout(() => { isProgrammaticScrolling = false; }, 500);
+        }, 100);
+      }
+      setTimeout(() => {
+        if ($vimConfigStore.isVimEnabled && !$vimCursorState.active) {
+          const paras = getAllRenderedParas(scrollContainer, activeSectionId);
+          if (paras.length > 0) {
+            const first = paras[0];
+            focusedParagraphKey = first.key;
+            focusedParagraphText = first.text;
+            vimController.syncCursor(first.secId, first.pIndex, 0, false);
+          }
+        }
+      }, 400);
+      return;
+    }
+
+    // 依據「有游標以游標為主，無游標以段落為主」復原
+    setTimeout(() => {
+      const targetKey = lastPos.paragraphKey || `${lastPos.sectionId}_${lastPos.paraIndex}`;
+      const targetEl = document.getElementById(`para-${targetKey}`) ||
+                       scrollContainer?.querySelector<HTMLElement>(`[data-para-key="${targetKey}"]`);
+
+      // 情況一：有游標記錄 且 Vim 開啟 -> 以游標為主
+      if (lastPos.type === 'cursor' && $vimConfigStore.isVimEnabled) {
+        if (targetEl) {
+          focusedParagraphKey = targetKey;
+          focusedParagraphText = targetEl.getAttribute('data-para-text') || '';
+          activeSectionId = lastPos.sectionId;
+          const charIdx = typeof lastPos.charIndex === 'number' ? lastPos.charIndex : 0;
+          
+          isProgrammaticScrolling = true;
+          vimController.syncCursor(lastPos.sectionId, lastPos.paraIndex, charIdx, false, false);
+          setTimeout(() => { isProgrammaticScrolling = false; }, 600);
+          return;
+        }
+      }
+
+      // 情況二：沒有游標記錄（或 Vim 未開啟）-> 以段落為主
+      if (targetEl) {
+        focusedParagraphKey = targetKey;
+        focusedParagraphText = targetEl.getAttribute('data-para-text') || '';
+        activeSectionId = lastPos.sectionId;
+
+        // 平滑捲動至視線居中位置
+        isProgrammaticScrolling = true;
+        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => { isProgrammaticScrolling = false; }, 600);
+      } else if (lastPos.sectionId) {
+        // 若找不到特定段落，降級捲動至章節
+        scrollToTarget('sec-' + lastPos.sectionId);
+      }
+    }, 280);
+  }
+
+  const handleBeforeUnload = () => {
+    persistReadingPosition();
+  };
+
   $: if (paper) {
     const isNewPaper = paper.id !== currentPaperId;
     if (isNewPaper) {
+      if (currentPaperId) {
+        persistReadingPosition();
+      }
       currentPaperId = paper.id;
       passedParaKeys = new Set<string>();
+      restoreLastReadingPosition();
     }
     const allSecs = paper.sections ? flattenSections(paper.sections) : [];
     const totalReadCount = allSecs.reduce((sum, s) => sum + (s.readParaIndices?.length || 0), 0);
@@ -199,31 +354,20 @@
       scrollTimeout = setTimeout(() => { isProgrammaticScrolling = false; }, 650);
     });
 
-    // 自動復原或捲動至當前焦點章節 (例如從雙語伴讀切換至雙軌對照時)
-    if (activeSectionId) {
-      isProgrammaticScrolling = true;
-      setTimeout(() => {
-        scrollToTarget('sec-' + activeSectionId);
-        setTimeout(() => {
-          isProgrammaticScrolling = false;
-        }, 500);
-      }, 100);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', handleBeforeUnload);
     }
 
-    setTimeout(() => {
-      if ($vimConfigStore.isVimEnabled && !$vimCursorState.active) {
-        const paras = getAllRenderedParas(scrollContainer, activeSectionId);
-        if (paras.length > 0) {
-          const first = paras[0];
-          focusedParagraphKey = first.key;
-          focusedParagraphText = first.text;
-          vimController.syncCursor(first.secId, first.pIndex, 0, false);
-        }
-      }
-    }, 400);
+    // 啟動最後閱讀位置復原
+    restoreLastReadingPosition();
   });
 
   onDestroy(() => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    }
+    persistReadingPosition();
+    if (savePositionTimer) clearTimeout(savePositionTimer);
     if (scrollSyncRafId !== null) cancelAnimationFrame(scrollSyncRafId);
     if (sectionJumpTimer) clearTimeout(sectionJumpTimer);
     if (scrollDebounceTimer) clearTimeout(scrollDebounceTimer);
@@ -284,6 +428,12 @@
       text,
       selectedText
     });
+
+    if ($vimConfigStore.isVimEnabled) {
+      schedulePersistPosition(300, 'cursor');
+    } else {
+      schedulePersistPosition(300, 'paragraph');
+    }
   }
 
   function askCompanionAboutParagraph(sec: ChapterSection, pIndex: number, text: string) {
@@ -614,9 +764,14 @@
             vimController.syncCursor($vimCursorState.sectionId, $vimCursorState.paraIndex, vimController.currentCharIndex, false, true);
           }
         }
+        schedulePersistPosition(300);
       }, 80);
     } else {
       lastScrollTop = scrollContainer.scrollTop;
+      if (scrollDebounceTimer) clearTimeout(scrollDebounceTimer);
+      scrollDebounceTimer = setTimeout(() => {
+        schedulePersistPosition(350, 'paragraph');
+      }, 250);
     }
 
     // --- 以下為 section 視線追蹤 / 閱讀進度，vim 自動捲動期間跳過 ---
@@ -730,6 +885,10 @@
       onCloseLightbox: closeLightbox,
       isLightboxOpen: Boolean(activeLightboxImg)
     });
+
+    if ($vimConfigStore.isVimEnabled) {
+      schedulePersistPosition(300, 'cursor');
+    }
   }
 
   function handleSectionClick(secId: string) {

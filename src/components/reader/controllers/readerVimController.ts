@@ -407,6 +407,7 @@ export class ReaderVimController {
     const rect = computeCharRect(el, charIdx, this.scrollContainer);
     if (rect) {
       this.currentParaKey = key; // 同步記錄當前段落，避免 Svelte 時序問題
+      this.currentCharIndex = charIdx;
       updateCursorPosition(rect, secId, pIndex, charIdx, triggerAnimation);
       if (!skipComfortScroll) {
         this.onBeforeComfortScroll?.(); // 通知外部設定 isProgrammaticScrolling
@@ -414,6 +415,19 @@ export class ReaderVimController {
       }
     }
     return rect;
+  }
+
+  public getCurrentCursorReadingPos(): { secId: string; pIndex: number; charIndex: number; key: string } | null {
+    if (!this.currentParaKey) return null;
+    const parts = this.currentParaKey.split('_');
+    const pIndexStr = parts.pop() || '0';
+    const secId = parts.join('_');
+    return {
+      secId,
+      pIndex: parseInt(pIndexStr, 10),
+      charIndex: this.currentCharIndex,
+      key: this.currentParaKey
+    };
   }
 
   public handleKeydown(

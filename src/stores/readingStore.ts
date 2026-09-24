@@ -335,3 +335,48 @@ export function applyProgressToSections(
   return synchronizeHeadingProgress(updated);
 }
 
+// ------------------------------------------------------------------
+// Last Reading Position (Cursor & Paragraph Bookmarks)
+// ------------------------------------------------------------------
+
+export interface ReadingPositionRecord {
+  paperId: string;
+  type: 'cursor' | 'paragraph';
+  sectionId: string;
+  paraIndex: number;
+  paragraphKey: string;
+  charIndex?: number;
+  timestamp: number;
+}
+
+const POSITION_STORAGE_PREFIX = 'mugen_last_pos_';
+
+export function loadLastReadingPosition(paperId: string): ReadingPositionRecord | null {
+  if (typeof window === 'undefined' || !paperId) return null;
+  try {
+    const raw = localStorage.getItem(`${POSITION_STORAGE_PREFIX}${paperId}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    console.warn('[readingStore] Failed to load last reading position:', err);
+    return null;
+  }
+}
+
+export function saveLastReadingPosition(paperId: string, record: ReadingPositionRecord): void {
+  if (typeof window === 'undefined' || !paperId || !record) return;
+  try {
+    localStorage.setItem(`${POSITION_STORAGE_PREFIX}${paperId}`, JSON.stringify(record));
+  } catch (err) {
+    console.warn('[readingStore] Failed to save last reading position:', err);
+  }
+}
+
+export function clearLastReadingPosition(paperId: string): void {
+  if (typeof window === 'undefined' || !paperId) return;
+  try {
+    localStorage.removeItem(`${POSITION_STORAGE_PREFIX}${paperId}`);
+  } catch (err) {
+    console.warn('[readingStore] Failed to clear last reading position:', err);
+  }
+}
+
