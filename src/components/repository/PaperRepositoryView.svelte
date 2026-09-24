@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
   import type { PaperDocument } from '../../stores/documentStore';
-  import { saveLibraryToStorage, setActivePaperId } from '../../stores/documentStore';
+  import { saveLibraryToStorage, setActivePaperId, convertDocumentToTraditional } from '../../stores/documentStore';
   import { loadPaperReadingState, calculateReadingStats, applyProgressToSections } from '../../stores/readingStore';
   import type { CacheStats } from '../../services/cacheService';
 
@@ -136,6 +136,15 @@
   function handlePreviewPaper(paper: PaperDocument) {
     previewPaper = paper;
     isInspectorOpen = true;
+  }
+
+  function handleConvertToTraditional(paper: PaperDocument) {
+    if (!paper) return;
+    const converted = convertDocumentToTraditional(paper);
+    library = library.map(p => p.id === converted.id ? converted : p);
+    saveLibraryToStorage(library);
+    previewPaper = converted;
+    dispatch('updateLibrary', { library });
   }
 
   function handleDeletePaper(id: string) {
@@ -330,5 +339,6 @@
     on:select={(e) => handleSelectPaper(e.detail.paper)}
     on:viewCitation={(e) => handleViewCitation(e.detail.paper)}
     on:viewNotes={(e) => handleViewNotes(e.detail.paper)}
+    on:convertToTraditional={(e) => handleConvertToTraditional(e.detail.paper)}
   />
 </div>

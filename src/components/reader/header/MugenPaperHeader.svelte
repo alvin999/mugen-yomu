@@ -152,19 +152,9 @@
               </p>
             {/if}
           {:else}
-            <div class="bg-[#32302f] border border-[#504945]/50 rounded-lg p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div class="flex items-center gap-2 text-[#d5c4a1] text-[11px]">
-                <span class="material-symbols-outlined text-[#fe8019] text-[17px] shrink-0">psychology</span>
-                <span>尚未建立繁體中文核心導讀。點擊按鈕由 AI 提煉論文核心精華。</span>
-              </div>
-              <button
-                class="font-mono text-[11px] bg-[#fe8019] hover:bg-[#fabd2f] text-[#1d2021] font-medium px-3 py-1 rounded flex items-center gap-1.5 transition-all shadow-sm shrink-0 cursor-pointer active:scale-95 disabled:opacity-50"
-                disabled={isGeneratingAbstract}
-                on:click={() => dispatch('generateAbstract')}
-              >
-                <span class="material-symbols-outlined text-[14px]">{isGeneratingAbstract ? 'progress_activity' : 'auto_awesome'}</span>
-                <span>{isGeneratingAbstract ? '提煉中...' : '✨ 提煉雙語導讀'}</span>
-              </button>
+            <div class="bg-[#32302f]/60 border border-[#504945]/40 rounded-lg p-2.5 flex items-center gap-2 text-[#a89984] text-[11px]">
+              <span class="material-symbols-outlined text-[#fe8019] text-[16px] shrink-0">psychology</span>
+              <span>尚未建立繁體中文核心導讀。可點擊右上角「生成導讀」由 AI 提煉論文核心精華。</span>
             </div>
 
             {#if cleanEnglishAbstract}

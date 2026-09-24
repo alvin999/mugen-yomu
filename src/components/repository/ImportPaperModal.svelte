@@ -8,6 +8,7 @@
     fetchWebArticle,
     fetchArxivDocument,
     parseMarkdownToDocument,
+    parseEpubToDocument,
     saveLibraryToStorage,
     setActivePaperId,
     type PaperDocument
@@ -20,7 +21,15 @@
 
   const dispatch = createEventDispatcher();
 
-  let activeTab: 'arxiv' | 'pdf' | 'web' | 'preset' | 'paste' | 'upload' = 'arxiv';
+  let activeTab: 'arxiv' | 'pdf' | 'book' | 'web' | 'preset' | 'paste' | 'upload' = 'arxiv';
+
+  // Tab Book: EPUB Local File Import State
+  let isParsingBook: boolean = false;
+  let bookParsePercent: number = 0;
+  let bookParseStepText: string = '';
+  let bookError: string = '';
+  let previewBookPaper: PaperDocument | null = null;
+  let bookDragOver: boolean = false;
 
   // Tab 0: arXiv ID Import State
   let arxivInput: string = '1706.03762';
@@ -297,6 +306,56 @@
     importAndActivatePaper(previewUploadPaper);
   }
 
+  // --- Book (EPUB / GitBook) Handlers ---
+  async function handleEpubFileInput(e: Event) {
+    const input = e.target as HTMLInputElement;
+    if (input.files && input.files[0]) {
+      await parseEpubFile(input.files[0]);
+    }
+  }
+
+  async function handleEpubDrop(e: DragEvent) {
+    e.preventDefault();
+    bookDragOver = false;
+    if (e.dataTransfer?.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      if (file.name.toLowerCase().endsWith('.epub')) {
+        await parseEpubFile(file);
+      } else {
+        bookError = '請拖放副檔名為 .epub 的電子書檔案';
+      }
+    }
+  }
+
+  async function parseEpubFile(file: File) {
+    isParsingBook = true;
+    bookError = '';
+    previewBookPaper = null;
+    bookParsePercent = 10;
+    bookParseStepText = '讀取本機 EPUB 檔案...';
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const paper = await parseEpubToDocument(arrayBuffer, {
+        toTraditional: false,
+        onProgress: (p) => {
+          bookParseStepText = p.step;
+          bookParsePercent = p.percent;
+        }
+      });
+      previewBookPaper = paper;
+    } catch (err: any) {
+      bookError = err?.message || 'EPUB 解析失敗，請確認檔案結構是否完整';
+    } finally {
+      isParsingBook = false;
+    }
+  }
+
+  function handleImportBookPaper() {
+    if (!previewBookPaper) return;
+    importAndActivatePaper(previewBookPaper);
+  }
+
   // --- Common Import Handler ---
   function importAndActivatePaper(paper: PaperDocument) {
     // Check if already in library by ID
@@ -361,6 +420,15 @@
           <span class="material-symbols-outlined text-[15px] text-[#fe8019]">picture_as_pdf</span>
           <span>本機 PDF 解析</span>
           <span class="bg-[#b8bb26]/20 text-[#b8bb26] text-[9px] px-1 py-0.2 rounded font-bold">離線</span>
+        </button>
+
+        <button
+          class="px-3.5 py-2 font-mono text-xs rounded-t-lg transition-colors flex items-center gap-1.5 {activeTab === 'book' ? 'bg-[#282828] text-[#8ec07c] border-t-2 border-[#8ec07c] font-semibold' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]/50'}"
+          on:click={() => activeTab = 'book'}
+        >
+          <span class="material-symbols-outlined text-[15px] text-[#8ec07c]">menu_book</span>
+          <span>EPUB 電子書</span>
+          <span class="bg-[#8ec07c]/20 text-[#8ec07c] text-[9px] px-1 py-0.2 rounded font-bold">上傳</span>
         </button>
 
         <button
@@ -652,6 +720,132 @@
                 >
                   <span class="material-symbols-outlined text-[16px]">library_add</span>
                   匯入至文獻庫並開啟雙語研讀
+                </button>
+              </div>
+            {/if}
+          </div>
+
+        <!-- ==================== TAB BOOK: EPUB IMPORT ==================== -->
+        {:else if activeTab === 'book'}
+          <div class="flex flex-col gap-3.5">
+            <div class="bg-[#32302f] border border-[#3c3836] p-3 rounded-lg flex items-start gap-2.5">
+              <span class="material-symbols-outlined text-[18px] text-[#8ec07c] shrink-0 mt-0.5">menu_book</span>
+              <div class="flex flex-col gap-0.5">
+                <span class="font-semibold text-[#ebdbb2]">EPUB 電子書無損解析引擎</span>
+                <span class="text-[#a89984] leading-relaxed">
+                  徹底告別 PDF 排版錯位與 Markdown 圖片破損！直接上傳或拖放本機 <code class="text-[#fabd2f]">.epub</code> 檔案，純前端秒級解開全書章節目錄樹，完整內嵌高畫質圖表與原始代碼縮排。
+                </span>
+              </div>
+            </div>
+
+            <!-- 本機 EPUB 檔案拖放上傳 -->
+            <div class="flex flex-col gap-1.5">
+              <!-- svelte-ignore a11y-no-static-element-interactions -->
+              <div
+                class="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center gap-2.5 transition-colors cursor-pointer {bookDragOver ? 'border-[#8ec07c] bg-[#8ec07c]/10' : 'border-[#504945] hover:border-[#8ec07c]/60 bg-[#1d2021]/50'}"
+                on:dragover|preventDefault={() => bookDragOver = true}
+                on:dragleave={() => bookDragOver = false}
+                on:drop={handleEpubDrop}
+                on:click={() => document.getElementById('epub-file-input')?.click()}
+                on:keydown={(e) => e.key === 'Enter' && document.getElementById('epub-file-input')?.click()}
+                tabindex="0"
+                role="button"
+              >
+                <input
+                  id="epub-file-input"
+                  type="file"
+                  accept=".epub"
+                  class="hidden"
+                  on:change={handleEpubFileInput}
+                />
+                <span class="material-symbols-outlined text-[36px] text-[#8ec07c]">file_open</span>
+                <div class="flex flex-col items-center gap-0.5 text-center">
+                  <span class="font-semibold text-[#ebdbb2] text-sm">拖曳 .epub 檔案至此處，或點擊選擇本機檔案</span>
+                  <span class="text-[#a89984] text-[11px]">純前端本地秒級解析 · 完整提取全書章節、段落、代碼與高畫質圖表</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 解析進度條指示 -->
+            {#if isParsingBook}
+              <div class="bg-[#1d2021] border border-[#8ec07c]/40 p-3 rounded-lg flex flex-col gap-2 shadow-inner">
+                <div class="flex items-center justify-between font-mono text-[11px]">
+                  <span class="text-[#8ec07c] font-semibold flex items-center gap-1.5">
+                    <span class="material-symbols-outlined text-[14px] animate-spin">sync</span>
+                    {bookParseStepText || '正在解析書籍結構...'}
+                  </span>
+                  <span class="text-[#fabd2f] font-bold">{bookParsePercent}%</span>
+                </div>
+                <div class="w-full bg-[#32302f] rounded-full h-1.5 overflow-hidden">
+                  <div class="bg-[#8ec07c] h-1.5 transition-all duration-300 rounded-full" style="width: {bookParsePercent}%;"></div>
+                </div>
+              </div>
+            {/if}
+
+            <!-- 錯誤提示 -->
+            {#if bookError}
+              <div class="bg-[#fb4934]/10 border border-[#fb4934]/30 text-[#fb4934] p-3 rounded-lg flex items-center gap-2">
+                <span class="material-symbols-outlined text-[16px]">error</span>
+                <span>{bookError}</span>
+              </div>
+            {/if}
+
+            <!-- 預覽結果確認面板 -->
+            {#if previewBookPaper}
+              <div class="bg-[#1d2021] border border-[#8ec07c]/50 p-4 rounded-lg flex flex-col gap-3 shadow-md">
+                <div class="flex items-start justify-between">
+                  <div class="flex flex-col gap-1">
+                    <div class="flex items-center gap-2">
+                      <span class="px-2 py-0.5 bg-[#8ec07c]/20 text-[#8ec07c] font-mono text-[10px] font-bold rounded">
+                        EPUB 解析完成
+                      </span>
+                    </div>
+                    <h4 class="text-sm font-bold text-[#ebdbb2] leading-snug">{previewBookPaper.title}</h4>
+                    <span class="text-[#a89984] text-[11px] font-mono">
+                      作者：{previewBookPaper.authors?.join(', ') || '技術作者'} · 來源：{previewBookPaper.venue}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-2 bg-[#282828] p-2.5 rounded border border-[#3c3836] font-mono text-center">
+                  <div class="flex flex-col">
+                    <span class="text-[10px] text-[#a89984]">收錄章節</span>
+                    <span class="text-xs font-bold text-[#8ec07c]">{previewBookPaper.sections.length} 章</span>
+                  </div>
+                  <div class="flex flex-col">
+                    <span class="text-[10px] text-[#a89984]">總段落數</span>
+                    <span class="text-xs font-bold text-[#fabd2f]">
+                      {previewBookPaper.sections.reduce((acc, s) => acc + s.paragraphs.length, 0)} 段
+                    </span>
+                  </div>
+                  <div class="flex flex-col">
+                    <span class="text-[10px] text-[#a89984]">高畫質圖表</span>
+                    <span class="text-xs font-bold text-[#b8bb26]">{previewBookPaper.figureList?.length || 0} 張</span>
+                  </div>
+                </div>
+
+                <!-- 目錄大綱前 8 章預覽 -->
+                <div class="flex flex-col gap-1 font-mono text-[11px]">
+                  <span class="text-[#a89984] text-[10px]">章節目錄預覽：</span>
+                  <div class="max-h-28 overflow-y-auto flex flex-col gap-1 bg-[#282828]/60 p-2 rounded border border-[#3c3836]">
+                    {#each previewBookPaper.sections.slice(0, 8) as sec, idx}
+                      <div class="flex items-center gap-1.5 text-[#ebdbb2] text-[10px] truncate">
+                        <span class="text-[#8ec07c] font-bold">#{idx + 1}</span>
+                        <span class="truncate">{sec.title}</span>
+                      </div>
+                    {/each}
+                    {#if previewBookPaper.sections.length > 8}
+                      <span class="text-[#a89984] text-[9px] italic">... 還有 {previewBookPaper.sections.length - 8} 個章節</span>
+                    {/if}
+                  </div>
+                </div>
+
+                <button
+                  class="mt-1 w-full py-2 bg-[#8ec07c] hover:bg-[#b8bb26] text-[#1d2021] font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
+                  on:click={handleImportBookPaper}
+                >
+                  <span class="material-symbols-outlined text-[16px]">library_add</span>
+                  收錄全書至文獻庫並開啟閱讀
                 </button>
               </div>
             {/if}

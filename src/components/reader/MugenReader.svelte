@@ -540,7 +540,12 @@
       dispatch('updatePaper', { paper });
     } catch (err: any) {
       console.error('生成核心摘要失敗:', err);
-      abstractGenError = err.message || '生成失敗，請檢查 API Key 或網路狀態';
+      const msg = String(err?.message || '');
+      if (msg.includes('unexpected EOF') || msg.includes('stream reading')) {
+        abstractGenError = 'Groq 雲端連線不穩定，請重新點擊重試（系統已啟用 8B-Instant 自動修復）。';
+      } else {
+        abstractGenError = err.message || '生成失敗，請檢查 API Key 或網路狀態';
+      }
     } finally {
       isGeneratingAbstract = false;
     }

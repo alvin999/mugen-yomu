@@ -11,10 +11,12 @@
 
   import {
     getInitialLibrary,
+    loadLibraryFromIndexedDB,
     getActivePaperId,
     setActivePaperId,
     saveLibraryToStorage,
     normalizePaper,
+    convertDocumentToTraditional,
     type PaperDocument
   } from '../stores/documentStore';
   import {
@@ -74,8 +76,19 @@
     }
   }
 
-  onMount(() => {
-    paperLibrary = getInitialLibrary();
+  onMount(async () => {
+    // 優先從超大容量 IndexedDB 載入文獻庫（如 EPUB 電子書），防止重新整理後丟失
+    try {
+      const dbLibrary = await loadLibraryFromIndexedDB();
+      if (dbLibrary && dbLibrary.length > 0) {
+        paperLibrary = dbLibrary;
+      } else {
+        paperLibrary = getInitialLibrary();
+      }
+    } catch {
+      paperLibrary = getInitialLibrary();
+    }
+
     activePaperId = getActivePaperId();
     const current = paperLibrary.find(p => p.id === activePaperId) || paperLibrary[0];
     if (current) {
@@ -144,6 +157,17 @@
 
   function handleZoomChange(event: CustomEvent<{ zoomLevel: number }>) {
     zoomLevel = event.detail.zoomLevel;
+  }
+
+  function handleConvertToTraditional(paperToConvert?: PaperDocument) {
+    const target = paperToConvert || activePaper;
+    if (!target) return;
+    const converted = convertDocumentToTraditional(target);
+    if (activePaper && activePaper.id === converted.id) {
+      activePaper = converted;
+    }
+    paperLibrary = paperLibrary.map(p => p.id === converted.id ? converted : p);
+    saveLibraryToStorage(paperLibrary);
   }
 
   function handleGlobalKeydown(e: KeyboardEvent) {
@@ -309,6 +333,7 @@
       on:openImport={() => isImportOpen = true}
       on:exportNotes={() => currentMainView = 'notes'}
       on:backToWorkspace={() => currentMainView = 'workspace'}
+      on:convertToTraditional={() => handleConvertToTraditional()}
     />
 
     <!-- Main Dynamic Route View Frame (pushed down by 64px header) -->
@@ -324,6 +349,7 @@
           on:openNotes={(e) => { setPaper(e.detail.paper); currentMainView = 'notes'; }}
           on:openImport={() => isImportOpen = true}
           on:updateLibrary={(e) => { paperLibrary = e.detail.library; refreshCacheStats(); }}
+          on:convertToTraditional={(e) => handleConvertToTraditional(e.detail.paper)}
           on:backToWorkspace={() => currentMainView = 'workspace'}
         />
       {:else if currentMainView === 'notes'}

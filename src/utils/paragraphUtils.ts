@@ -1,8 +1,13 @@
 import { extractImageInfo } from './academicImageUtils';
 import { cleanPaperText } from './paperTextSanitizer';
 
+export interface MarkdownTableData {
+  headers: string[];
+  rows: string[][];
+}
+
 export interface NormalizedParagraphItem {
-  type: 'subheading' | 'formula' | 'image' | 'text' | 'code';
+  type: 'subheading' | 'formula' | 'image' | 'text' | 'code' | 'table';
   text?: string;
   level?: number;
   latex?: string;
@@ -11,11 +16,72 @@ export interface NormalizedParagraphItem {
   alt?: string;
   code?: string;
   language?: string;
+  tableData?: MarkdownTableData;
   originalIndex: number;
 }
 
 /**
- * 將原始章節段落清單正規化為結構化渲染項目（子標題、公式卡、圖片視圖、程式碼區塊、正文段落）
+ * 解析 Markdown 表格字串
+ * 支援多行標準 Markdown 表格（\n 分隔）
+ * 以及緊湊單行 Markdown 表格（|| 分隔）
+ */
+export function parseMarkdownTable(text: string): MarkdownTableData | null {
+  if (!text || !text.includes('|')) return null;
+
+  let lines: string[] = [];
+  if (text.includes('\n')) {
+    lines = text
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(l => l.startsWith('|') && l.endsWith('|'));
+  } else if (text.includes('||')) {
+    const rawChunks = text.split(/\|\|+/);
+    lines = rawChunks
+      .map(chunk => {
+        let c = chunk.trim();
+        if (!c.startsWith('|')) c = '|' + c;
+        if (!c.endsWith('|')) c = c + '|';
+        return c;
+      })
+      .filter(c => c.length > 2 && c.includes('|'));
+  }
+
+  if (lines.length < 2) return null;
+
+  // 尋找分隔線 | --- | --- |
+  let separatorIdx = -1;
+  for (let idx = 0; idx < lines.length; idx++) {
+    const l = lines[idx];
+    const inner = l.slice(1, -1).trim();
+    const cells = inner.split('|').map(c => c.trim());
+    if (cells.length > 0 && cells.every(c => /^:?-+:?$/.test(c))) {
+      separatorIdx = idx;
+      break;
+    }
+  }
+
+  if (separatorIdx === -1) return null;
+
+  const headerLine = lines[0];
+  const headers = headerLine.slice(1, -1).split('|').map(c => c.trim().replace(/\\\|/g, '|'));
+
+  const rows: string[][] = [];
+  for (let idx = separatorIdx + 1; idx < lines.length; idx++) {
+    const l = lines[idx];
+    const cells = l.slice(1, -1).split('|').map(c => c.trim().replace(/\\\|/g, '|'));
+    if (cells.some(c => c.length > 0)) {
+      while (cells.length < headers.length) cells.push('');
+      rows.push(cells.slice(0, Math.max(headers.length, cells.length)));
+    }
+  }
+
+  if (rows.length === 0) return null;
+
+  return { headers, rows };
+}
+
+/**
+ * 將原始章節段落清單正規化為結構化渲染項目（子標題、公式卡、圖片視圖、表格、程式碼區塊、正文段落）
  */
 export function normalizeParagraphs(paragraphs: string[]): NormalizedParagraphItem[] {
   if (!paragraphs || paragraphs.length === 0) return [];
@@ -56,7 +122,45 @@ export function normalizeParagraphs(paragraphs: string[]): NormalizedParagraphIt
       continue;
     }
 
-    // 3. 檢測 Markdown 程式碼區塊 (Code Block)
+    // 3. 檢測表格 (Table)
+    const directTable = parseMarkdownTable(trimmed);
+    if (directTable) {
+      items.push({
+        type: 'table',
+        tableData: directTable,
+        originalIndex: i
+      });
+      i++;
+      continue;
+    }
+
+    if (trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.includes('|')) {
+      const tableLines: string[] = [trimmed];
+      let j = i + 1;
+      while (j < paragraphs.length) {
+        const nextP = (paragraphs[j] || '').trim();
+        if (nextP.startsWith('|') && nextP.endsWith('|')) {
+          tableLines.push(nextP);
+          j++;
+        } else {
+          break;
+        }
+      }
+      if (tableLines.length >= 2) {
+        const multiTable = parseMarkdownTable(tableLines.join('\n'));
+        if (multiTable) {
+          items.push({
+            type: 'table',
+            tableData: multiTable,
+            originalIndex: i
+          });
+          i = j;
+          continue;
+        }
+      }
+    }
+
+    // 4. 檢測 Markdown 程式碼區塊 (Code Block)
     if (trimmed.startsWith('```')) {
       const langMatch = trimmed.match(/^```([a-zA-Z0-9_-]*)/);
       const language = langMatch ? langMatch[1] : '';

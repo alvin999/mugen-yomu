@@ -34,6 +34,17 @@
     openSettings: void;
   }>();
 
+  function formatInlineMarkdown(escapedText: string): string {
+    if (!escapedText) return '';
+    return escapedText
+      // 行內程式碼：`code` (已 escapeHtml)
+      .replace(/`([^`]+)`/g, '<code class="bg-[#1d2021] text-[#fe8019] px-1.5 py-0.5 rounded font-mono text-[0.88em] border border-[#504945]/60">$1</code>')
+      // 粗體：**text**
+      .replace(/\*\*([\s\S]+?)\*\*/g, '<strong class="font-bold text-[#fabd2f] text-inherit">$1</strong>')
+      // 斜體：*text* (排除連續星號)
+      .replace(/(?<!\*)\*([^\*]+?)\*(?!\*)/g, '<em class="italic text-[#83a598]">$1</em>');
+  }
+
   function parseLinksAndText(rawText: string, currentMode: string): string {
     if (!rawText) return '';
     const linkRegex = /(?<!!)\[([^\[\]]+)\]\(((?:https?:\/\/|#)[^\s'")]+)\)/g;
@@ -43,7 +54,7 @@
 
     while ((m = linkRegex.exec(rawText)) !== null) {
       if (m.index > last) {
-        res.push(escapeHtml(rawText.slice(last, m.index)));
+        res.push(formatInlineMarkdown(escapeHtml(rawText.slice(last, m.index))));
       }
       const anchor = escapeHtml(m[1]);
       const url = m[2].replace(/"/g, '&quot;');
@@ -56,16 +67,37 @@
           : '';
         res.push(`<span class="inline-flex items-center gap-0.5 mx-0.5 align-baseline group/cite bg-[#1d2021]/80 px-1 py-0.2 rounded border border-[#504945]/60 hover:border-[#fe8019] transition-all"><a href="${url}" target="_blank" rel="noopener noreferrer" class="text-[#fabd2f] hover:text-[#fe8019] underline decoration-[#fabd2f]/40 hover:decoration-[#fe8019] font-mono text-[12px] font-bold cursor-pointer" title="查看引文來源：${url}">[${displayNum}]</a>${probeBtn}</span>`);
       } else {
-        res.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center text-[#8ec07c] hover:text-[#b8bb26] underline decoration-[#8ec07c]/40 hover:decoration-[#b8bb26] transition-colors font-medium px-0.5 rounded hover:bg-[#8ec07c]/10 cursor-pointer" title="${url}">${anchor}</a>`);
+        res.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center text-[#8ec07c] hover:text-[#b8bb26] underline decoration-[#8ec07c]/40 hover:decoration-[#b8bb26] transition-colors font-medium px-0.5 rounded hover:bg-[#8ec07c]/10 cursor-pointer" title="${url}">${formatInlineMarkdown(anchor)}</a>`);
       }
       last = linkRegex.lastIndex;
     }
 
     if (last < rawText.length) {
-      res.push(escapeHtml(rawText.slice(last)));
+      res.push(formatInlineMarkdown(escapeHtml(rawText.slice(last))));
     }
 
     return res.join('');
+  }
+
+  function copyTableAsMarkdown(tableData: { headers: string[]; rows: string[][] }) {
+    const lines = [
+      `| ${tableData.headers.join(' | ')} |`,
+      `| ${tableData.headers.map(() => '---').join(' | ')} |`,
+      ...tableData.rows.map(r => `| ${r.join(' | ')} |`)
+    ];
+    navigator.clipboard.writeText(lines.join('\n'));
+    copyToastText = '已複製表格 Markdown';
+    setTimeout(() => { copyToastText = null; }, 2000);
+  }
+
+  function copyTableAsTSV(tableData: { headers: string[]; rows: string[][] }) {
+    const lines = [
+      tableData.headers.join('\t'),
+      ...tableData.rows.map(r => r.join('\t'))
+    ];
+    navigator.clipboard.writeText(lines.join('\n'));
+    copyToastText = '已複製 TSV (適合貼至 Excel)';
+    setTimeout(() => { copyToastText = null; }, 2000);
   }
 
   function formatParagraphWithMath(text: string, currentMode: string): string {
@@ -258,6 +290,68 @@
           {item.number}
         </span>
       {/if}
+    </div>
+  </div>
+
+{:else if item.type === 'table' && item.tableData}
+  <!-- Inline Markdown Academic Table Card -->
+  <div class="my-4 bg-[#1d2021] border border-[#504945] rounded-xl overflow-hidden shadow-md group/table">
+    <div class="w-full flex items-center justify-between text-xs font-mono text-[#fabd2f] bg-[#282828] border-b border-[#3c3836] px-4 py-2.5">
+      <div class="flex items-center gap-2 font-bold">
+        <span class="material-symbols-outlined text-[16px] text-[#fe8019]">table_chart</span>
+        <span>資料圖表 / 對照表 (Academic Table)</span>
+        <span class="text-[#a89984] text-[10px] font-normal">
+          ({item.tableData.rows.length} 列 × {item.tableData.headers.length} 欄)
+        </span>
+      </div>
+      <div class="flex items-center gap-2">
+        {#if copyToastText}
+          <span class="font-mono text-[10px] text-[#b8bb26] bg-[#b8bb26]/15 border border-[#b8bb26]/40 px-2 py-0.5 rounded animate-fade-in">
+            {copyToastText}
+          </span>
+        {/if}
+        <button
+          class="text-[#a89984] hover:text-[#ebdbb2] text-[11px] flex items-center gap-1 cursor-pointer transition-colors bg-[#1d2021] hover:bg-[#32302f] border border-[#3c3836] px-2 py-0.5 rounded"
+          on:click|stopPropagation={() => copyTableAsMarkdown(item.tableData)}
+          title="複製 Markdown 表格語法"
+        >
+          <span class="material-symbols-outlined text-[13px]">content_copy</span>
+          <span>複製 MD</span>
+        </button>
+        <button
+          class="text-[#a89984] hover:text-[#ebdbb2] text-[11px] flex items-center gap-1 cursor-pointer transition-colors bg-[#1d2021] hover:bg-[#32302f] border border-[#3c3836] px-2 py-0.5 rounded"
+          on:click|stopPropagation={() => copyTableAsTSV(item.tableData)}
+          title="複製為 TSV 格式（可直接貼上至 Excel 或 Google 試算表）"
+        >
+          <span class="material-symbols-outlined text-[13px]">grid_on</span>
+          <span>複製 TSV</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="w-full overflow-x-auto p-1 max-h-[520px] overflow-y-auto">
+      <table class="w-full text-left border-collapse text-[13px] font-sans">
+        <thead>
+          <tr class="border-b border-[#504945] bg-[#282828]/80 text-[#fabd2f]">
+            {#each item.tableData.headers as th, hIdx}
+              <th class="px-3.5 py-2.5 font-bold tracking-wide {hIdx === 0 ? 'rounded-tl' : ''}">
+                {@html formatParagraphWithMath(th, readingMode)}
+              </th>
+            {/each}
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-[#3c3836]/60">
+          {#each item.tableData.rows as row, rIdx}
+            <tr class="hover:bg-[#32302f]/60 transition-colors {rIdx % 2 === 0 ? 'bg-[#1d2021]' : 'bg-[#282828]/30'}">
+              {#each row as cell}
+                <td class="px-3.5 py-2.5 text-[#ebdbb2]/90 leading-relaxed align-top">
+                  {@html formatParagraphWithMath(cell, readingMode)}
+                </td>
+              {/each}
+            </tr>
+          {/each}
+        </tbody>
+      </table>
     </div>
   </div>
 

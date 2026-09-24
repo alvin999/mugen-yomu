@@ -18,17 +18,24 @@ export function extractImageInfo(text: string): { url: string; alt: string } | n
   const trimmed = text.trim();
 
   // 1. 巢狀超連結圖片：[![alt](imgUrl)](linkUrl)
-  const linkedMatch = trimmed.match(/^\[!\[(.*?)\]\((.*?)\)\]\((.*?)\)$/);
+  const linkedMatch = trimmed.match(/^\[!\[([\s\S]*?)\]\s*\(([\s\S]*?)\)\]\s*\(([\s\S]*?)\)$/);
   if (linkedMatch) {
-    const url = linkedMatch[2].split(' ')[0].replace(/['"]/g, '');
-    return { alt: linkedMatch[1] || '學術圖表', url: normalizeAcademicImageUrl(url) };
+    const url = linkedMatch[2].trim().split(/\s+/)[0].replace(/['"]/g, '');
+    return { alt: linkedMatch[1].trim() || '學術圖表', url: normalizeAcademicImageUrl(url) };
   }
 
   // 2. 標準 Markdown 圖片：![alt](imgUrl)
-  const match = trimmed.match(/^!\[(.*?)\]\((.*?)\)$/);
+  const match = trimmed.match(/^!\[([\s\S]*?)\]\s*\(([\s\S]*?)\)$/);
   if (match) {
-    const url = match[2].split(' ')[0].replace(/['"]/g, '');
-    return { alt: match[1] || '學術圖表', url: normalizeAcademicImageUrl(url) };
+    const url = match[2].trim().split(/\s+/)[0].replace(/['"]/g, '');
+    return { alt: match[1].trim() || '學術圖表', url: normalizeAcademicImageUrl(url) };
+  }
+
+  // 3. 防禦性匹配：若段落開頭為 ![ 且包含 data:image/ 或 http
+  const looseMatch = trimmed.match(/^!\[([\s\S]*?)\]\s*\(((?:data:image\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/=]+|https?:\/\/[^\s'")]+))\)/);
+  if (looseMatch) {
+    const url = looseMatch[2].trim();
+    return { alt: looseMatch[1].trim() || '學術圖表', url: normalizeAcademicImageUrl(url) };
   }
 
   return null;

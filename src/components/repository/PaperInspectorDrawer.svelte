@@ -164,6 +164,15 @@
       </button>
 
       <button
+        class="px-3 py-2 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#8ec07c]/60 text-[#8ec07c] hover:text-[#b8bb26] rounded-lg text-xs font-mono flex items-center gap-1 transition-colors cursor-pointer"
+        on:click={() => { dispatch('convertToTraditional', { paper }); }}
+        title="將此文獻轉換為台灣正體/繁體中文 (OpenCC S2TWP)"
+      >
+        <span class="material-symbols-outlined text-[16px]">translate</span>
+        <span class="hidden sm:inline">轉繁體</span>
+      </button>
+
+      <button
         class="px-3 py-2 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#83a598] hover:text-[#ebdbb2] rounded-lg text-xs font-mono flex items-center gap-1 transition-colors cursor-pointer"
         on:click={() => { dispatch('viewCitation', { paper }); close(); }}
         title="查看文獻引文圖譜"

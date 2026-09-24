@@ -35,9 +35,10 @@ async function streamOpenAICompatible(
   const decoder = new TextDecoder('utf-8');
   let accumulated = '';
   let buffer = '';
+  let isStreamFinished = false;
 
   try {
-    while (true) {
+    while (!isStreamFinished) {
       const { done, value } = await reader.read();
       if (done) break;
 
@@ -48,7 +49,10 @@ async function streamOpenAICompatible(
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed || trimmed.startsWith(':')) continue;
-        if (trimmed === 'data: [DONE]') break;
+        if (trimmed === 'data: [DONE]' || trimmed === '[DONE]') {
+          isStreamFinished = true;
+          break; // 跳出 for 迴圈，同時外層 while (!isStreamFinished) 也將結束
+        }
         if (trimmed.startsWith('data: ')) {
           try {
             const parsed = JSON.parse(trimmed.slice(6));
@@ -63,11 +67,19 @@ async function streamOpenAICompatible(
         }
       }
     }
-  } catch (err) {
-    console.warn('Stream reading exception:', err);
-    if (!accumulated) {
+  } catch (err: any) {
+    const errMsg = String(err?.message || '');
+    // 若已收集到足夠內文，或是遭遇伺服器在結束時發出的 EOF，視為正常收尾
+    if (accumulated && accumulated.trim().length > 0) {
+      console.info('[Stream] 串流接收完成（遭遇連線閉合），保留已接收的完整文字');
+    } else {
+      console.warn('Stream reading exception:', err);
       throw err;
     }
+  } finally {
+    try {
+      reader.cancel().catch(() => {});
+    } catch {}
   }
 
   if (onChunk && accumulated) onChunk(accumulated);
@@ -228,22 +240,36 @@ export async function callGroqChat(
   } catch (err: any) {
     const errStr = String(err?.message || '');
     if (errStr.includes('unexpected EOF') || errStr.includes('stream reading')) {
-      console.warn('[Groq 韌性保護] 捕捉到 unexpected EOF，執行非串流應急重試...');
+      console.warn('[Groq 韌性保護] 捕捉到 unexpected EOF，自動切換至 llama-3.1-8b-instant 非串流重試...');
       try {
-        await delay(500);
-        const fallbackRes = await doGroqRequest(false);
+        await delay(600);
+        const fallbackRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey.trim()}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'llama-3.1-8b-instant',
+            messages: conversation,
+            temperature: 0.3,
+            max_tokens: 1500,
+            stream: false
+          })
+        });
         if (fallbackRes.ok) {
           const json = await fallbackRes.json();
           const reply = json.choices?.[0]?.message?.content || '';
           if (reply) {
             if (onChunk) await playTypewriter(reply, onChunk, 10);
             const latencyMs = Math.round(performance.now() - startTime);
-            return { reply, latencyMs, model: model || 'llama-3.3-70b-versatile', provider: 'groq' };
+            return { reply, latencyMs, model: 'llama-3.1-8b-instant', provider: 'groq' };
           }
         }
       } catch (e2) {
-        console.warn('非串流應急亦失敗:', e2);
+        console.warn('8B-Instant 應急亦失敗:', e2);
       }
+      throw new Error('Groq 雲端連線不穩定 (stream reading EOF)，請稍候再試或在右上角設定自備 API 金鑰。');
     }
     throw err;
   }

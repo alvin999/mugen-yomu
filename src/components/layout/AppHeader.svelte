@@ -204,6 +204,17 @@
   <!-- Right BYOK & Utilities -->
   <div class="flex items-center gap-2 shrink-0">
     {#if currentMainView === 'workspace'}
+      <!-- Traditional Chinese Conversion Button -->
+      <button
+        class="px-2.5 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#8ec07c]/60 text-[#8ec07c] hover:text-[#b8bb26] rounded-lg text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+        on:click={() => dispatch('convertToTraditional')}
+        title="將當前文獻轉換為台灣正體/繁體中文 (OpenCC S2TWP)"
+        id="btn-header-traditional"
+      >
+        <span class="material-symbols-outlined text-[14px]">translate</span>
+        <span class="hidden md:inline">轉繁體</span>
+      </button>
+
       <!-- Slide-out PDF / Web Drawer Toggle Button -->
       <button
         class="px-2.5 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 text-[#fabd2f] hover:text-[#fe8019] rounded-lg text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm {isPdfDrawerOpen ? '!bg-[#fe8019] !text-[#1d2021] font-semibold' : ''}"
