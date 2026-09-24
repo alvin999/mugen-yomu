@@ -210,6 +210,23 @@
     importAndActivatePaper(preset);
   }
 
+  function handleRestoreAllPresets() {
+    const presets = [userManualDocument, attentionPaper, resnetPaper, anthropicCircuitsWeb];
+    let updated = [...currentLibrary];
+    for (const p of presets) {
+      if (!updated.some(item => item.id === p.id)) {
+        updated.push(p);
+      }
+    }
+    saveLibraryToStorage(updated);
+    dispatch('paperLoaded', { paper: userManualDocument, library: updated });
+    clipboardToast = '已成功補齊並還原預設核心文獻！';
+    setTimeout(() => {
+      clipboardToast = '';
+      close();
+    }, 1200);
+  }
+
   // --- Tab 3: Paste Text Logic ---
   function handleCleanPasteText() {
     if (!pasteContent.trim()) return;
@@ -960,7 +977,18 @@
         <!-- ==================== TAB 2: PRESET LIBRARY ==================== -->
         {:else if activeTab === 'preset'}
           <div class="flex flex-col gap-3">
-            <span class="font-mono text-[11px] text-[#a89984]">點擊任一使用手冊或經典學術論文，立即進入深度伴讀工作台：</span>
+            <div class="flex items-center justify-between flex-wrap gap-2 pb-1 border-b border-[#3c3836]">
+              <span class="font-mono text-[11px] text-[#a89984]">點擊任一手冊或經典文獻重新載入 (Fallback 恢復)：</span>
+              <button
+                type="button"
+                class="px-2.5 py-1 bg-[#32302f] hover:bg-[#3c3836] border border-[#504945] hover:border-[#fe8019]/60 text-[#fabd2f] text-xs font-mono rounded flex items-center gap-1.5 transition-colors cursor-pointer"
+                on:click={handleRestoreAllPresets}
+                title="一鍵將全部 4 篇預設核心論文與手冊重新補齊至本地文獻庫"
+              >
+                <span class="material-symbols-outlined text-[14px]">history</span>
+                <span>一鍵還原全部核心文獻</span>
+              </button>
+            </div>
 
             <!-- Preset 0: MUGEN YOMU Official Operating Manual -->
             <div class="bg-[#1d2021] border border-[#fe8019]/60 hover:border-[#fe8019] p-3.5 rounded-xl flex flex-col gap-2 transition-all shadow-md">

@@ -139,15 +139,14 @@
               >
                 <span class="material-symbols-outlined text-[16px]">visibility</span>
               </button>
-              {#if !isActive}
-                <button
-                  class="p-1 text-[#7c6f64] hover:text-[#fb4934] hover:bg-[#282828] rounded transition-colors"
-                  on:click={() => dispatch('delete', { id: paper.id })}
-                  title="移除文獻"
-                >
-                  <span class="material-symbols-outlined text-[16px]">delete</span>
-                </button>
-              {/if}
+              <button
+                type="button"
+                class="p-1 text-[#7c6f64] hover:text-[#fb4934] hover:bg-[#282828] rounded transition-colors"
+                on:click|stopPropagation={() => dispatch('delete', { id: paper.id })}
+                title="移除文獻"
+              >
+                <span class="material-symbols-outlined text-[16px]">delete</span>
+              </button>
             </div>
           </td>
         </tr>

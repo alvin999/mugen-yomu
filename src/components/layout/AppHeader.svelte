@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import type { PaperDocument } from '../../stores/documentStore';
+  import { type PaperDocument, isPaperProtected } from '../../stores/documentStore';
   import type { CacheStats } from '../../services/cacheService';
   import { THEMES, currentTheme, setTheme } from '../../stores/themeStore';
 
@@ -152,6 +152,17 @@
           <span class="font-mono text-[10px] bg-[#32302f] border border-[#504945] text-[#a89984] px-1.5 py-0.5 rounded shrink-0">
             {activePaper.venue}
           </span>
+        {/if}
+
+        {#if activePaper}
+          <button
+            type="button"
+            class="w-6 h-6 rounded flex items-center justify-center text-[#7c6f64] hover:text-[#fb4934] hover:bg-[#282828] transition-colors cursor-pointer shrink-0"
+            title="從文獻庫移除此文獻"
+            on:click={() => dispatch('deleteCurrentPaper', { paperId: activePaper.id })}
+          >
+            <span class="material-symbols-outlined text-[15px]">delete</span>
+          </button>
         {/if}
       {/if}
     </div>

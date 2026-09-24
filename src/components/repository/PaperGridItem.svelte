@@ -48,22 +48,22 @@
       {/if}
     </div>
 
-    <!-- Active Indicator or Delete Button -->
-    <div class="flex items-center gap-1 shrink-0">
+    <!-- Active Indicator and Delete Button -->
+    <div class="flex items-center gap-1.5 shrink-0">
       {#if isActive}
         <span class="font-mono text-[11px] text-[#fe8019] bg-[#fe8019]/10 border border-[#fe8019]/40 px-2 py-0.5 rounded-full flex items-center gap-1.5 font-semibold">
           <span class="h-1.5 w-1.5 rounded-full bg-[#fe8019] animate-pulse"></span>
           研讀中
         </span>
-      {:else}
-        <button
-          class="w-6 h-6 rounded flex items-center justify-center text-[#7c6f64] hover:text-[#fb4934] hover:bg-[#1d2021] transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
-          title="自文獻庫移除"
-          on:click={() => dispatch('delete', { id: paper.id })}
-        >
-          <span class="material-symbols-outlined text-[15px]">delete</span>
-        </button>
       {/if}
+      <button
+        type="button"
+        class="w-6 h-6 rounded flex items-center justify-center text-[#7c6f64] hover:text-[#fb4934] hover:bg-[#1d2021] transition-colors cursor-pointer {isActive ? 'opacity-80 hover:opacity-100 text-[#a89984]' : 'opacity-0 group-hover:opacity-100'}"
+        title="自文獻庫移除"
+        on:click|stopPropagation={() => dispatch('delete', { id: paper.id })}
+      >
+        <span class="material-symbols-outlined text-[15px]">delete</span>
+      </button>
     </div>
   </div>
 

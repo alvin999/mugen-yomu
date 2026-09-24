@@ -39,6 +39,59 @@ export {
   parseEpubToDocument
 } from '../services/epubParserService';
 
+import { clearPaperReadingState } from './readingStore';
+
+export const PRESET_PAPER_IDS = [
+  'mugen_yomu_user_manual',
+  'arxiv_1706_03762',
+  'cvpr_2016_resnet',
+  'web_anthropic_circuits'
+];
+
+export function isPresetPaper(paperId: string): boolean {
+  return PRESET_PAPER_IDS.includes(paperId);
+}
+
+// 保持向下相容介面，但開放所有文獻皆可自訂刪除
+export function isPaperProtected(_paperId: string): boolean {
+  return false;
+}
+
+export function getDefaultPresets(): PaperDocument[] {
+  return [userManualDocument, attentionPaper, resnetPaper, anthropicCircuitsWeb];
+}
+
+/**
+ * 統一從文獻庫中刪除指定文獻，並自動清除進度、筆記與快取（核心文獻亦支援刪除，可自匯入面板隨時 Fallback 重新載入）
+ */
+export function deletePaperFromLibrary(
+  library: PaperDocument[],
+  paperId: string
+): { updatedLibrary: PaperDocument[]; nextActivePaper: PaperDocument | null } {
+  const updatedLibrary = library.filter(p => p && p.id !== paperId);
+  saveLibraryToStorage(updatedLibrary);
+
+  // 1. 清除閱讀進度
+  clearPaperReadingState(paperId);
+
+  // 2. 清除精讀筆記與快取
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem(`mugen_notes_${paperId}`);
+      localStorage.removeItem(`mugen_pdf_page_${paperId}`);
+      localStorage.removeItem(`mugen_web_scroll_${paperId}`);
+      localStorage.removeItem(`mugen_flow_${paperId}`);
+    } catch (e) {
+      console.warn('清理文獻快取時發生錯誤:', e);
+    }
+  }
+
+  // 3. 推薦下一個活躍文獻（若還有文獻）
+  const nextActivePaper = updatedLibrary.length > 0 ? updatedLibrary[0] : null;
+
+  return { updatedLibrary, nextActivePaper };
+}
+
 export {
   toTraditionalTaiwan,
   convertDocumentToTraditional
@@ -177,17 +230,13 @@ export function getInitialLibrary(): PaperDocument[] {
         // 標準化並自我修復所有文獻
         const normalizedList: PaperDocument[] = parsed.filter(Boolean).map(normalizePaper);
 
-        // Ensure userManualDocument is present and always synced with the latest version
+        // 若使用者文獻庫中仍保留 userManualDocument，同步更新至最新版本內容
         const manualIdx = normalizedList.findIndex((p: any) => p.id === userManualDocument.id);
-        if (manualIdx === -1) {
-          const updated = [userManualDocument, ...normalizedList];
-          saveLibraryToStorage(updated);
-          return updated;
-        } else {
+        if (manualIdx !== -1) {
           normalizedList[manualIdx] = userManualDocument;
           saveLibraryToStorage(normalizedList);
-          return normalizedList;
         }
+        return normalizedList;
       }
     }
   } catch (e) {

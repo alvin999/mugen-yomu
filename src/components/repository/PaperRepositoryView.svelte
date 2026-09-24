@@ -1,7 +1,13 @@
 <script lang="ts">
   import { onMount, createEventDispatcher } from 'svelte';
   import type { PaperDocument } from '../../stores/documentStore';
-  import { saveLibraryToStorage, setActivePaperId, convertDocumentToTraditional } from '../../stores/documentStore';
+  import {
+    saveLibraryToStorage,
+    setActivePaperId,
+    convertDocumentToTraditional,
+    isPaperProtected,
+    deletePaperFromLibrary
+  } from '../../stores/documentStore';
   import { loadPaperReadingState, calculateReadingStats, applyProgressToSections } from '../../stores/readingStore';
   import type { CacheStats } from '../../services/cacheService';
 
@@ -9,6 +15,7 @@
   import PaperGridItem from './PaperGridItem.svelte';
   import PaperTableList from './PaperTableList.svelte';
   import PaperInspectorDrawer from './PaperInspectorDrawer.svelte';
+  import DeletePaperConfirmModal from '../common/DeletePaperConfirmModal.svelte';
 
   export let library: PaperDocument[] = [];
   export let activePaperId: string = '';
@@ -17,6 +24,7 @@
 
   const dispatch = createEventDispatcher<{
     selectPaper: { paper: PaperDocument };
+    changeActivePaper: { paper: PaperDocument };
     openCitationGraph: { paper: PaperDocument };
     openNotes: { paper: PaperDocument };
     openImport: void;
@@ -37,6 +45,10 @@
   // 預覽抽屜狀態
   let previewPaper: PaperDocument | null = null;
   let isInspectorOpen: boolean = false;
+
+  // 刪除確認 Modal 狀態
+  let paperToDelete: PaperDocument | null = null;
+  let isDeleteModalOpen: boolean = false;
 
   $: refreshPaperStats(library);
 
@@ -148,19 +160,40 @@
   }
 
   function handleDeletePaper(id: string) {
-    if (id === 'arxiv_1706_03762' || id === 'cvpr_2016_resnet' || id === 'web_anthropic_circuits') {
-      alert('預設經典論文與專文具備防護機制，無法刪除！');
-      return;
-    }
-    if (!confirm('確定要自本地文獻庫中移除這篇文章嗎？此操作將同時移除對應之快取紀錄。')) return;
+    const target = library.find(p => p && p.id === id);
+    if (!target) return;
+    paperToDelete = target;
+    isDeleteModalOpen = true;
+  }
 
-    const updated = library.filter(p => p.id !== id);
-    library = updated;
-    saveLibraryToStorage(library);
-    dispatch('updateLibrary', { library });
+  function handleConfirmDelete(id: string) {
+    try {
+      const wasActive = activePaperId === id;
+      const { updatedLibrary, nextActivePaper } = deletePaperFromLibrary(library, id);
+      library = updatedLibrary;
+      dispatch('updateLibrary', { library });
 
-    if (activePaperId === id && library.length > 0) {
-      handleSelectPaper(library[0]);
+      if (wasActive) {
+        if (nextActivePaper) {
+          activePaperId = nextActivePaper.id;
+          setActivePaperId(nextActivePaper.id);
+          // 靜默更新活躍文獻，不強迫跳回 workspace
+          dispatch('changeActivePaper', { paper: nextActivePaper });
+        } else {
+          activePaperId = '';
+          setActivePaperId('');
+        }
+      }
+
+      if (previewPaper && previewPaper.id === id) {
+        previewPaper = null;
+        isInspectorOpen = false;
+      }
+    } catch (err: any) {
+      console.error('刪除失敗:', err);
+    } finally {
+      isDeleteModalOpen = false;
+      paperToDelete = null;
     }
   }
 
@@ -340,5 +373,14 @@
     on:viewCitation={(e) => handleViewCitation(e.detail.paper)}
     on:viewNotes={(e) => handleViewNotes(e.detail.paper)}
     on:convertToTraditional={(e) => handleConvertToTraditional(e.detail.paper)}
+    on:delete={(e) => handleDeletePaper(e.detail.id)}
+  />
+
+  <!-- 風格化刪除確認 Modal -->
+  <DeletePaperConfirmModal
+    bind:isOpen={isDeleteModalOpen}
+    paper={paperToDelete}
+    on:confirm={(e) => handleConfirmDelete(e.detail.id)}
+    on:cancel={() => { isDeleteModalOpen = false; paperToDelete = null; }}
   />
 </div>

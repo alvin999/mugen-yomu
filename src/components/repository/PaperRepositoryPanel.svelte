@@ -1,11 +1,20 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import type { PaperDocument } from '../../stores/documentStore';
-  import { saveLibraryToStorage, setActivePaperId } from '../../stores/documentStore';
+  import {
+    saveLibraryToStorage,
+    setActivePaperId,
+    isPaperProtected,
+    deletePaperFromLibrary
+  } from '../../stores/documentStore';
+  import DeletePaperConfirmModal from '../common/DeletePaperConfirmModal.svelte';
 
   export let isOpen: boolean = false;
   export let library: PaperDocument[] = [];
   export let activePaperId: string = '';
+
+  let paperToDelete: PaperDocument | null = null;
+  let isDeleteModalOpen: boolean = false;
 
   const dispatch = createEventDispatcher();
 
@@ -21,20 +30,33 @@
     close();
   }
 
-  function handleDeletePaper(id: string, e: MouseEvent) {
+  function promptDeletePaper(id: string, e: MouseEvent) {
     e.stopPropagation();
-    if (id === 'arxiv_1706_03762' || id === 'cvpr_2016_resnet' || id === 'web_anthropic_circuits') {
-      alert('預設經典論文與專文無法刪除！');
-      return;
-    }
-    if (!confirm('確定要自文獻庫中移除這篇文章嗎？')) return;
+    const target = library.find(p => p && p.id === id);
+    if (!target) return;
+    paperToDelete = target;
+    isDeleteModalOpen = true;
+  }
 
-    library = library.filter(p => p.id !== id);
-    saveLibraryToStorage(library);
+  function handleConfirmDelete(id: string) {
+    try {
+      const { updatedLibrary, nextActivePaper } = deletePaperFromLibrary(library, id);
+      library = updatedLibrary;
+      dispatch('updateLibrary', { library });
 
-    // If currently reading the deleted paper, fallback to attention
-    if (activePaperId === id && library.length > 0) {
-      handleSelectPaper(library[0]);
+      // 若刪除的是當前閱讀文章，切換至備選文章
+      if (activePaperId === id) {
+        if (nextActivePaper) {
+          activePaperId = nextActivePaper.id;
+          setActivePaperId(nextActivePaper.id);
+          dispatch('selectPaper', { paper: nextActivePaper });
+        }
+      }
+    } catch (err: any) {
+      console.error('刪除失敗:', err);
+    } finally {
+      isDeleteModalOpen = false;
+      paperToDelete = null;
     }
   }
 
@@ -136,21 +158,21 @@
               </div>
 
               <!-- Active or Actions -->
-              <div class="flex items-center gap-1">
+              <div class="flex items-center gap-1.5">
                 {#if paper.id === activePaperId}
                   <span class="font-mono text-[10px] text-[#fe8019] flex items-center gap-1 font-semibold">
                     <span class="h-1.5 w-1.5 rounded-full bg-[#fe8019] animate-pulse"></span>
                     當前研讀中
                   </span>
-                {:else}
-                  <button
-                    class="w-6 h-6 rounded flex items-center justify-center text-[#a89984] hover:text-[#fb4934] hover:bg-[#1d2021] transition-colors"
-                    title="刪除文章"
-                    on:click={(e) => handleDeletePaper(paper.id, e)}
-                  >
-                    <span class="material-symbols-outlined text-[14px]">delete</span>
-                  </button>
                 {/if}
+                <button
+                  type="button"
+                  class="w-6 h-6 rounded flex items-center justify-center text-[#a89984] hover:text-[#fb4934] hover:bg-[#1d2021] transition-colors cursor-pointer"
+                  title="刪除文章"
+                  on:click={(e) => promptDeletePaper(paper.id, e)}
+                >
+                  <span class="material-symbols-outlined text-[14px]">delete</span>
+                </button>
               </div>
             </div>
 
@@ -180,3 +202,10 @@
     </div>
   </div>
 {/if}
+
+<DeletePaperConfirmModal
+  bind:isOpen={isDeleteModalOpen}
+  paper={paperToDelete}
+  on:confirm={(e) => handleConfirmDelete(e.detail.id)}
+  on:cancel={() => { isDeleteModalOpen = false; paperToDelete = null; }}
+/>

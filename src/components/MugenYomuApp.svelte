@@ -8,6 +8,7 @@
   import CognitiveNotesView from './notes/CognitiveNotesView.svelte';
   import SettingsModal from './settings/SettingsModal.svelte';
   import ImportPaperModal from './repository/ImportPaperModal.svelte';
+  import DeletePaperConfirmModal from './common/DeletePaperConfirmModal.svelte';
 
   import {
     getInitialLibrary,
@@ -17,6 +18,8 @@
     saveLibraryToStorage,
     normalizePaper,
     convertDocumentToTraditional,
+    isPaperProtected,
+    deletePaperFromLibrary,
     type PaperDocument
   } from '../stores/documentStore';
   import {
@@ -36,6 +39,8 @@
   let zoomLevel: number = 100;
   let isByokOpen: boolean = false;
   let isImportOpen: boolean = false;
+  let isDeleteDirectModalOpen: boolean = false;
+  let paperToDeleteDirect: PaperDocument | null = null;
   let isRailCollapsed: boolean = false;
 
   // --- Model, Memory & Cache Telemetry ---
@@ -227,6 +232,35 @@
     setPaper(normalizePaper(event.detail.paper));
   }
 
+  function handleDeletePaperDirect(paperId: string) {
+    if (!paperId) return;
+    const target = paperLibrary.find(p => p && p.id === paperId) || activePaper;
+    if (!target) return;
+    paperToDeleteDirect = target;
+    isDeleteDirectModalOpen = true;
+  }
+
+  function handleConfirmDeleteDirect(paperId: string) {
+    try {
+      const { updatedLibrary, nextActivePaper } = deletePaperFromLibrary(paperLibrary, paperId);
+      paperLibrary = updatedLibrary;
+      refreshCacheStats();
+
+      if (nextActivePaper) {
+        setPaper(nextActivePaper);
+      } else {
+        activePaper = null;
+        activePaperId = '';
+        setActivePaperId('');
+      }
+    } catch (err: any) {
+      console.error('刪除失敗:', err);
+    } finally {
+      isDeleteDirectModalOpen = false;
+      paperToDeleteDirect = null;
+    }
+  }
+
   function handleLoadPaperFromCitation(e: CustomEvent<{ paperId: string }>) {
     const targetId = e.detail.paperId;
     const found = paperLibrary.find(p => p.id === targetId || p.id.includes(targetId));
@@ -334,6 +368,7 @@
       on:exportNotes={() => currentMainView = 'notes'}
       on:backToWorkspace={() => currentMainView = 'workspace'}
       on:convertToTraditional={() => handleConvertToTraditional()}
+      on:deleteCurrentPaper={(e) => handleDeletePaperDirect(e.detail.paperId)}
     />
 
     <!-- Main Dynamic Route View Frame (pushed down by 64px header) -->
@@ -345,10 +380,18 @@
           {localMemoryMb}
           {cacheStats}
           on:selectPaper={(e) => { setPaper(e.detail.paper); currentMainView = 'workspace'; }}
+          on:changeActivePaper={(e) => setPaper(e.detail.paper)}
           on:openCitationGraph={(e) => { setPaper(e.detail.paper); currentMainView = 'citation-graph'; }}
           on:openNotes={(e) => { setPaper(e.detail.paper); currentMainView = 'notes'; }}
           on:openImport={() => isImportOpen = true}
-          on:updateLibrary={(e) => { paperLibrary = e.detail.library; refreshCacheStats(); }}
+          on:updateLibrary={(e) => {
+            paperLibrary = e.detail.library;
+            refreshCacheStats();
+            if (activePaper && !paperLibrary.some(p => p.id === activePaper?.id)) {
+              const next = paperLibrary.length > 0 ? paperLibrary[0] : null;
+              if (next) setPaper(next);
+            }
+          }}
           on:convertToTraditional={(e) => handleConvertToTraditional(e.detail.paper)}
           on:backToWorkspace={() => currentMainView = 'workspace'}
         />
@@ -397,6 +440,14 @@
     bind:isOpen={isByokOpen}
     on:save={handleByokSave}
     on:close={() => isByokOpen = false}
+  />
+
+  <!-- 風格化刪除確認 Modal (從 Header 快捷觸發) -->
+  <DeletePaperConfirmModal
+    bind:isOpen={isDeleteDirectModalOpen}
+    paper={paperToDeleteDirect}
+    on:confirm={(e) => handleConfirmDeleteDirect(e.detail.id)}
+    on:cancel={() => { isDeleteDirectModalOpen = false; paperToDeleteDirect = null; }}
   />
 </div>
 

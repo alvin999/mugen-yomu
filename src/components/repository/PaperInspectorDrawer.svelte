@@ -12,6 +12,7 @@
     select: { paper: PaperDocument };
     viewCitation: { paper: PaperDocument };
     viewNotes: { paper: PaperDocument };
+    delete: { id: string };
   }>();
 
   function close() {
@@ -186,6 +187,15 @@
         title="查看精讀筆記"
       >
         <span class="material-symbols-outlined text-[16px]">draw</span>
+      </button>
+
+      <button
+        type="button"
+        class="px-2.5 py-2 bg-[#282828] hover:bg-[#1d2021] border border-[#3c3836] hover:border-[#fb4934]/60 text-[#a89984] hover:text-[#fb4934] rounded-lg text-xs font-mono flex items-center gap-1 transition-colors cursor-pointer"
+        on:click={() => { if (paper) { dispatch('delete', { id: paper.id }); close(); } }}
+        title="自文獻庫移除此文獻"
+      >
+        <span class="material-symbols-outlined text-[16px]">delete</span>
       </button>
     </div>
   </div>
