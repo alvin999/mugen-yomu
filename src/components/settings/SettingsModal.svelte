@@ -27,19 +27,49 @@
   ];
 
   let availableModels: ProviderModelItem[] = [];
+  import {
+    getVaultSecurityMode,
+    isVaultUnlocked,
+    hasMasterPinSet,
+    unlockVaultWithPin,
+    lockVault,
+    setMasterPin,
+    getApiKey,
+    setApiKey,
+    switchVaultSecurityMode,
+    clearAllStoredKeys,
+    type VaultSecurityMode
+  } from '../../services/crypto/keyVaultService';
+
   let isLoadingModels: boolean = false;
   let fetchStatus: 'idle' | 'success' | 'error' = 'idle';
   let fetchErrorMsg: string = '';
   let debounceTimer: any = null;
   let embeddingPref: EmbeddingEnginePreference = 'api-first';
 
-  onMount(() => {
+  // 金鑰安全與加密狀態
+  let vaultMode: VaultSecurityMode = 'device-auto';
+  let isUnlocked: boolean = true;
+  let showApiKey: boolean = false;
+  let pinInput: string = '';
+  let newPinInput: string = '';
+  let confirmPinInput: string = '';
+  let isSettingNewPin: boolean = false;
+  let vaultNotice: string = '';
+  let vaultError: string = '';
+
+  onMount(async () => {
     if (typeof window !== 'undefined') {
       embeddingPref = getEmbeddingPreference();
       const savedProvider = localStorage.getItem('mugen_provider') || 'groq';
       currentProvider = savedProvider;
 
-      const savedKey = localStorage.getItem(`mugen_key_${currentProvider}`) || localStorage.getItem(`mugen_api_key_${currentProvider}`);
+      // 載入安全模式與解鎖狀態
+      vaultMode = getVaultSecurityMode();
+      isUnlocked = isVaultUnlocked();
+
+      // 透過安全庫非同步取得金鑰
+      const savedKey = await getApiKey(currentProvider);
       if (savedKey) apiKey = savedKey;
 
       const savedModel = localStorage.getItem('mugen_model') || 'llama-3.3-70b-versatile';
@@ -97,9 +127,9 @@
     }
   }
 
-  function handleProviderChange(providerId: string) {
+  async function handleProviderChange(providerId: string) {
     currentProvider = providerId;
-    apiKey = localStorage.getItem(`mugen_key_${providerId}`) || localStorage.getItem(`mugen_api_key_${providerId}`) || '';
+    apiKey = await getApiKey(providerId);
     
     const prov = providers.find(p => p.id === providerId);
     currentModel = prov ? prov.defaultModel : 'llama-3.3-70b-versatile';
@@ -113,12 +143,99 @@
     }
   }
 
-  function saveSettings() {
+  async function handleModeSelect(newMode: VaultSecurityMode) {
+    vaultNotice = '';
+    vaultError = '';
+    if (newMode === vaultMode) return;
+
+    if (newMode === 'master-pin') {
+      isSettingNewPin = true;
+      newPinInput = '';
+      confirmPinInput = '';
+      return;
+    }
+
+    try {
+      await switchVaultSecurityMode(newMode);
+      vaultMode = newMode;
+      isUnlocked = isVaultUnlocked();
+      isSettingNewPin = false;
+      vaultNotice = newMode === 'device-auto' ? '已切換至「裝置透明加密」保護' : '已切換至「明文相容模式」';
+      setTimeout(() => (vaultNotice = ''), 3000);
+    } catch (e: any) {
+      vaultError = e.message || '切換安全模式失敗';
+    }
+  }
+
+  async function applyMasterPin() {
+    vaultError = '';
+    if (!newPinInput || newPinInput.length < 4) {
+      vaultError = '主 PIN 碼長度至少需為 4 位';
+      return;
+    }
+    if (newPinInput !== confirmPinInput) {
+      vaultError = '兩次輸入的 PIN 碼不相符';
+      return;
+    }
+
+    try {
+      await switchVaultSecurityMode('master-pin', { newPin: newPinInput });
+      vaultMode = 'master-pin';
+      isUnlocked = true;
+      isSettingNewPin = false;
+      newPinInput = '';
+      confirmPinInput = '';
+      vaultNotice = '已啟用「主密碼 / PIN 強化保護」，密鑰已加密存放';
+      setTimeout(() => (vaultNotice = ''), 3000);
+    } catch (e: any) {
+      vaultError = e.message || '設置主 PIN 碼失敗';
+    }
+  }
+
+  async function handleUnlockVault() {
+    vaultError = '';
+    if (!pinInput) {
+      vaultError = '請輸入解鎖 PIN 碼';
+      return;
+    }
+
+    const success = await unlockVaultWithPin(pinInput);
+    if (success) {
+      isUnlocked = true;
+      pinInput = '';
+      vaultNotice = '金鑰庫已成功解鎖！';
+      apiKey = await getApiKey(currentProvider);
+      if (apiKey && apiKey.trim().length > 5) {
+        refreshModels();
+      }
+      setTimeout(() => (vaultNotice = ''), 3000);
+    } else {
+      vaultError = 'PIN 碼錯誤，無法解鎖金鑰';
+    }
+  }
+
+  function handleLockVault() {
+    lockVault();
+    isUnlocked = false;
+    apiKey = '';
+    vaultNotice = '金鑰庫已立即鎖定，記憶體快取已安全釋放';
+    setTimeout(() => (vaultNotice = ''), 3000);
+  }
+
+  async function handleWipeAllKeys() {
+    if (confirm('確定要安全抹除所有本機 API 金鑰與加密憑證嗎？此動作無法復原。')) {
+      await clearAllStoredKeys();
+      apiKey = '';
+      vaultNotice = '所有金鑰與憑證已安全抹除！';
+      setTimeout(() => (vaultNotice = ''), 3000);
+    }
+  }
+
+  async function saveSettings() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('mugen_provider', currentProvider);
-      if (apiKey) {
-        localStorage.setItem(`mugen_key_${currentProvider}`, apiKey);
-        localStorage.setItem(`mugen_api_key_${currentProvider}`, apiKey);
+      if (currentProvider !== 'ollama') {
+        await setApiKey(currentProvider, apiKey);
       }
       localStorage.setItem('mugen_model', currentModel);
       setEmbeddingPreference(embeddingPref);
@@ -200,12 +317,24 @@
           </div>
         </div>
 
-        <!-- API Key Input -->
+        <!-- API Key Input with Mask Toggle & Security Badge -->
         <div class="flex flex-col gap-1.5">
           <div class="flex items-center justify-between">
-            <label for="settings-api-key-input" class="font-mono text-[11px] text-[#d5c4a1]">
-              {currentProvider === 'groq' ? 'Groq API Key' : `${currentProvider.toUpperCase()} API Key`}
-            </label>
+            <div class="flex items-center gap-2">
+              <label for="settings-api-key-input" class="font-mono text-[11px] text-[#d5c4a1]">
+                {currentProvider === 'groq' ? 'Groq API Key' : `${currentProvider.toUpperCase()} API Key`}
+              </label>
+              {#if currentProvider !== 'ollama'}
+                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono {vaultMode === 'plaintext' ? 'bg-[#3c3836] text-[#a89984]' : vaultMode === 'device-auto' ? 'bg-[#8ec07c]/20 text-[#8ec07c] border border-[#8ec07c]/40' : 'bg-[#fe8019]/20 text-[#fe8019] border border-[#fe8019]/40'}">
+                  <span class="material-symbols-outlined text-[11px]">
+                    {vaultMode === 'plaintext' ? 'lock_open' : vaultMode === 'device-auto' ? 'lock' : 'key'}
+                  </span>
+                  <span>
+                    {vaultMode === 'plaintext' ? '明文儲存' : vaultMode === 'device-auto' ? 'AES-GCM 透明加密' : (isUnlocked ? 'PIN 已解鎖' : 'PIN 鎖定中')}
+                  </span>
+                </span>
+              {/if}
+            </div>
 
             {#if currentProvider === 'groq'}
               <a
@@ -230,18 +359,203 @@
               on:input={handleKeyInput}
             />
           {:else}
-            <input
-              id="settings-api-key-input"
-              class="w-full bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] px-3 py-2 rounded-lg focus:outline-none focus:border-[#fe8019] font-mono text-xs placeholder:text-[#a89984]/40"
-              type="password"
-              placeholder={currentProvider === 'groq' ? 'gsk_...' : 'sk-...'}
-              bind:value={apiKey}
-              on:input={handleKeyInput}
-            />
+            <div class="relative flex items-center">
+              <input
+                id="settings-api-key-input"
+                class="w-full bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] pl-3 pr-10 py-2 rounded-lg focus:outline-none focus:border-[#fe8019] font-mono text-xs placeholder:text-[#a89984]/40"
+                type={showApiKey ? 'text' : 'password'}
+                placeholder={currentProvider === 'groq' ? 'gsk_...' : 'sk-...'}
+                bind:value={apiKey}
+                on:input={handleKeyInput}
+                disabled={vaultMode === 'master-pin' && !isUnlocked}
+              />
+              <button
+                type="button"
+                class="absolute right-2.5 text-[#a89984] hover:text-[#ebdbb2] transition-colors p-1 flex items-center justify-center cursor-pointer"
+                on:click={() => (showApiKey = !showApiKey)}
+                title={showApiKey ? '隱藏金鑰' : '顯示明文'}
+              >
+                <span class="material-symbols-outlined text-[16px]">
+                  {showApiKey ? 'visibility_off' : 'visibility'}
+                </span>
+              </button>
+            </div>
           {/if}
-          <span class="font-mono text-[10px] text-[#a89984]">
-            輸入金鑰後將自動連線官方端點讀取最新可用模型清單
-          </span>
+
+          {#if vaultMode === 'master-pin' && !isUnlocked}
+            <span class="font-mono text-[10px] text-[#fe8019] flex items-center gap-1">
+              <span class="material-symbols-outlined text-[13px]">lock</span>
+              金鑰庫處於鎖定狀態，請在下方輸入 PIN 碼解鎖後使用。
+            </span>
+          {:else}
+            <span class="font-mono text-[10px] text-[#a89984]">
+              輸入金鑰後將自動連線官方端點讀取最新可用模型清單
+            </span>
+          {/if}
+        </div>
+
+        <!-- 🔒 Key Security & Encryption Vault Section -->
+        <div class="flex flex-col gap-2 p-3 bg-[#1d2021] border border-[#3c3836] rounded-lg">
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-[11px] text-[#d5c4a1] flex items-center gap-1.5 font-medium">
+              <span class="material-symbols-outlined text-[15px] text-[#8ec07c]">shield</span>
+              <span>BYOK API 金鑰本機加密保存 (KeyVault)</span>
+            </span>
+            <button
+              type="button"
+              class="font-mono text-[10px] text-[#fb4934] hover:underline flex items-center gap-0.5 cursor-pointer"
+              on:click={handleWipeAllKeys}
+              title="清除所有儲存之金鑰與解密憑證"
+            >
+              <span class="material-symbols-outlined text-[12px]">delete_forever</span>
+              <span>抹除所有金鑰</span>
+            </button>
+          </div>
+
+          <!-- 模式切換三個選項按鈕 -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+            <!-- 裝置透明加密 -->
+            <button
+              type="button"
+              class="p-2 rounded-lg border text-left flex flex-col gap-0.5 transition-all cursor-pointer {vaultMode === 'device-auto' ? 'bg-[#3c3836] border-[#8ec07c] text-[#ebdbb2]' : 'bg-[#282828] border-[#3c3836] text-[#a89984] hover:bg-[#32302f]'}"
+              on:click={() => handleModeSelect('device-auto')}
+            >
+              <div class="flex items-center justify-between">
+                <span class="font-semibold text-[11px] {vaultMode === 'device-auto' ? 'text-[#8ec07c]' : ''}">裝置透明加密</span>
+                {#if vaultMode === 'device-auto'}
+                  <span class="material-symbols-outlined text-[13px] text-[#8ec07c]">check_circle</span>
+                {/if}
+              </div>
+              <span class="text-[9px] text-[#a89984]">AES-GCM 免輸密碼自動加解密</span>
+            </button>
+
+            <!-- 主 PIN 碼強化 -->
+            <button
+              type="button"
+              class="p-2 rounded-lg border text-left flex flex-col gap-0.5 transition-all cursor-pointer {vaultMode === 'master-pin' ? 'bg-[#3c3836] border-[#fe8019] text-[#ebdbb2]' : 'bg-[#282828] border-[#3c3836] text-[#a89984] hover:bg-[#32302f]'}"
+              on:click={() => handleModeSelect('master-pin')}
+            >
+              <div class="flex items-center justify-between">
+                <span class="font-semibold text-[11px] {vaultMode === 'master-pin' ? 'text-[#fe8019]' : ''}">主 PIN 碼強化</span>
+                {#if vaultMode === 'master-pin'}
+                  <span class="material-symbols-outlined text-[13px] text-[#fe8019]">check_circle</span>
+                {/if}
+              </div>
+              <span class="text-[9px] text-[#a89984]">自訂密碼 PBKDF2 衍生金鑰</span>
+            </button>
+
+            <!-- 明文模式 -->
+            <button
+              type="button"
+              class="p-2 rounded-lg border text-left flex flex-col gap-0.5 transition-all cursor-pointer {vaultMode === 'plaintext' ? 'bg-[#3c3836] border-[#d5c4a1] text-[#ebdbb2]' : 'bg-[#282828] border-[#3c3836] text-[#a89984] hover:bg-[#32302f]'}"
+              on:click={() => handleModeSelect('plaintext')}
+            >
+              <div class="flex items-center justify-between">
+                <span class="font-semibold text-[11px]">明文相容模式</span>
+                {#if vaultMode === 'plaintext'}
+                  <span class="material-symbols-outlined text-[13px] text-[#d5c4a1]">check_circle</span>
+                {/if}
+              </div>
+              <span class="text-[9px] text-[#a89984]">原生 localStorage（不加密）</span>
+            </button>
+          </div>
+
+          <!-- 主 PIN 碼交互操作區塊 -->
+          {#if vaultMode === 'master-pin'}
+            <div class="mt-1 p-2.5 bg-[#282828] border border-[#504945] rounded-md flex flex-col gap-2">
+              {#if isSettingNewPin}
+                <div class="flex flex-col gap-1.5">
+                  <span class="font-medium text-[#ebdbb2] text-[11px]">設定主解鎖 PIN 碼 (至少 4 位)：</span>
+                  <div class="grid grid-cols-2 gap-2">
+                    <input
+                      type="password"
+                      class="bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] px-2.5 py-1.5 rounded text-xs focus:border-[#fe8019] focus:outline-none"
+                      placeholder="輸入新 PIN 碼"
+                      bind:value={newPinInput}
+                    />
+                    <input
+                      type="password"
+                      class="bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] px-2.5 py-1.5 rounded text-xs focus:border-[#fe8019] focus:outline-none"
+                      placeholder="再次確認 PIN 碼"
+                      bind:value={confirmPinInput}
+                    />
+                  </div>
+                  <div class="flex justify-end gap-2 mt-1">
+                    <button
+                      type="button"
+                      class="px-2.5 py-1 text-[10px] text-[#a89984] hover:text-[#ebdbb2]"
+                      on:click={() => (isSettingNewPin = false)}
+                    >
+                      取消
+                    </button>
+                    <button
+                      type="button"
+                      class="px-3 py-1 bg-[#fe8019] text-[#1d2021] font-semibold rounded text-[10px] hover:bg-[#d65d0e] transition-colors"
+                      on:click={applyMasterPin}
+                    >
+                      確認並加密金鑰
+                    </button>
+                  </div>
+                </div>
+              {:else if !isUnlocked}
+                <div class="flex items-center gap-2">
+                  <input
+                    type="password"
+                    class="flex-1 bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] px-2.5 py-1.5 rounded text-xs focus:border-[#fe8019] focus:outline-none"
+                    placeholder="輸入 PIN 碼解鎖金鑰庫..."
+                    bind:value={pinInput}
+                    on:keydown={(e) => e.key === 'Enter' && handleUnlockVault()}
+                  />
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 bg-[#8ec07c] hover:bg-[#b8bb26] text-[#1d2021] font-semibold rounded text-xs transition-colors flex items-center gap-1 cursor-pointer"
+                    on:click={handleUnlockVault}
+                  >
+                    <span class="material-symbols-outlined text-[14px]">lock_open</span>
+                    <span>解鎖</span>
+                  </button>
+                </div>
+              {:else}
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-1.5 text-[#8ec07c] font-medium text-[11px]">
+                    <span class="material-symbols-outlined text-[15px]">verified</span>
+                    <span>金鑰庫已解鎖 (本分頁記憶體 Session 有效)</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      class="text-[10px] text-[#fabd2f] hover:underline cursor-pointer"
+                      on:click={() => (isSettingNewPin = true)}
+                    >
+                      變更 PIN 碼
+                    </button>
+                    <button
+                      type="button"
+                      class="px-2 py-1 bg-[#3c3836] hover:bg-[#504945] text-[#ebdbb2] rounded text-[10px] flex items-center gap-1 cursor-pointer transition-colors"
+                      on:click={handleLockVault}
+                    >
+                      <span class="material-symbols-outlined text-[12px]">lock</span>
+                      <span>立即鎖定</span>
+                    </button>
+                  </div>
+                </div>
+              {/if}
+            </div>
+          {/if}
+
+          <!-- 通知與錯誤訊息 -->
+          {#if vaultNotice}
+            <div class="font-mono text-[10px] text-[#8ec07c] flex items-center gap-1">
+              <span class="material-symbols-outlined text-[12px]">check</span>
+              <span>{vaultNotice}</span>
+            </div>
+          {/if}
+          {#if vaultError}
+            <div class="font-mono text-[10px] text-[#fb4934] flex items-center gap-1">
+              <span class="material-symbols-outlined text-[12px]">error</span>
+              <span>{vaultError}</span>
+            </div>
+          {/if}
         </div>
 
         <!-- Model Selection with Auto-fetch -->

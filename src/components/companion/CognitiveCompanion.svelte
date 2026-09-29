@@ -75,16 +75,21 @@
     }
   ];
 
+  import { getApiKey, getStoredApiKeySync } from '../../services/crypto/keyVaultService';
+
   onMount(() => {
     refreshKeyFromStorage();
   });
 
-  export function refreshKeyFromStorage() {
+  export async function refreshKeyFromStorage() {
     if (typeof window !== 'undefined') {
       activeProvider = localStorage.getItem('mugen_provider') || 'groq';
-      apiKey = localStorage.getItem(`mugen_key_${activeProvider}`) || localStorage.getItem('mugen_key_groq') || '';
+      apiKey = getStoredApiKeySync(activeProvider) || localStorage.getItem(`mugen_key_${activeProvider}`) || localStorage.getItem('mugen_key_groq') || '';
       activeModel = localStorage.getItem('mugen_model') || 'llama-3.3-70b-versatile';
       ollamaUrl = localStorage.getItem('mugen_ollama_url') || 'http://localhost:11434';
+      if (!apiKey && activeProvider !== 'ollama') {
+        apiKey = await getApiKey(activeProvider);
+      }
     }
   }
 
@@ -209,6 +214,9 @@
         history.push({ role: 'user', content: contextualPrompt });
 
         // 3. 呼叫具備輸入長度修剪、自動同源降級 (70B -> 8B Instant) 的韌性服務
+        if (!apiKey && activeProvider !== 'ollama') {
+          apiKey = await getApiKey(activeProvider);
+        }
         const result = await callProviderChatWithResilience(activeProvider, history, apiKey, activeModel, ollamaUrl);
 
         let displayTag = result.cached

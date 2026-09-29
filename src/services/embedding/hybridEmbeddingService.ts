@@ -48,14 +48,21 @@ export function setEmbeddingPreference(_pref: EmbeddingEnginePreference): void {
   }
 }
 
+import { getStoredApiKeySync } from '../crypto/keyVaultService';
+
 /**
- * 讀取本機儲存的 API Key
+ * 讀取本機儲存的 API Key (支援安全庫與歷史明文)
  */
 function getSavedKey(provider: 'google' | 'openai'): string {
   if (typeof window === 'undefined') return '';
+  const provKey = provider === 'google' ? 'gemini' : provider;
+  const vaultKey = getStoredApiKeySync(provKey);
+  if (vaultKey) return vaultKey;
   return (
     localStorage.getItem(`mugen_key_${provider}`) ||
     localStorage.getItem(`mugen_api_key_${provider}`) ||
+    localStorage.getItem(`mugen_key_${provKey}`) ||
+    localStorage.getItem(`mugen_api_key_${provKey}`) ||
     ''
   ).trim();
 }

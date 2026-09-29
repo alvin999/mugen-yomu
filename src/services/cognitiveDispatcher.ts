@@ -11,6 +11,8 @@ import {
   generateTerminologyAlignment
 } from './aiService';
 
+import { getApiKey, getStoredApiKeySync } from './crypto/keyVaultService';
+
 export interface AiClientConfig {
   provider: string;
   apiKey: string;
@@ -20,6 +22,8 @@ export interface AiClientConfig {
 
 export function getStoredApiKey(provider: string = 'groq'): string {
   if (typeof window === 'undefined') return '';
+  const vaultKey = getStoredApiKeySync(provider);
+  if (vaultKey) return vaultKey;
   const p = (provider || 'groq').toLowerCase();
   return (
     localStorage.getItem(`mugen_key_${p}`) ||
@@ -44,6 +48,17 @@ export function getStoredAiConfig(): AiClientConfig {
   const model = localStorage.getItem('mugen_model') || 'llama-3.3-70b-versatile';
   const ollamaUrl = localStorage.getItem('mugen_ollama_url') || 'http://localhost:11434';
   return { provider, apiKey, model, ollamaUrl };
+}
+
+/**
+ * 完整非同步解析 AI 客戶端設定（若金鑰處於非同步解密狀態，將自動解密）
+ */
+export async function resolveStoredAiConfig(): Promise<AiClientConfig> {
+  const cfg = getStoredAiConfig();
+  if (!cfg.apiKey) {
+    cfg.apiKey = await getApiKey(cfg.provider);
+  }
+  return cfg;
 }
 
 /**
