@@ -1,5 +1,6 @@
 import { defineConfig } from 'astro/config';
 import svelte from '@astrojs/svelte';
+import tailwindcss from '@tailwindcss/vite';
 
 // Allow fetching academic literature PDFs through local/development proxy
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
@@ -107,6 +108,6 @@ function pdfProxyPlugin() {
 export default defineConfig({
   integrations: [svelte()],
   vite: {
-    plugins: [pdfProxyPlugin()]
+    plugins: [tailwindcss(), pdfProxyPlugin()]
   }
 });
