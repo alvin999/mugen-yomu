@@ -2,9 +2,11 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import type { SectionCompanionData } from '../../stores/documentStore';
   import { callProviderChatWithResilience, type ChatMessage } from '../../services/aiService';
+  import { retrieveRelevantContextForAI } from '../../services/embedding/hybridEmbeddingService';
 
   export let activeContextText: string = '§ 3.2.1 Scaled Dot-Product';
   export let companionData: SectionCompanionData | undefined = undefined;
+  export let paperId: string = '';
   export let paperTitle: string = '';
   export let activeParagraphText: string = '';
   export let selectedText: string = '';
@@ -187,6 +189,21 @@
         if (safePara) {
           contextualPrompt += `【讀者當前研讀段落原文 (Evidence Context)】：\n"${safePara}"\n`;
         }
+
+        // 嘗試自動調用本機語意向量檢索相關文獻證據 (Local RAG)
+        let hasRagEvidence = false;
+        if (paperId) {
+          try {
+            const ragEvidence = await retrieveRelevantContextForAI(paperId, qText, 2);
+            if (ragEvidence) {
+              contextualPrompt += `\n${ragEvidence}\n`;
+              hasRagEvidence = true;
+            }
+          } catch (ragErr) {
+            console.warn('[Companion RAG] 向量檢索跳過:', ragErr);
+          }
+        }
+
         contextualPrompt += `\n【讀者提問】：\n${qText}`;
 
         history.push({ role: 'user', content: contextualPrompt });
@@ -197,6 +214,10 @@
         let displayTag = result.cached
           ? `本機快取 · ${result.model} · ${result.latencyMs}ms`
           : `${result.provider.toUpperCase()} (${result.model}) · ${result.latencyMs}ms`;
+
+        if (hasRagEvidence) {
+          displayTag = `⚡ 向量 RAG · ${displayTag}`;
+        }
 
         if (result.fallbackNotice) {
           displayTag = `${displayTag} · ${result.fallbackNotice}`;

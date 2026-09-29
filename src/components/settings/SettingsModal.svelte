@@ -3,6 +3,11 @@
   import { fetchProviderModels, FALLBACK_MODELS, type ProviderModelItem } from '../../services/aiService';
   import { THEMES, currentTheme, setTheme } from '../../stores/themeStore';
   import { vimConfigStore, updateVimConfig } from '../../stores/vimCursorStore';
+  import {
+    getEmbeddingPreference,
+    setEmbeddingPreference,
+    type EmbeddingEnginePreference
+  } from '../../services/embedding/hybridEmbeddingService';
 
   export let isOpen: boolean = false;
   export let currentProvider: string = 'groq';
@@ -26,9 +31,11 @@
   let fetchStatus: 'idle' | 'success' | 'error' = 'idle';
   let fetchErrorMsg: string = '';
   let debounceTimer: any = null;
+  let embeddingPref: EmbeddingEnginePreference = 'api-first';
 
   onMount(() => {
     if (typeof window !== 'undefined') {
+      embeddingPref = getEmbeddingPreference();
       const savedProvider = localStorage.getItem('mugen_provider') || 'groq';
       currentProvider = savedProvider;
 
@@ -114,6 +121,7 @@
         localStorage.setItem(`mugen_api_key_${currentProvider}`, apiKey);
       }
       localStorage.setItem('mugen_model', currentModel);
+      setEmbeddingPreference(embeddingPref);
     }
 
     dispatch('save', {
@@ -345,6 +353,62 @@
                 value={$vimConfigStore.bounceStrength ?? 60}
                 on:input={(e) => updateVimConfig({ bounceStrength: parseInt(e.currentTarget.value, 10) })}
               />
+            </div>
+          </div>
+        </div>
+
+        <!-- Semantic Vector & Embedding Engine Section -->
+        <div class="flex flex-col gap-2 pt-2 border-t border-[#3c3836]">
+          <div class="flex items-center justify-between">
+            <span class="font-mono text-[11px] text-[#d5c4a1] flex items-center gap-1.5 font-medium">
+              <span class="material-symbols-outlined text-[15px] text-[#fabd2f]">radar</span>
+              <span>語意向量搜尋與端側嵌入引擎 (Hybrid Embeddings)</span>
+            </span>
+            <span class="font-mono text-[10px] text-[#fabd2f]">
+              {embeddingPref === 'local-only' ? '端側 ONNX (384-dim)' : '智慧混合 (API 優先)'}
+            </span>
+          </div>
+
+          <div class="bg-[#1d2021] border border-[#3c3836] p-2.5 rounded-lg flex flex-col gap-2">
+            <!-- 模式選擇 -->
+            <div class="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                class="p-2 rounded-lg border text-left flex flex-col gap-1 transition-all cursor-pointer {embeddingPref === 'local-only' ? 'bg-[#3c3836] border-[#8ec07c] text-[#fbf1c7]' : 'bg-[#282828] border-[#3c3836] text-[#a89984] hover:bg-[#32302f]'}"
+                on:click={() => embeddingPref = 'local-only'}
+              >
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-semibold flex items-center gap-1 {embeddingPref === 'local-only' ? 'text-[#8ec07c]' : 'text-[#ebdbb2]'}">
+                    <span class="material-symbols-outlined text-[14px]">offline_bolt</span>
+                    純端側 ONNX (推薦)
+                  </span>
+                  {#if embeddingPref === 'local-only'}
+                    <span class="material-symbols-outlined text-[13px] text-[#8ec07c]">check_circle</span>
+                  {/if}
+                </div>
+                <p class="text-[10px] leading-tight text-[#a89984]">
+                  瀏覽器端 384-dim 本機推論，100% 離線免金鑰、零依賴、開箱即用、絕不報錯
+                </p>
+              </button>
+
+              <button
+                type="button"
+                class="p-2 rounded-lg border text-left flex flex-col gap-1 transition-all cursor-pointer {embeddingPref === 'api-first' ? 'bg-[#3c3836] border-[#fabd2f] text-[#fbf1c7]' : 'bg-[#282828] border-[#3c3836] text-[#a89984] hover:bg-[#32302f]'}"
+                on:click={() => embeddingPref = 'api-first'}
+              >
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-semibold flex items-center gap-1 {embeddingPref === 'api-first' ? 'text-[#fabd2f]' : 'text-[#ebdbb2]'}">
+                    <span class="material-symbols-outlined text-[14px]">cloud_sync</span>
+                    雲端 API 向量 (進階)
+                  </span>
+                  {#if embeddingPref === 'api-first'}
+                    <span class="material-symbols-outlined text-[13px] text-[#fabd2f]">check_circle</span>
+                  {/if}
+                </div>
+                <p class="text-[10px] leading-tight text-[#a89984]">
+                  需配置支援 Embedding 權限之 API Key；若 API 異常時將自動無縫退避至端側 ONNX
+                </p>
+              </button>
             </div>
           </div>
         </div>

@@ -6,6 +6,7 @@
   import DerivationsFiguresView from '../reader/DerivationsFiguresView.svelte';
   import CognitiveCompanion from '../companion/CognitiveCompanion.svelte';
   import OriginalDocumentViewer from '../reader/OriginalDocumentViewer.svelte';
+  import SemanticSearchModal from '../search/SemanticSearchModal.svelte';
 
   import type { PaperDocument, ChapterSection } from '../../types/document';
   import { flattenSections, loadLastReadingPosition } from '../../stores/readingStore';
@@ -51,6 +52,7 @@
   let activeSelectedText: string = '';
   let activeFocusedParagraphKey: string = '';
   let currentPaperId: string = '';
+  let isSemanticSearchOpen: boolean = false;
 
   // AI Cognitive async loading indicators
   let loadingIntuitionId: string | null = null;
@@ -242,6 +244,29 @@
     activeParagraphText = text;
     activeFocusedParagraphKey = paragraphKey;
     if (selectedText) activeSelectedText = selectedText;
+  }
+
+  function handleSemanticSelectParagraph(event: CustomEvent<{ sectionId: string; paragraphIndex: number; text: string; query?: string; charIndex?: number; matchedText?: string }>) {
+    const { sectionId, paragraphIndex, text, query, charIndex } = event.detail;
+    if (sectionId) {
+      // 避免 source: 'outline' 觸發 scrollToTarget 重置到章節首字
+      selectSection({ sectionId, source: 'semantic', noScroll: true });
+      activeParagraphText = text;
+
+      // 精確跳轉定位至該段落的目標字詞 (Jump to Word / Character)
+      setTimeout(() => {
+        if (readerRef && readerRef.focusParagraphAtChar) {
+          readerRef.focusParagraphAtChar(sectionId, paragraphIndex ?? 0, charIndex ?? 0, query);
+        }
+      }, 50);
+    }
+  }
+
+  function handleGlobalKeyDown(e: KeyboardEvent) {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'F' || e.key === 'f')) {
+      e.preventDefault();
+      isSemanticSearchOpen = !isSemanticSearchOpen;
+    }
   }
 
   function handleTextSelected(e: CustomEvent<{ selectedText: string }>) {
@@ -498,12 +523,15 @@
   }
 </script>
 
+<svelte:window on:keydown={handleGlobalKeyDown} />
+
 <div class="flex-1 w-full h-full flex flex-col bg-[#282828] overflow-hidden">
   <!-- Density & Flow Ribbon -->
   <DensityRibbon
     focusTrack="{activeContextText} · Depth Level: {activePaper?.depthLevel || 'Academic Rigor'}"
     flowWpm={activePaper?.readingSpeedWpm || 265}
     embeddingDim={384}
+    on:openSemanticSearch={() => isSemanticSearchOpen = true}
   />
 
   <!-- Workspace Studio Layout -->
@@ -637,6 +665,7 @@
       {#if readingMode !== 'zen'}
         <CognitiveCompanion
           bind:this={companionRef}
+          paperId={activePaper?.id || ''}
           {activeContextText}
           paperTitle={activePaper?.title || ''}
           activeParagraphText={activeParagraphText}
@@ -691,4 +720,17 @@
       />
     </div>
   {/if}
+
+  <!-- Semantic Vector Radar Search Modal (Ctrl+Shift+F) -->
+  <SemanticSearchModal
+    isOpen={isSemanticSearchOpen}
+    paperId={activePaper?.id || ''}
+    sections={activePaper?.sections || []}
+    on:close={() => isSemanticSearchOpen = false}
+    on:selectParagraph={handleSemanticSelectParagraph}
+    on:openSettings={() => {
+      isSemanticSearchOpen = false;
+      dispatch('openSettings');
+    }}
+  />
 </div>

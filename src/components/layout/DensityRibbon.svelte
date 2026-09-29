@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { flowStore } from '../../stores/flowStore';
+  import { embeddingStore } from '../../stores/embeddingStore';
   import FlowCockpitModal from './FlowCockpitModal.svelte';
 
   export let focusTrack: string = '§ 3.2 Attention Mechanism · Depth Level: Formal Derivation';
@@ -9,6 +10,12 @@
 
   const dispatch = createEventDispatcher();
   let isCockpitOpen: boolean = false;
+
+  $: activeEngineLabel = `語意檢索 (${embeddingDim}-dim)`;
+
+  function handleOpenSemanticRadar() {
+    dispatch('openSemanticSearch');
+  }
 
   $: currentTelemetry = $flowStore;
   $: displayWpm = currentTelemetry?.currentWpm || flowWpm;
@@ -62,10 +69,17 @@
 
     <div class="h-3 w-px bg-[#504945]"></div>
 
-    <div class="flex items-center gap-1 font-mono text-[11px] text-[#fabd2f]">
-      <span class="material-symbols-outlined text-[13px] text-[#fe8019]">bolt</span>
-      <span>Local Embeddings: Active ({embeddingDim}-dim)</span>
-    </div>
+    <!-- Interactive Semantic Vector Radar Capsule -->
+    <button
+      type="button"
+      class="flex items-center gap-1.5 font-mono text-[11px] px-2 py-0.5 rounded border border-[#fabd2f]/30 bg-[#fabd2f]/10 text-[#fabd2f] hover:bg-[#fabd2f]/20 hover:border-[#fabd2f]/50 transition-all cursor-pointer shadow-xs active:scale-98 group"
+      on:click={handleOpenSemanticRadar}
+      title="點擊開啟語意檢索雷達 (支援跨語言自然語意段落搜尋與 Local RAG)"
+    >
+      <span class="material-symbols-outlined text-[13px] text-[#fe8019] animate-pulse">radar</span>
+      <span class="group-hover:text-[#fbf1c7] transition-colors">{activeEngineLabel}</span>
+      <span class="material-symbols-outlined text-[11px] text-[#a89984] group-hover:text-[#fabd2f] transition-colors">manage_search</span>
+    </button>
   </div>
 </div>
 

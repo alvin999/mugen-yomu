@@ -41,6 +41,7 @@
     scrollToTarget as helperScrollToTarget,
     highlightAndScrollToParagraph as helperHighlightPara
   } from './controllers/readerScrollManager';
+  import { findBestMatchCharIndex } from '../../utils/textSearchMatcher';
 
   // Props
   export let paper: PaperDocument | null = null;
@@ -463,6 +464,109 @@
         focusSectionFirstParagraph(secId, { syncImmediately: false });
       }
     });
+  }
+
+  /**
+   * 精確跳轉定位至特定段落的目標字詞 (Jump to Word / Character)
+   * 包含關鍵字元位移計算、Vim 方塊游標精準降落吸附與視窗舒適平滑對齊
+   */
+  export function focusParagraphAtChar(
+    targetSecId: string,
+    targetParaIndex: number = 0,
+    charIndex: number = 0,
+    queryText?: string
+  ): boolean {
+    if (typeof document === 'undefined' || !targetSecId) return false;
+
+    const cleanSecId = targetSecId.replace(/^sec-/, '');
+    const pKey = `${cleanSecId}_${targetParaIndex}`;
+    
+    // 多重 DOM 查找策略：優先精確 ID，次選 data-para-key，備選 getAllRenderedParas 比對
+    let targetParaEl: HTMLElement | null =
+      document.getElementById(`para-${pKey}`) ||
+      scrollContainer?.querySelector<HTMLElement>(`[data-para-key="${pKey}"]`) ||
+      null;
+
+    if (!targetParaEl) {
+      const allParas = getAllRenderedParas(scrollContainer, cleanSecId);
+      const matched = allParas.find(
+        (p) =>
+          (p.secId === cleanSecId || p.secId.replace(/^sec-/, '') === cleanSecId) &&
+          p.pIndex === targetParaIndex
+      );
+      if (matched) {
+        targetParaEl = matched.el;
+      }
+    }
+
+    if (!targetParaEl) {
+      // 若找不到具體段落，降級退避至該章首段
+      return focusSectionFirstParagraph(cleanSecId);
+    }
+
+    const pText = targetParaEl.getAttribute('data-para-text') || targetParaEl.textContent || '';
+    const realSecId = targetParaEl.getAttribute('data-sec-id') || cleanSecId;
+    const realParaKey = targetParaEl.getAttribute('data-para-key') || pKey;
+    const realParaIndex = parseInt(realParaKey.split('_').pop() || String(targetParaIndex), 10);
+
+    // 優先採用傳入之精準 charIndex，若無則依據搜尋詞計算最佳位移
+    let finalCharIdx = charIndex;
+    if (finalCharIdx <= 0 && queryText && queryText.trim()) {
+      const matchRes = findBestMatchCharIndex(pText, queryText);
+      finalCharIdx = matchRes.charIndex;
+    }
+
+    focusedParagraphKey = realParaKey;
+    focusedParagraphText = pText;
+    activeSectionId = realSecId;
+    vimController.currentCharIndex = finalCharIdx;
+    vimController.preferredColLeft = null;
+
+    markParagraphAsRead(realSecId, realParaIndex, pText);
+
+    dispatch('paragraphFocused', {
+      sectionId: realSecId,
+      paragraphIndex: realParaIndex,
+      paragraphKey: realParaKey,
+      text: pText,
+      selectedText: ''
+    });
+
+    const performSync = () => {
+      if (scrollContainer) lastScrollTop = scrollContainer.scrollTop;
+      vimController.syncCursor(realSecId, realParaIndex, finalCharIdx, true, false);
+    };
+
+    // 1. 瞬移 Vim 游標精準吸附在目標字元上
+    performSync();
+
+    // 2. 平滑滾動讓該字元舒適進入視線中央行
+    if (scrollContainer) {
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const elRect = targetParaEl.getBoundingClientRect();
+      const relativeTop = elRect.top - containerRect.top + scrollContainer.scrollTop;
+      const targetScroll = Math.max(0, relativeTop - containerRect.height * 0.35);
+
+      isProgrammaticScrolling = true;
+      scrollContainer.scrollTo({
+        top: targetScroll,
+        behavior: 'smooth'
+      });
+
+      if (sectionJumpTimer) clearTimeout(sectionJumpTimer);
+      sectionJumpTimer = setTimeout(() => {
+        performSync();
+        isProgrammaticScrolling = false;
+      }, 450);
+    }
+
+    // 3. 觸發段落聚焦光暈脈衝視覺回饋
+    targetParaEl.classList.add('ring-2', 'ring-[#fe8019]', 'transition-all');
+    setTimeout(() => {
+      targetParaEl?.classList.remove('ring-2', 'ring-[#fe8019]');
+    }, 1800);
+
+    return true;
   }
 
   export function focusSectionFirstParagraph(
