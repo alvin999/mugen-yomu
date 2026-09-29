@@ -12,7 +12,7 @@
   export let dModel: number = 512;
   export let numHeads: number = 8;
   export let sanityResult: SanityResult;
-  export let tensorShapeResults: TensorShapeResult[] = [];
+  export let tensorShapeResults: TensorShapeResult = [];
   export let isVerifyingScratchpad: boolean = false;
   export let scratchpadAiResult: {
     isValid: boolean;

@@ -1,6 +1,4 @@
-<script lang="ts">
-  import { createEventDispatcher } from 'svelte';
-
+<script context="module" lang="ts">
   export interface NoteEntry {
     id?: string;
     title: string;
@@ -12,6 +10,10 @@
     sectionTitle?: string;
     isPinned?: boolean;
   }
+</script>
+
+<script lang="ts">
+  import { createEventDispatcher } from 'svelte';
 
   export let notes: NoteEntry[] = [];
   export let selectedIndex: number = 0;

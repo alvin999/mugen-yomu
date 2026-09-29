@@ -618,7 +618,7 @@ export async function parsePdfToDocument(
     page: raw.page,
     progress: 0,
     isRead: false,
-    paragraphs: raw.paragraphs.length > 0 ? raw.paragraphs : ['本節無純文字內容或為純圖表頁面。']
+    paragraphs: raw.paragraphs
   }));
 
   // 8. 構造 AI 伴讀預設資訊庫

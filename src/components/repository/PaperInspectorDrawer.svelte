@@ -13,6 +13,7 @@
     viewCitation: { paper: PaperDocument };
     viewNotes: { paper: PaperDocument };
     delete: { id: string };
+    convertToTraditional: { paper: PaperDocument };
   }>();
 
   function close() {
@@ -34,6 +35,7 @@
   <div
     class="fixed inset-0 bg-black/50 backdrop-blur-xs z-40 transition-opacity"
     on:click={close}
+    on:keydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') close(); }}
     role="button"
     tabindex="-1"
     aria-label="點擊關閉預覽抽屜"

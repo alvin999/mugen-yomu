@@ -70,11 +70,16 @@
   <!-- Title and Authors -->
   <div class="flex flex-col gap-1.5 flex-1 min-w-0">
     <h3
-      class="text-sm font-bold text-[#ebdbb2] group-hover:text-[#fe8019] transition-colors line-clamp-2 leading-snug cursor-pointer select-text"
-      on:click={() => dispatch('select', { paper })}
+      class="text-sm font-bold text-[#ebdbb2] group-hover:text-[#fe8019] transition-colors line-clamp-2 leading-snug select-text"
       title={paper.title}
     >
-      {paper.title}
+      <button
+        type="button"
+        class="text-left font-inherit text-inherit bg-transparent p-0 m-0 border-none cursor-pointer group-hover:text-[#fe8019] hover:underline"
+        on:click={() => dispatch('select', { paper })}
+      >
+        {paper.title}
+      </button>
     </h3>
 
     <span class="text-xs text-[#a89984] truncate select-text">

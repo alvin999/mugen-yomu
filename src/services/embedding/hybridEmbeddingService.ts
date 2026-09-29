@@ -249,6 +249,7 @@ export async function searchSemantic(
         scorePercent: Math.round(Math.max(0, sim) * 100)
       };
     })
+    .filter((item) => item.similarity >= 0.20)
     .sort((a, b) => b.similarity - a.similarity)
     .slice(0, topK);
 

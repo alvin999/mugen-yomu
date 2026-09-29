@@ -509,11 +509,13 @@
     const realParaKey = targetParaEl.getAttribute('data-para-key') || pKey;
     const realParaIndex = parseInt(realParaKey.split('_').pop() || String(targetParaIndex), 10);
 
-    // 優先採用傳入之精準 charIndex，若無則依據搜尋詞計算最佳位移
-    let finalCharIdx = charIndex;
-    if (finalCharIdx <= 0 && queryText && queryText.trim()) {
+    // 優先採用傳入之精準 charIndex，若無則依據搜尋詞計算位移；純語意命中則以段落開頭就位
+    let finalCharIdx = Math.max(0, charIndex);
+    if (charIndex < 0 && queryText && queryText.trim()) {
       const matchRes = findBestMatchCharIndex(pText, queryText);
-      finalCharIdx = matchRes.charIndex;
+      if (matchRes.charIndex >= 0) {
+        finalCharIdx = matchRes.charIndex;
+      }
     }
 
     focusedParagraphKey = realParaKey;

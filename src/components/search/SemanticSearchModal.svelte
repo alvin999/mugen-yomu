@@ -304,7 +304,7 @@
           {#each searchResults as item, idx}
             {@const matchInfo = findBestMatchCharIndex(item.text, query)}
             <div
-              class="p-3.5 rounded-lg border border-[#3c3836] bg-[#282828]/40 hover:bg-[#32302f] hover:border-[#fabd2f]/50 transition-all cursor-pointer group shadow-sm"
+              class="p-3.5 rounded-lg border {matchInfo.isDirectMatch ? 'border-[#fe8019]/60 bg-[#fe8019]/[0.05] shadow-[0_0_12px_rgba(254,128,25,0.09)]' : 'border-[#3c3836] bg-[#282828]/40'} hover:bg-[#32302f] hover:border-[#fabd2f]/50 transition-all cursor-pointer group"
               on:click={() => handleSelect(item)}
               role="button"
               tabindex="0"
@@ -312,19 +312,23 @@
             >
               <div class="flex items-center justify-between mb-2">
                 <div class="flex items-center flex-wrap gap-2">
+                  <!-- 科學餘弦指標 -->
                   <span
-                    class="px-2 py-0.5 rounded text-[11px] font-mono font-semibold"
-                    style="background-color: {item.scorePercent >= 80 ? '#8ec07c25' : '#fabd2f25'}; color: {item.scorePercent >= 80 ? '#8ec07c' : '#fabd2f'}; border: 1px solid {item.scorePercent >= 80 ? '#8ec07c40' : '#fabd2f40'};"
+                    class="px-2 py-0.5 rounded text-[11px] font-mono font-medium border border-[#504945] bg-[#1d2021] text-[#a89984]"
+                    title="高維向量空間餘弦相似度 (Cosine Similarity)"
                   >
-                    {item.scorePercent}% 語意吻合
+                    cos θ <span class="text-[#fbf1c7] font-semibold">{(item.similarity ?? (item.scorePercent / 100)).toFixed(2)}</span>
                   </span>
 
-                  {#if matchInfo.matchedText}
-                    <span class="px-2 py-0.5 rounded text-[11px] font-mono flex items-center gap-1 bg-[#fe8019]/20 text-[#fe8019] border border-[#fe8019]/40">
-                      <span class="material-symbols-outlined text-[12px]">target</span>
+                  {#if matchInfo.isDirectMatch && matchInfo.matchedText}
+                    <!-- 命中目標強烈高亮徽章 (僅在真有字面命中時顯示) -->
+                    <span
+                      class="px-2.5 py-0.5 rounded text-[11px] font-mono flex items-center gap-1 transition-all bg-[#fe8019] text-[#1d2021] font-bold shadow-[0_0_8px_rgba(254,128,25,0.45)]"
+                    >
+                      <span class="material-symbols-outlined text-[13px]">center_focus_strong</span>
                       <span>
-                        {matchInfo.conceptLabel ? matchInfo.conceptLabel : `命中: "${matchInfo.matchedText}"`}
-                        <span class="opacity-75">· 第 {matchInfo.charIndex + 1} 字</span>
+                        命中: "{matchInfo.matchedText}"
+                        <span class="text-[#1d2021]/80 font-normal">· 第 {matchInfo.charIndex + 1} 字</span>
                       </span>
                     </span>
                   {/if}
@@ -337,7 +341,7 @@
                 </div>
 
                 <span class="text-[11px] font-mono text-[#a89984] group-hover:text-[#fabd2f] transition-colors flex items-center gap-0.5 shrink-0 ml-2">
-                  跳轉落字 <span class="material-symbols-outlined text-[13px]">arrow_forward</span>
+                  {matchInfo.isDirectMatch ? '跳轉落字' : '定位段落'} <span class="material-symbols-outlined text-[13px]">arrow_forward</span>
                 </span>
               </div>
 
@@ -363,12 +367,8 @@
         {/if}
       </div>
 
-      <!-- Footer -->
-      <div class="px-5 py-3 border-t border-[#3c3836] bg-[#1d2021] flex items-center justify-between text-[11px] text-[#7c6f64] font-mono">
-        <div class="flex items-center gap-1.5">
-          <span class="material-symbols-outlined text-[13px] text-[#fabd2f]">shield</span>
-          <span>100% 離線或直連官方 API，無第三方中繼伺服器</span>
-        </div>
+      <!-- Footer (Clean & Pure) -->
+      <div class="px-5 py-3 border-t border-[#3c3836] bg-[#1d2021] flex items-center justify-end text-[11px] text-[#7c6f64] font-mono">
         <div class="flex items-center gap-3">
           <span>按 <kbd class="px-1.5 py-0.5 bg-[#32302f] border border-[#504945] rounded text-[#ebdbb2]">Enter</kbd> 搜尋</span>
           <span>按 <kbd class="px-1.5 py-0.5 bg-[#32302f] border border-[#504945] rounded text-[#ebdbb2]">Esc</kbd> 關閉</span>
