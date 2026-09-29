@@ -1,20 +1,25 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import type { SimNode } from '../../services/citation/citationPhysicsEngine';
 
-  export let selectedNode: SimNode | null = null;
-  export let categoryMeta: Record<string, { name: string; color: string; bgBadge: string; borderBadge: string }>;
+  interface Props {
+    selectedNode?: SimNode | null;
+    categoryMeta: Record<string, { name: string; color: string; bgBadge: string; borderBadge: string }>;
+    onclose?: () => void;
+    onloadPaper?: (data: { paperId: string }) => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    close: void;
-    loadPaper: { paperId: string };
-  }>();
+  let {
+    selectedNode = null,
+    categoryMeta,
+    onclose,
+    onloadPaper
+  }: Props = $props();
 
-  $: meta = selectedNode ? categoryMeta[selectedNode.category] : null;
+  let meta = $derived(selectedNode ? categoryMeta[selectedNode.category] : null);
 
   function handleLoadTarget(targetPaperId?: string) {
     if (!targetPaperId) return;
-    dispatch('loadPaper', { paperId: targetPaperId });
+    onloadPaper?.({ paperId: targetPaperId });
   }
 </script>
 
@@ -40,7 +45,7 @@
       </div>
       <button
         class="text-[#a89984] hover:text-[#ebdbb2] p-1 rounded hover:bg-[#282828] transition-colors"
-        on:click={() => dispatch('close')}
+        onclick={() => onclose?.()}
         title="收合卷宗"
       >
         <span class="material-symbols-outlined text-[16px]">close</span>
@@ -127,7 +132,7 @@
       {#if selectedNode.targetPaperId}
         <button
           class="mt-2 w-full py-2.5 bg-[#fe8019] hover:bg-[#d65d0e] text-[#141617] font-bold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg cursor-pointer text-xs"
-          on:click={() => handleLoadTarget(selectedNode?.targetPaperId)}
+          onclick={() => handleLoadTarget(selectedNode?.targetPaperId)}
         >
           <span class="material-symbols-outlined text-[17px]">auto_stories</span>
           <span>載入此論文並進入雙語伴讀</span>

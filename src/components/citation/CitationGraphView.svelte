@@ -311,8 +311,8 @@
     return sId === hoveredNodeId || tId === hoveredNodeId;
   }
 
-  function handleLoadTargetPaper(event: CustomEvent<{ paperId: string }>) {
-    dispatch('loadPaper', { paperId: event.detail.paperId });
+  function handleLoadTargetPaper(data: { paperId: string }) {
+    dispatch('loadPaper', { paperId: data.paperId });
   }
 
   onMount(() => {
@@ -677,8 +677,8 @@
     <CitationDetailPanel
       {selectedNode}
       {categoryMeta}
-      on:close={() => selectedNodeId = null}
-      on:loadPaper={handleLoadTargetPaper}
+      onclose={() => selectedNodeId = null}
+      onloadPaper={handleLoadTargetPaper}
     />
 
   </div>
