@@ -1,33 +1,40 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import type { PaperDocument } from '../../types/document';
   import { isPresetPaper } from '../../stores/documentStore';
   import { deactivateCursor, activateCursor } from '../../stores/vimCursorStore';
 
-  export let isOpen: boolean = false;
-  export let paper: PaperDocument | null = null;
-
-  const dispatch = createEventDispatcher<{
-    confirm: { id: string };
-    cancel: void;
-  }>();
-
-  $: if (isOpen) {
-    deactivateCursor();
-  } else {
-    activateCursor();
+  interface Props {
+    isOpen?: boolean;
+    paper?: PaperDocument | null;
+    onconfirm?: (data: { id: string }) => void;
+    oncancel?: () => void;
   }
+
+  let {
+    isOpen = $bindable(false),
+    paper = null,
+    onconfirm,
+    oncancel
+  }: Props = $props();
+
+  $effect(() => {
+    if (isOpen) {
+      deactivateCursor();
+    } else {
+      activateCursor();
+    }
+  });
 
   function handleCancel() {
     isOpen = false;
-    dispatch('cancel');
+    oncancel?.();
   }
 
   function handleConfirm() {
     if (!paper) return;
     const id = paper.id;
     isOpen = false;
-    dispatch('confirm', { id });
+    onconfirm?.({ id });
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -41,10 +48,10 @@
     }
   }
 
-  $: isPreset = paper ? isPresetPaper(paper.id) : false;
+  let isPreset = $derived(paper ? isPresetPaper(paper.id) : false);
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 {#if isOpen && paper}
   <div
@@ -55,7 +62,7 @@
     <!-- Backdrop Click to Close -->
     <div
       class="fixed inset-0 cursor-default"
-      on:click={handleCancel}
+      onclick={handleCancel}
       role="button"
       tabindex="-1"
       aria-label="點擊遮罩關閉彈窗"
@@ -80,7 +87,7 @@
         <button
           type="button"
           class="w-7 h-7 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f] transition-colors cursor-pointer"
-          on:click={handleCancel}
+          onclick={handleCancel}
           title="關閉 (Esc)"
         >
           <span class="material-symbols-outlined text-[18px]">close</span>
@@ -164,7 +171,7 @@
         <button
           type="button"
           class="px-3 py-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] rounded-lg text-xs font-medium transition-colors cursor-pointer"
-          on:click={handleCancel}
+          onclick={handleCancel}
         >
           取消 (Esc)
         </button>
@@ -172,7 +179,7 @@
         <button
           type="button"
           class="px-3.5 py-1.5 bg-[#fb4934] hover:bg-[#cc241d] text-[#1d2021] hover:text-white font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
-          on:click={handleConfirm}
+          onclick={handleConfirm}
         >
           <span class="material-symbols-outlined text-[15px]">delete</span>
           <span>確認移除文獻</span>

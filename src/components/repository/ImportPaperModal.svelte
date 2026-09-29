@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import {
     userManualDocument,
     attentionPaper,
@@ -19,12 +18,23 @@
   import { cleanPaperText } from '../../utils/paperTextSanitizer';
   import { pdfViewerStore } from '../../stores/pdfViewerStore';
 
-  export let isOpen: boolean = false;
-  export let currentLibrary: PaperDocument[] = [];
+  interface Props {
+    isOpen?: boolean;
+    currentLibrary?: PaperDocument[];
+    onpaperLoaded?: (data: { paper: PaperDocument; library: PaperDocument[] }) => void;
+    onopenSettings?: () => void;
+    onclose?: () => void;
+  }
 
-  const dispatch = createEventDispatcher();
+  let {
+    isOpen = $bindable(false),
+    currentLibrary = [],
+    onpaperLoaded,
+    onopenSettings,
+    onclose
+  }: Props = $props();
 
-  $: hasGeminiKey = typeof window !== 'undefined' ? Boolean(getStoredApiKey('google') || getStoredApiKey('gemini')) : false;
+  let hasGeminiKey = $derived(typeof window !== 'undefined' ? Boolean(getStoredApiKey('google') || getStoredApiKey('gemini')) : false);
 
   let activeTab: 'arxiv' | 'pdf' | 'book' | 'web' | 'preset' | 'paste' | 'upload' = 'arxiv';
 
@@ -148,7 +158,7 @@
 
   function close() {
     isOpen = false;
-    dispatch('close');
+    onclose?.();
   }
 
   // --- Tab 0: arXiv Fetch Logic ---
@@ -234,7 +244,7 @@
       }
     }
     saveLibraryToStorage(updated);
-    dispatch('paperLoaded', { paper: userManualDocument, library: updated });
+    onpaperLoaded?.({ paper: userManualDocument, library: updated });
     clipboardToast = '已成功補齊並還原預設核心文獻！';
     setTimeout(() => {
       clipboardToast = '';
@@ -465,7 +475,7 @@
     saveLibraryToStorage(updatedLibrary);
     setActivePaperId(paper.id);
 
-    dispatch('paperLoaded', { paper, library: updatedLibrary });
+    onpaperLoaded?.({ paper, library: updatedLibrary });
     close();
   }
 </script>

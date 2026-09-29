@@ -74,8 +74,8 @@
     <AuthorInfoModal
       authors={paper.authors || []}
       {selectedAuthorInfo}
-      on:selectAuthor={(e) => dispatch('selectAuthor', { author: e.detail.author })}
-      on:closeAuthorInfo={() => dispatch('closeAuthorInfo')}
+      onselectAuthor={(data) => dispatch('selectAuthor', { author: data.author })}
+      oncloseAuthorInfo={() => dispatch('closeAuthorInfo')}
     />
 
     <!-- Abstract Collapsible Card -->

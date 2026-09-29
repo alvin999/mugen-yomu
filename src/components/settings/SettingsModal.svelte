@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount } from 'svelte';
+  import { onMount } from 'svelte';
   import { fetchProviderModels, FALLBACK_MODELS, type ProviderModelItem } from '../../services/aiService';
   import { THEMES, currentTheme, setTheme } from '../../stores/themeStore';
   import { vimConfigStore, updateVimConfig } from '../../stores/vimCursorStore';
@@ -9,13 +9,25 @@
     type EmbeddingEnginePreference
   } from '../../services/embedding/hybridEmbeddingService';
 
-  export let isOpen: boolean = false;
-  export let currentProvider: string = 'groq';
-  export let currentModel: string = 'llama-3.3-70b-versatile';
-  export let apiKey: string = '';
-  export let ollamaUrl: string = 'http://localhost:11434';
+  interface Props {
+    isOpen?: boolean;
+    currentProvider?: string;
+    currentModel?: string;
+    apiKey?: string;
+    ollamaUrl?: string;
+    onsave?: (data: { provider: string; model: string; apiKey: string; ollamaUrl: string }) => void;
+    onclose?: () => void;
+  }
 
-  const dispatch = createEventDispatcher();
+  let {
+    isOpen = $bindable(false),
+    currentProvider = $bindable('groq'),
+    currentModel = $bindable('llama-3.3-70b-versatile'),
+    apiKey = $bindable(''),
+    ollamaUrl = $bindable('http://localhost:11434'),
+    onsave,
+    onclose
+  }: Props = $props();
 
   const providers = [
     { id: 'groq', name: 'Groq LPU (極速推薦)', defaultModel: 'llama-3.3-70b-versatile', badge: 'Ultra-Fast' },
@@ -241,7 +253,7 @@
       setEmbeddingPreference(embeddingPref);
     }
 
-    dispatch('save', {
+    onsave?.({
       provider: currentProvider,
       model: currentModel,
       apiKey,
@@ -253,7 +265,7 @@
 
   function close() {
     isOpen = false;
-    dispatch('close');
+    onclose?.();
   }
 </script>
 

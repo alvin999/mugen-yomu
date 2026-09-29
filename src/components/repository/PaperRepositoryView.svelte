@@ -380,7 +380,7 @@
   <DeletePaperConfirmModal
     bind:isOpen={isDeleteModalOpen}
     paper={paperToDelete}
-    on:confirm={(e) => handleConfirmDelete(e.detail.id)}
-    on:cancel={() => { isDeleteModalOpen = false; paperToDelete = null; }}
+    onconfirm={(data) => handleConfirmDelete(data.id)}
+    oncancel={() => { isDeleteModalOpen = false; paperToDelete = null; }}
   />
 </div>

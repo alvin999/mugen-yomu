@@ -1,10 +1,16 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount, onDestroy } from 'svelte';
+  import { onDestroy } from 'svelte';
   import { flowStore, type FlowTelemetry } from '../../stores/flowStore';
 
-  export let isOpen: boolean = false;
+  interface Props {
+    isOpen?: boolean;
+    onclose?: () => void;
+  }
 
-  const dispatch = createEventDispatcher();
+  let {
+    isOpen = false,
+    onclose
+  }: Props = $props();
 
   let telemetry: FlowTelemetry;
   const unsubscribe = flowStore.subscribe(val => {
@@ -16,7 +22,7 @@
   });
 
   function close() {
-    dispatch('close');
+    onclose?.();
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -58,16 +64,16 @@
   }
 
   // 計算指針在光譜條的位置 (0 ~ 100%)
-  $: spectrumPercent = (() => {
+  let spectrumPercent = $derived.by(() => {
     if (!telemetry) return 50;
     const wpm = telemetry.currentWpm;
     if (wpm <= 40) return 4;
     if (wpm >= 450) return 96;
     return Math.min(96, Math.max(4, Math.round(((wpm - 40) / (450 - 40)) * 100)));
-  })();
+  });
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 {#if isOpen}
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
@@ -75,7 +81,7 @@
     class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-fade-in"
     role="dialog"
     aria-modal="true"
-    on:click|self={close}
+    onclick={(e) => { if (e.target === e.currentTarget) close(); }}
   >
     <div
       class="w-full max-w-xl bg-[#282828] border border-[#504945] rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-scale-in select-none text-[#ebdbb2]"
@@ -103,7 +109,7 @@
         <button
           type="button"
           class="p-1.5 text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f] rounded-lg transition-colors cursor-pointer"
-          on:click={close}
+          onclick={close}
           title="關閉 (Esc)"
         >
           <span class="material-symbols-outlined text-[20px]">close</span>
@@ -262,7 +268,7 @@
             <button
               type="button"
               class="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-all cursor-pointer {telemetry.isPacerActive ? 'bg-[#fe8019]/20 text-[#fe8019] border-[#fe8019]' : 'bg-[#282828] text-[#a89984] border-[#504945] hover:text-[#ebdbb2]'}"
-              on:click={togglePacer}
+              onclick={togglePacer}
             >
               <span class="w-2 h-2 rounded-full {telemetry.isPacerActive ? 'bg-[#fe8019] animate-ping' : 'bg-[#504945]'}"></span>
               <span>{telemetry.isPacerActive ? '導引進行中' : '已關閉'}</span>
@@ -281,7 +287,7 @@
               max="450"
               step="10"
               value={telemetry.targetPacingWpm}
-              on:input={handlePacerSlider}
+              oninput={handlePacerSlider}
               class="w-full h-1.5 bg-[#32302f] rounded-lg appearance-none cursor-pointer accent-[#fe8019]"
             />
             <!-- Quick Preset Buttons -->
@@ -289,21 +295,21 @@
               <button
                 type="button"
                 class="flex-1 py-1 px-2 text-[10px] font-mono rounded bg-[#282828] hover:bg-[#32302f] border border-[#504945] text-[#d5c4a1] transition-colors cursor-pointer {telemetry.targetPacingWpm === 180 ? 'border-[#83a598] text-[#83a598]' : ''}"
-                on:click={() => setPresetPacing(180)}
+                onclick={() => setPresetPacing(180)}
               >
                 180 慢速精讀
               </button>
               <button
                 type="button"
                 class="flex-1 py-1 px-2 text-[10px] font-mono rounded bg-[#282828] hover:bg-[#32302f] border border-[#504945] text-[#d5c4a1] transition-colors cursor-pointer {telemetry.targetPacingWpm === 260 ? 'border-[#fe8019] text-[#fe8019]' : ''}"
-                on:click={() => setPresetPacing(260)}
+                onclick={() => setPresetPacing(260)}
               >
                 260 標準心流
               </button>
               <button
                 type="button"
                 class="flex-1 py-1 px-2 text-[10px] font-mono rounded bg-[#282828] hover:bg-[#32302f] border border-[#504945] text-[#d5c4a1] transition-colors cursor-pointer {telemetry.targetPacingWpm === 360 ? 'border-[#8ec07c] text-[#8ec07c]' : ''}"
-                on:click={() => setPresetPacing(360)}
+                onclick={() => setPresetPacing(360)}
               >
                 360 飛速掃讀
               </button>
@@ -317,7 +323,7 @@
         <button
           type="button"
           class="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[#a89984] hover:text-[#fb4934] hover:bg-[#32302f] rounded border border-transparent hover:border-[#504945] transition-colors cursor-pointer"
-          on:click={resetStats}
+          onclick={resetStats}
           title="重設本篇心流時長與字數統計"
         >
           <span class="material-symbols-outlined text-[15px]">restart_alt</span>
@@ -327,7 +333,7 @@
         <button
           type="button"
           class="px-4 py-1.5 text-xs font-medium text-[#282828] bg-[#fabd2f] hover:bg-[#fe8019] rounded-lg transition-colors cursor-pointer shadow-sm"
-          on:click={close}
+          onclick={close}
         >
           完成並返回閱讀
         </button>

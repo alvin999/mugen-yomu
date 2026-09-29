@@ -1142,7 +1142,7 @@
   isOpen={Boolean(activeLightboxImg)}
   imageUrl={activeLightboxImg || ''}
   caption={activeLightboxCaption}
-  on:close={closeLightbox}
+  onclose={closeLightbox}
 />
 
 <!-- Neovim 閱讀狀態列與快捷鍵浮動指示器 -->

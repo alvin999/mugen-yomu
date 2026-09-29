@@ -86,6 +86,6 @@
 <!-- Flow Cockpit Modal -->
 <FlowCockpitModal
   isOpen={isCockpitOpen}
-  on:close={() => isCockpitOpen = false}
+  onclose={() => isCockpitOpen = false}
 />
 

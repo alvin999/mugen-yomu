@@ -1,17 +1,23 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  interface Props {
+    isOpen?: boolean;
+    imageUrl?: string;
+    caption?: string;
+    onclose?: () => void;
+  }
 
-  export let isOpen: boolean = false;
-  export let imageUrl: string = '';
-  export let caption: string = '學術圖表預覽';
+  let {
+    isOpen = false,
+    imageUrl = '',
+    caption = '學術圖表預覽',
+    onclose
+  }: Props = $props();
 
-  const dispatch = createEventDispatcher<{ close: void }>();
-
-  let zoom: number = 1;
+  let zoom: number = $state(1);
 
   function handleClose() {
     zoom = 1;
-    dispatch('close');
+    onclose?.();
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -25,13 +31,13 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 {#if isOpen && imageUrl}
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <div
     class="fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center p-6 backdrop-blur-md transition-opacity duration-200"
-    on:click={handleClose}
+    onclick={handleClose}
     role="dialog"
     aria-modal="true"
     tabindex="-1"
@@ -39,7 +45,7 @@
     <!-- Header Bar -->
     <div
       class="w-full max-w-5xl flex items-center justify-between pb-3 text-[#ebdbb2]"
-      on:click|stopPropagation
+      onclick={(e) => e.stopPropagation()}
       role="toolbar"
       tabindex="-1"
     >
@@ -54,7 +60,7 @@
         <button
           type="button"
           class="text-[#a89984] hover:text-[#ebdbb2] flex items-center gap-1 font-mono text-xs bg-[#282828] px-3 py-1.5 rounded border border-[#3c3836] transition-colors"
-          on:click={toggleZoom}
+          onclick={toggleZoom}
           title={zoom === 1 ? '放大圖表 (160%)' : '還原大小 (100%)'}
         >
           <span class="material-symbols-outlined text-[15px]">
@@ -66,7 +72,7 @@
         <button
           type="button"
           class="text-[#a89984] hover:text-[#fe8019] flex items-center gap-1 font-mono text-xs bg-[#282828] px-3 py-1.5 rounded border border-[#3c3836] transition-colors hover:border-[#fe8019]/50"
-          on:click={handleClose}
+          onclick={handleClose}
           title="關閉 (ESC)"
         >
           <span>關閉</span>
@@ -79,7 +85,7 @@
     <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
     <div
       class="max-w-5xl max-h-[85vh] overflow-auto flex items-center justify-center rounded-lg cursor-zoom-in"
-      on:click|stopPropagation={toggleZoom}
+      onclick={(e) => { e.stopPropagation(); toggleZoom(); }}
       role="figure"
       tabindex="-1"
     >

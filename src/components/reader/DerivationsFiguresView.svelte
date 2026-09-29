@@ -565,5 +565,5 @@ ${scratchpadAiResult ? `### AI 導師審查講評\n**${scratchpadAiResult.verdic
   isOpen={isFigureLightboxOpen}
   imageUrl={lightboxImageUrl}
   caption={lightboxTitle}
-  on:close={closeLightbox}
+  onclose={closeLightbox}
 />

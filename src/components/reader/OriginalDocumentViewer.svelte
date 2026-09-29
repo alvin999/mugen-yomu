@@ -562,5 +562,5 @@
   isOpen={Boolean(activeLightboxImg)}
   imageUrl={activeLightboxImg || ''}
   caption={activeLightboxCaption}
-  on:close={closeLightbox}
+  onclose={closeLightbox}
 />

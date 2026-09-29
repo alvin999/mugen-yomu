@@ -431,24 +431,24 @@
   <ImportPaperModal
     bind:isOpen={isImportOpen}
     currentLibrary={paperLibrary}
-    on:paperLoaded={handlePaperLoaded}
-    on:openSettings={() => { isImportOpen = false; isByokOpen = true; }}
-    on:close={() => isImportOpen = false}
+    onpaperLoaded={handlePaperLoaded}
+    onopenSettings={() => { isImportOpen = false; isByokOpen = true; }}
+    onclose={() => isImportOpen = false}
   />
 
   <!-- System & LLM Settings Modal -->
   <SettingsModal
     bind:isOpen={isByokOpen}
-    on:save={handleByokSave}
-    on:close={() => isByokOpen = false}
+    onsave={handleByokSave}
+    onclose={() => isByokOpen = false}
   />
 
   <!-- 風格化刪除確認 Modal (從 Header 快捷觸發) -->
   <DeletePaperConfirmModal
     bind:isOpen={isDeleteDirectModalOpen}
     paper={paperToDeleteDirect}
-    on:confirm={(e) => handleConfirmDeleteDirect(e.detail.id)}
-    on:cancel={() => { isDeleteDirectModalOpen = false; paperToDeleteDirect = null; }}
+    onconfirm={(data) => handleConfirmDeleteDirect(data.id)}
+    oncancel={() => { isDeleteDirectModalOpen = false; paperToDeleteDirect = null; }}
   />
 </div>
 
