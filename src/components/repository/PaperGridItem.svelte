@@ -1,24 +1,34 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import type { PaperDocument } from '../../stores/documentStore';
 
-  export let paper: PaperDocument;
-  export let isActive: boolean = false;
-  export let progressPercent: number = 0;
-  export let notesCount: number = 0;
+  interface Props {
+    paper: PaperDocument;
+    isActive?: boolean;
+    progressPercent?: number;
+    notesCount?: number;
+    onselect?: (data: { paper: PaperDocument }) => void;
+    onviewCitation?: (data: { paper: PaperDocument }) => void;
+    onviewNotes?: (data: { paper: PaperDocument }) => void;
+    onpreview?: (data: { paper: PaperDocument }) => void;
+    ondelete?: (data: { id: string }) => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    select: { paper: PaperDocument };
-    viewCitation: { paper: PaperDocument };
-    viewNotes: { paper: PaperDocument };
-    preview: { paper: PaperDocument };
-    delete: { id: string };
-  }>();
+  let {
+    paper,
+    isActive = false,
+    progressPercent = 0,
+    notesCount = 0,
+    onselect,
+    onviewCitation,
+    onviewNotes,
+    onpreview,
+    ondelete
+  }: Props = $props();
 
   // 計算圖表與公式數量
-  $: formulaCount = (paper?.sections || []).reduce((sum, s) => sum + (s?.formulas?.length || 0), 0);
-  $: figureCount = (paper?.sections || []).reduce((sum, s) => sum + (s?.figures?.length || 0), 0);
-  $: sectionCount = paper?.sections?.length || 0;
+  let formulaCount = $derived((paper?.sections || []).reduce((sum, s) => sum + (s?.formulas?.length || 0), 0));
+  let figureCount = $derived((paper?.sections || []).reduce((sum, s) => sum + (s?.figures?.length || 0), 0));
+  let sectionCount = $derived(paper?.sections?.length || 0);
 </script>
 
 <div
@@ -60,7 +70,7 @@
         type="button"
         class="w-6 h-6 rounded flex items-center justify-center text-[#7c6f64] hover:text-[#fb4934] hover:bg-[#1d2021] transition-colors cursor-pointer {isActive ? 'opacity-80 hover:opacity-100 text-[#a89984]' : 'opacity-0 group-hover:opacity-100'}"
         title="自文獻庫移除"
-        on:click|stopPropagation={() => dispatch('delete', { id: paper.id })}
+        onclick={(e) => { e.stopPropagation(); ondelete?.({ id: paper.id }); }}
       >
         <span class="material-symbols-outlined text-[15px]">delete</span>
       </button>
@@ -76,7 +86,7 @@
       <button
         type="button"
         class="text-left font-inherit text-inherit bg-transparent p-0 m-0 border-none cursor-pointer group-hover:text-[#fe8019] hover:underline"
-        on:click={() => dispatch('select', { paper })}
+        onclick={() => onselect?.({ paper })}
       >
         {paper.title}
       </button>
@@ -136,7 +146,7 @@
   <div class="flex items-center gap-1.5 pt-1">
     <button
       class="flex-1 py-1.5 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold text-xs rounded-lg flex items-center justify-center gap-1 transition-colors shadow-sm cursor-pointer"
-      on:click={() => dispatch('select', { paper })}
+      onclick={() => onselect?.({ paper })}
       title="進入閱讀工作台開始研讀"
     >
       <span class="material-symbols-outlined text-[15px]">menu_book</span>
@@ -145,7 +155,7 @@
 
     <button
       class="px-2.5 py-1.5 bg-[#1d2021] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#83a598] text-[#a89984] hover:text-[#83a598] rounded-lg text-xs font-mono flex items-center gap-1 transition-colors cursor-pointer"
-      on:click={() => dispatch('viewCitation', { paper })}
+      onclick={() => onviewCitation?.({ paper })}
       title="查看引文星系圖譜"
     >
       <span class="material-symbols-outlined text-[15px]">hub</span>
@@ -153,7 +163,7 @@
 
     <button
       class="px-2.5 py-1.5 bg-[#1d2021] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fabd2f] text-[#a89984] hover:text-[#fabd2f] rounded-lg text-xs font-mono flex items-center gap-1 transition-colors cursor-pointer"
-      on:click={() => dispatch('viewNotes', { paper })}
+      onclick={() => onviewNotes?.({ paper })}
       title="查閱本篇精讀筆記"
     >
       <span class="material-symbols-outlined text-[15px]">draw</span>
@@ -161,7 +171,7 @@
 
     <button
       class="px-2.5 py-1.5 bg-[#1d2021] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#a89984] text-[#a89984] hover:text-[#ebdbb2] rounded-lg text-xs font-mono flex items-center gap-1 transition-colors cursor-pointer"
-      on:click={() => dispatch('preview', { paper })}
+      onclick={() => onpreview?.({ paper })}
       title="預覽大綱與摘要"
     >
       <span class="material-symbols-outlined text-[15px]">visibility</span>

@@ -1,20 +1,53 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { type PaperDocument, isPaperProtected } from '../../stores/documentStore';
   import type { CacheStats } from '../../services/cacheService';
   import { THEMES, currentTheme, setTheme } from '../../stores/themeStore';
 
-  export let activePaper: PaperDocument | null = null;
-  export let readingMode: 'bilingual' | 'split' | 'zen' | 'figures' = 'bilingual';
-  export let isPdfDrawerOpen: boolean = false;
-  export let zoomLevel: number = 100;
-  export let modelName: string = 'Groq (Llama 3.3 70B)';
-  export let cachedInfo: string = '$0.14 / 2.4k cached (省 82%)';
-  export let isRailCollapsed: boolean = false;
-  export let cacheStats: CacheStats | null = null;
-  export let currentMainView: string = 'workspace';
+  interface Props {
+    activePaper?: PaperDocument | null;
+    readingMode?: 'bilingual' | 'split' | 'zen' | 'figures';
+    isPdfDrawerOpen?: boolean;
+    zoomLevel?: number;
+    modelName?: string;
+    cachedInfo?: string;
+    isRailCollapsed?: boolean;
+    cacheStats?: CacheStats | null;
+    currentMainView?: string;
+    onmodeChange?: (data: { mode: 'bilingual' | 'split' | 'zen' | 'figures' }) => void;
+    onzoomChange?: (data: { zoomLevel: number }) => void;
+    onopenSettings?: () => void;
+    onexportNotes?: () => void;
+    onopenRepository?: () => void;
+    onopenImport?: () => void;
+    onbackToWorkspace?: () => void;
+    ondeleteCurrentPaper?: (data: { paperId: string }) => void;
+    onconvertToTraditional?: () => void;
+    ontogglePdfDrawer?: () => void;
+  }
 
-  let isThemeDropdownOpen: boolean = false;
+  let {
+    activePaper = null,
+    readingMode = $bindable('bilingual'),
+    isPdfDrawerOpen = false,
+    zoomLevel = $bindable(100),
+    modelName = 'Groq (Llama 3.3 70B)',
+    cachedInfo = '$0.14 / 2.4k cached (省 82%)',
+    isRailCollapsed = false,
+    cacheStats = null,
+    currentMainView = 'workspace',
+    onmodeChange,
+    onzoomChange,
+    onopenSettings,
+    onexportNotes,
+    onopenRepository,
+    onopenImport,
+    onbackToWorkspace,
+    ondeleteCurrentPaper,
+    onconvertToTraditional,
+    ontogglePdfDrawer
+  }: Props = $props();
+
+  let isThemeDropdownOpen: boolean = $state(false);
 
   function handleWindowClick() {
     if (isThemeDropdownOpen) {
@@ -22,40 +55,38 @@
     }
   }
 
-  const dispatch = createEventDispatcher();
-
   function setMode(mode: 'bilingual' | 'split' | 'zen' | 'figures') {
     readingMode = mode;
-    dispatch('modeChange', { mode });
+    onmodeChange?.({ mode });
   }
 
   function adjustZoom(delta: number) {
     zoomLevel = Math.max(70, Math.min(150, zoomLevel + delta));
-    dispatch('zoomChange', { zoomLevel });
+    onzoomChange?.({ zoomLevel });
   }
 
   function openSettings() {
-    dispatch('openSettings');
+    onopenSettings?.();
   }
 
   function exportNotes() {
-    dispatch('exportNotes');
+    onexportNotes?.();
   }
 
   function openRepository() {
-    dispatch('openRepository');
+    onopenRepository?.();
   }
 
   function openImport() {
-    dispatch('openImport');
+    onopenImport?.();
   }
 
   function backToWorkspace() {
-    dispatch('backToWorkspace');
+    onbackToWorkspace?.();
   }
 </script>
 
-<svelte:window on:click={handleWindowClick} />
+<svelte:window onclick={handleWindowClick} />
 
 <header class="fixed top-0 {isRailCollapsed ? 'left-16' : 'left-60'} right-0 h-16 bg-[#1d2021]/95 backdrop-blur-xl border-b border-[#3c3836] z-40 px-4 flex items-center justify-between shadow-md select-none gap-4 transition-all duration-300 ease-in-out">
   <!-- Left Brand & Breadcrumb (Prioritized flexible width) -->
@@ -64,7 +95,7 @@
     <button
       type="button"
       class="flex items-center gap-2 shrink-0 cursor-pointer bg-transparent border-none p-0 text-left focus:outline-none focus:ring-1 focus:ring-[#fe8019] rounded"
-      on:click={openRepository}
+      onclick={openRepository}
       title="開啟文獻庫"
     >
       <div class="flex flex-col">
@@ -78,8 +109,8 @@
     <!-- Repository & Import Buttons -->
     <div class="flex items-center gap-1.5 shrink-0">
       <button
-        class="font-mono text-xs bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] px-2.5 py-1 rounded font-semibold transition-all flex items-center gap-1 shadow-sm shrink-0"
-        on:click={openImport}
+        class="font-mono text-xs bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] px-2.5 py-1 rounded font-semibold transition-all flex items-center gap-1 shadow-sm shrink-0 cursor-pointer"
+        onclick={openImport}
         title="匯入新論文或網頁文章"
         id="btn-header-import"
       >
@@ -99,7 +130,7 @@
         </span>
         <button
           class="ml-2 px-2 py-0.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#fe8019] font-mono rounded text-[11px] flex items-center gap-1 transition-colors cursor-pointer shrink-0"
-          on:click={backToWorkspace}
+          onclick={backToWorkspace}
         >
           <span class="material-symbols-outlined text-[12px]">arrow_back</span>
           <span>返回閱讀</span>
@@ -111,7 +142,7 @@
         </span>
         <button
           class="ml-2 px-2 py-0.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#fabd2f] font-mono rounded text-[11px] flex items-center gap-1 transition-colors cursor-pointer shrink-0"
-          on:click={backToWorkspace}
+          onclick={backToWorkspace}
         >
           <span class="material-symbols-outlined text-[12px]">arrow_back</span>
           <span>返回閱讀</span>
@@ -123,7 +154,7 @@
         </span>
         <button
           class="ml-2 px-2 py-0.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#83a598] font-mono rounded text-[11px] flex items-center gap-1 transition-colors cursor-pointer shrink-0"
-          on:click={backToWorkspace}
+          onclick={backToWorkspace}
         >
           <span class="material-symbols-outlined text-[12px]">arrow_back</span>
           <span>返回閱讀</span>
@@ -159,7 +190,7 @@
             type="button"
             class="w-6 h-6 rounded flex items-center justify-center text-[#7c6f64] hover:text-[#fb4934] hover:bg-[#282828] transition-colors cursor-pointer shrink-0"
             title="從文獻庫移除此文獻"
-            on:click={() => dispatch('deleteCurrentPaper', { paperId: activePaper.id })}
+            onclick={() => { if (activePaper) ondeleteCurrentPaper?.({ paperId: activePaper.id }); }}
           >
             <span class="material-symbols-outlined text-[15px]">delete</span>
           </button>
@@ -173,16 +204,16 @@
     <div class="flex items-center justify-center shrink-0">
       <nav class="flex items-center bg-[#282828] border border-[#3c3836] p-1 rounded-xl gap-1 shadow-inner">
         <button
-          class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 {readingMode === 'bilingual' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
-          on:click={() => setMode('bilingual')}
+          class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 cursor-pointer {readingMode === 'bilingual' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
+          onclick={() => setMode('bilingual')}
         >
           <span class="material-symbols-outlined text-[13px]">chrome_reader_mode</span>
           <span>雙語伴讀</span>
         </button>
 
         <button
-          class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 {readingMode === 'split' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
-          on:click={() => setMode('split')}
+          class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 cursor-pointer {readingMode === 'split' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
+          onclick={() => setMode('split')}
           title="左右 50/50 雙軌並列：左側原始論文/網頁，右側雙語伴讀"
         >
           <span class="material-symbols-outlined text-[13px]">view_column</span>
@@ -190,8 +221,8 @@
         </button>
 
         <button
-          class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 {readingMode === 'zen' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
-          on:click={() => setMode('zen')}
+          class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 cursor-pointer {readingMode === 'zen' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
+          onclick={() => setMode('zen')}
         >
           <span class="material-symbols-outlined text-[13px]">self_improvement</span>
           <span>純沉浸</span>
@@ -199,8 +230,8 @@
 
         <button
           id="btn-nav-figures"
-          class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 {readingMode === 'figures' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
-          on:click={() => setMode('figures')}
+          class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 cursor-pointer {readingMode === 'figures' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
+          onclick={() => setMode('figures')}
           title="圖表與公式推導工作室"
         >
           <span class="material-symbols-outlined text-[13px]">schema</span>
@@ -218,7 +249,7 @@
       <!-- Traditional Chinese Conversion Button -->
       <button
         class="px-2.5 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#8ec07c]/60 text-[#8ec07c] hover:text-[#b8bb26] rounded-lg text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
-        on:click={() => dispatch('convertToTraditional')}
+        onclick={() => onconvertToTraditional?.()}
         title="將當前文獻轉換為台灣正體/繁體中文 (OpenCC S2TWP)"
         id="btn-header-traditional"
       >
@@ -229,7 +260,7 @@
       <!-- Slide-out PDF / Web Drawer Toggle Button -->
       <button
         class="px-2.5 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 text-[#fabd2f] hover:text-[#fe8019] rounded-lg text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm {isPdfDrawerOpen ? '!bg-[#fe8019] !text-[#1d2021] font-semibold' : ''}"
-        on:click={() => dispatch('togglePdfDrawer')}
+        onclick={() => ontogglePdfDrawer?.()}
         title="開啟/收合原檔或原站側邊抽屜 (快捷鍵: Alt+P)"
       >
         <span class="material-symbols-outlined text-[14px]">{activePaper?.type === 'web' ? 'web' : 'picture_as_pdf'}</span>
@@ -239,8 +270,8 @@
     {/if}
     <!-- BYOK Status Pill -->
     <button
-      class="flex items-center gap-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#504945] px-2 py-1 rounded-lg transition-colors text-left"
-      on:click={openSettings}
+      class="flex items-center gap-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#504945] px-2 py-1 rounded-lg transition-colors text-left cursor-pointer"
+      onclick={openSettings}
       title="{modelName} · {cachedInfo} · 點擊設定 BYOK API 金鑰與模型"
     >
       <span class="h-2 w-2 rounded-full bg-[#fabd2f] animate-pulse"></span>
@@ -258,11 +289,11 @@
     {#if currentMainView === 'workspace'}
       <!-- Zoom Controller -->
       <div class="flex items-center bg-[#282828] border border-[#3c3836] rounded-lg p-0.5 text-[#d5c4a1]">
-        <button class="w-5 h-5 flex items-center justify-center hover:bg-[#3c3836] hover:text-[#ebdbb2] rounded transition-colors" on:click={() => adjustZoom(-10)}>
+        <button class="w-5 h-5 flex items-center justify-center hover:bg-[#3c3836] hover:text-[#ebdbb2] rounded transition-colors cursor-pointer" onclick={() => adjustZoom(-10)}>
           <span class="material-symbols-outlined text-[13px]">remove</span>
         </button>
         <span class="font-mono text-[10px] px-1 text-[#ebdbb2] select-none font-medium">{zoomLevel}%</span>
-        <button class="w-5 h-5 flex items-center justify-center hover:bg-[#3c3836] hover:text-[#ebdbb2] rounded transition-colors" on:click={() => adjustZoom(10)}>
+        <button class="w-5 h-5 flex items-center justify-center hover:bg-[#3c3836] hover:text-[#ebdbb2] rounded transition-colors cursor-pointer" onclick={() => adjustZoom(10)}>
           <span class="material-symbols-outlined text-[13px]">add</span>
         </button>
       </div>
@@ -274,7 +305,7 @@
       <div class="relative" id="theme-switcher-container">
         <button
           class="w-7 h-7 rounded-lg flex items-center justify-center text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2] transition-colors cursor-pointer {isThemeDropdownOpen ? 'bg-[#3c3836] text-[#fe8019]' : ''}"
-          on:click|stopPropagation={() => isThemeDropdownOpen = !isThemeDropdownOpen}
+          onclick={(e) => { e.stopPropagation(); isThemeDropdownOpen = !isThemeDropdownOpen; }}
           title="切換介面主題 (當前：{$currentTheme})"
           id="btn-theme-switcher"
         >
@@ -285,7 +316,7 @@
           <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
           <div
             class="absolute right-0 top-9 w-64 bg-[#282828] border border-[#504945] rounded-xl shadow-2xl z-50 p-2 flex flex-col gap-1 max-h-96 overflow-y-auto animate-fade-in"
-            on:click|stopPropagation
+            onclick={(e) => e.stopPropagation()}
           >
             <div class="px-2 py-1.5 border-b border-[#3c3836] flex items-center justify-between">
               <span class="font-mono text-[11px] text-[#ebdbb2] font-semibold flex items-center gap-1">
@@ -301,7 +332,7 @@
               {#each THEMES as t}
                 <button
                   class="w-full px-2 py-1.5 rounded-lg flex items-center justify-between transition-all text-left group cursor-pointer {t.id === $currentTheme ? 'bg-[#3c3836] border border-[#fe8019]/50' : 'hover:bg-[#32302f] border border-transparent'}"
-                  on:click={() => { setTheme(t.id); isThemeDropdownOpen = false; }}
+                  onclick={() => { setTheme(t.id); isThemeDropdownOpen = false; }}
                 >
                   <div class="flex items-center gap-2 min-w-0">
                     <!-- Swatch preview -->
@@ -333,12 +364,12 @@
 
       <button
         class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer {currentMainView === 'notes' ? 'bg-[#3c3836] text-[#fabd2f]' : 'text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2]'}"
-        on:click={exportNotes}
+        onclick={exportNotes}
         title="開啟精讀筆記工作室"
       >
         <span class="material-symbols-outlined text-[16px]">draw</span>
       </button>
-      <button class="w-7 h-7 rounded-lg flex items-center justify-center text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2] transition-colors" on:click={openSettings} title="BYOK 與系統設定">
+      <button class="w-7 h-7 rounded-lg flex items-center justify-center text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2] transition-colors cursor-pointer" onclick={openSettings} title="BYOK 與系統設定">
         <span class="material-symbols-outlined text-[16px]">settings</span>
       </button>
     </div>

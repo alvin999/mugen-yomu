@@ -326,18 +326,18 @@
     memoryUsageMb={localMemoryMb}
     memoryPercent={localMemoryPercent}
     memoryTooltip={localMemoryTooltip}
-    on:toggleCollapse={(e) => isRailCollapsed = e.detail.isCollapsed}
-    on:navigate={(e) => {
-      if (e.detail.path === 'paper-repository') {
+    ontoggleCollapse={(data) => isRailCollapsed = data.isCollapsed}
+    onnavigate={(data) => {
+      if (data.path === 'paper-repository') {
         currentMainView = 'repository';
-      } else if (e.detail.path === 'cognitive-notes') {
+      } else if (data.path === 'cognitive-notes') {
         currentMainView = 'notes';
-      } else if (e.detail.path === 'citation-graph') {
+      } else if (data.path === 'citation-graph') {
         currentMainView = 'citation-graph';
-      } else if (e.detail.path === 'prompt-formula-lab') {
+      } else if (data.path === 'prompt-formula-lab') {
         currentMainView = 'workspace';
         readingMode = 'figures';
-      } else if (e.detail.path === 'reading-workspace') {
+      } else if (data.path === 'reading-workspace') {
         currentMainView = 'workspace';
         if (readingMode === 'figures') {
           readingMode = 'bilingual';
@@ -359,16 +359,16 @@
       {isRailCollapsed}
       {cacheStats}
       {currentMainView}
-      on:modeChange={handleModeChange}
-      on:zoomChange={handleZoomChange}
-      on:togglePdfDrawer={() => isPdfDrawerOpen = !isPdfDrawerOpen}
-      on:openSettings={() => isByokOpen = true}
-      on:openRepository={() => currentMainView = 'repository'}
-      on:openImport={() => isImportOpen = true}
-      on:exportNotes={() => currentMainView = 'notes'}
-      on:backToWorkspace={() => currentMainView = 'workspace'}
-      on:convertToTraditional={() => handleConvertToTraditional()}
-      on:deleteCurrentPaper={(e) => handleDeletePaperDirect(e.detail.paperId)}
+      onmodeChange={handleModeChange}
+      onzoomChange={handleZoomChange}
+      ontogglePdfDrawer={() => isPdfDrawerOpen = !isPdfDrawerOpen}
+      onopenSettings={() => isByokOpen = true}
+      onopenRepository={() => currentMainView = 'repository'}
+      onopenImport={() => isImportOpen = true}
+      onexportNotes={() => currentMainView = 'notes'}
+      onbackToWorkspace={() => currentMainView = 'workspace'}
+      onconvertToTraditional={() => handleConvertToTraditional()}
+      ondeleteCurrentPaper={(data) => handleDeletePaperDirect(data.paperId)}
     />
 
     <!-- Main Dynamic Route View Frame (pushed down by 64px header) -->
@@ -379,21 +379,21 @@
           {activePaperId}
           {localMemoryMb}
           {cacheStats}
-          on:selectPaper={(e) => { setPaper(e.detail.paper); currentMainView = 'workspace'; }}
-          on:changeActivePaper={(e) => setPaper(e.detail.paper)}
-          on:openCitationGraph={(e) => { setPaper(e.detail.paper); currentMainView = 'citation-graph'; }}
-          on:openNotes={(e) => { setPaper(e.detail.paper); currentMainView = 'notes'; }}
-          on:openImport={() => isImportOpen = true}
-          on:updateLibrary={(e) => {
-            paperLibrary = e.detail.library;
+          onselectPaper={(data) => { setPaper(data.paper); currentMainView = 'workspace'; }}
+          onchangeActivePaper={(data) => setPaper(data.paper)}
+          onopenCitationGraph={(data) => { setPaper(data.paper); currentMainView = 'citation-graph'; }}
+          onopenNotes={(data) => { setPaper(data.paper); currentMainView = 'notes'; }}
+          onopenImport={() => isImportOpen = true}
+          onupdateLibrary={(data) => {
+            paperLibrary = data.library;
             refreshCacheStats();
             if (activePaper && !paperLibrary.some(p => p.id === activePaper?.id)) {
               const next = paperLibrary.length > 0 ? paperLibrary[0] : null;
               if (next) setPaper(next);
             }
           }}
-          on:convertToTraditional={(e) => handleConvertToTraditional(e.detail.paper)}
-          on:backToWorkspace={() => currentMainView = 'workspace'}
+          onconvertToTraditional={(data) => handleConvertToTraditional(data.paper)}
+          onbackToWorkspace={() => currentMainView = 'workspace'}
         />
       {:else if currentMainView === 'notes'}
         <CognitiveNotesView

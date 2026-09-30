@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import type { PaperDocument } from '../../stores/documentStore';
   import {
     saveLibraryToStorage,
@@ -9,24 +8,38 @@
   } from '../../stores/documentStore';
   import DeletePaperConfirmModal from '../common/DeletePaperConfirmModal.svelte';
 
-  export let isOpen: boolean = false;
-  export let library: PaperDocument[] = [];
-  export let activePaperId: string = '';
+  interface Props {
+    isOpen?: boolean;
+    library?: PaperDocument[];
+    activePaperId?: string;
+    onclose?: () => void;
+    onselectPaper?: (data: { paper: PaperDocument }) => void;
+    onupdateLibrary?: (data: { library: PaperDocument[] }) => void;
+    onopenImport?: () => void;
+  }
 
-  let paperToDelete: PaperDocument | null = null;
-  let isDeleteModalOpen: boolean = false;
+  let {
+    isOpen = $bindable(false),
+    library = $bindable([]),
+    activePaperId = $bindable(''),
+    onclose,
+    onselectPaper,
+    onupdateLibrary,
+    onopenImport
+  }: Props = $props();
 
-  const dispatch = createEventDispatcher();
+  let paperToDelete: PaperDocument | null = $state(null);
+  let isDeleteModalOpen: boolean = $state(false);
 
   function close() {
     isOpen = false;
-    dispatch('close');
+    onclose?.();
   }
 
   function handleSelectPaper(paper: PaperDocument) {
     activePaperId = paper.id;
     setActivePaperId(paper.id);
-    dispatch('selectPaper', { paper });
+    onselectPaper?.({ paper });
     close();
   }
 
@@ -42,14 +55,14 @@
     try {
       const { updatedLibrary, nextActivePaper } = deletePaperFromLibrary(library, id);
       library = updatedLibrary;
-      dispatch('updateLibrary', { library });
+      onupdateLibrary?.({ library });
 
       // 若刪除的是當前閱讀文章，切換至備選文章
       if (activePaperId === id) {
         if (nextActivePaper) {
           activePaperId = nextActivePaper.id;
           setActivePaperId(nextActivePaper.id);
-          dispatch('selectPaper', { paper: nextActivePaper });
+          onselectPaper?.({ paper: nextActivePaper });
         }
       }
     } catch (err: any) {
@@ -61,7 +74,7 @@
   }
 
   function handleOpenImport() {
-    dispatch('openImport');
+    onopenImport?.();
   }
 
   function handleExportBackup() {
@@ -84,8 +97,8 @@
       tabindex="-1"
       aria-label="關閉文獻庫側邊面板"
       class="fixed inset-0 bg-black/60 backdrop-blur-sm cursor-default"
-      on:click={close}
-      on:keydown={(e) => (e.key === 'Escape' || e.key === 'Enter') && close()}
+      onclick={close}
+      onkeydown={(e) => (e.key === 'Escape' || e.key === 'Enter') && close()}
     ></div>
 
     <!-- Slide-in Drawer -->
@@ -105,8 +118,8 @@
         </div>
 
         <button
-          class="w-7 h-7 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]"
-          on:click={close}
+          class="w-7 h-7 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828] cursor-pointer"
+          onclick={close}
         >
           <span class="material-symbols-outlined text-[18px]">close</span>
         </button>
@@ -115,16 +128,16 @@
       <!-- Action Toolbar -->
       <div class="p-3 bg-[#1d2021] border-b border-[#3c3836] flex items-center gap-2">
         <button
-          class="flex-1 py-1.5 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 transition-colors shadow-sm"
-          on:click={handleOpenImport}
+          class="flex-1 py-1.5 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold text-xs rounded-lg flex items-center justify-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+          onclick={handleOpenImport}
         >
           <span class="material-symbols-outlined text-[15px]">add_circle</span>
           匯入新論文 / 網頁
         </button>
 
         <button
-          class="px-3 py-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] text-xs font-mono rounded-lg flex items-center gap-1 transition-colors"
-          on:click={handleExportBackup}
+          class="px-3 py-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] text-xs font-mono rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+          onclick={handleExportBackup}
           title="匯出本機文獻庫備份 (JSON)"
         >
           <span class="material-symbols-outlined text-[15px]">download</span>
@@ -139,8 +152,8 @@
             role="button"
             tabindex="0"
             class="bg-[#282828] border rounded-xl p-3 flex flex-col gap-2 transition-all cursor-pointer hover:border-[#504945] {paper.id === activePaperId ? 'border-[#fe8019] shadow-[0_0_12px_rgba(254,128,25,0.2)] bg-[#32302f]' : 'border-[#3c3836]'}"
-            on:click={() => handleSelectPaper(paper)}
-            on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleSelectPaper(paper)}
+            onclick={() => handleSelectPaper(paper)}
+            onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleSelectPaper(paper)}
           >
             <div class="flex items-center justify-between">
               <!-- Type & Venue Badge -->
@@ -169,7 +182,7 @@
                   type="button"
                   class="w-6 h-6 rounded flex items-center justify-center text-[#a89984] hover:text-[#fb4934] hover:bg-[#1d2021] transition-colors cursor-pointer"
                   title="刪除文章"
-                  on:click={(e) => promptDeletePaper(paper.id, e)}
+                  onclick={(e) => promptDeletePaper(paper.id, e)}
                 >
                   <span class="material-symbols-outlined text-[14px]">delete</span>
                 </button>

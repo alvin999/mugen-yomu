@@ -1,14 +1,25 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  interface Props {
+    currentPath?: string;
+    memoryUsageMb?: number;
+    memoryPercent?: number;
+    memoryTooltip?: string;
+    paperCount?: number;
+    isCollapsed?: boolean;
+    ontoggleCollapse?: (data: { isCollapsed: boolean }) => void;
+    onnavigate?: (data: { path: string }) => void;
+  }
 
-  export let currentPath: string = 'reading-workspace';
-  export let memoryUsageMb: number = 0.8;
-  export let memoryPercent: number = 1;
-  export let memoryTooltip: string = '本機 IndexedDB 快取與文獻庫';
-  export let paperCount: number = 3;
-  export let isCollapsed: boolean = false;
-
-  const dispatch = createEventDispatcher();
+  let {
+    currentPath = $bindable('reading-workspace'),
+    memoryUsageMb = 0.8,
+    memoryPercent = 1,
+    memoryTooltip = '本機 IndexedDB 快取與文獻庫',
+    paperCount = 3,
+    isCollapsed = $bindable(false),
+    ontoggleCollapse,
+    onnavigate
+  }: Props = $props();
 
   const navItems = [
     { id: 'reading-workspace', label: 'Reading Workspace', icon: 'menu_book' },
@@ -20,12 +31,12 @@
 
   function toggleCollapse() {
     isCollapsed = !isCollapsed;
-    dispatch('toggleCollapse', { isCollapsed });
+    ontoggleCollapse?.({ isCollapsed });
   }
 
   function handleNavClick(id: string) {
     currentPath = id;
-    dispatch('navigate', { path: id });
+    onnavigate?.({ path: id });
   }
 </script>
 
@@ -40,8 +51,8 @@
         <div class="flex items-center gap-1">
           <span class="font-mono text-[10px] text-[#fe8019] bg-[#fe8019]/10 border border-[#fe8019]/40 px-1.5 py-0.5 rounded font-semibold tracking-wider">BETA</span>
           <button
-            class="w-6 h-6 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828] transition-colors"
-            on:click={toggleCollapse}
+            class="w-6 h-6 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828] transition-colors cursor-pointer"
+            onclick={toggleCollapse}
             title="收合成 64px 緊湊導航條"
           >
             <span class="material-symbols-outlined text-[16px]">menu_open</span>
@@ -49,8 +60,8 @@
         </div>
       {:else}
         <button
-          class="w-10 h-10 rounded-lg flex items-center justify-center text-[#fe8019] bg-[#282828] border border-[#3c3836] hover:bg-[#32302f] transition-colors shadow-sm"
-          on:click={toggleCollapse}
+          class="w-10 h-10 rounded-lg flex items-center justify-center text-[#fe8019] bg-[#282828] border border-[#3c3836] hover:bg-[#32302f] transition-colors shadow-sm cursor-pointer"
+          onclick={toggleCollapse}
           title="展開導航欄 (240px)"
         >
           <span class="material-symbols-outlined text-[20px]">menu</span>
@@ -62,8 +73,8 @@
     <nav class="flex flex-col gap-1 {isCollapsed ? 'px-1.5' : 'px-2'}">
       {#each navItems as item}
         <button
-          class="w-full flex items-center rounded-lg text-left transition-colors relative group {isCollapsed ? 'justify-center p-2.5' : 'justify-between px-3 py-2'} {currentPath === item.id ? 'bg-[#3c3836] text-[#fe8019] font-semibold border-l-2 border-[#fe8019]' : 'text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2]'}"
-          on:click={() => handleNavClick(item.id)}
+          class="w-full flex items-center rounded-lg text-left transition-colors relative group cursor-pointer {isCollapsed ? 'justify-center p-2.5' : 'justify-between px-3 py-2'} {currentPath === item.id ? 'bg-[#3c3836] text-[#fe8019] font-semibold border-l-2 border-[#fe8019]' : 'text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2]'}"
+          onclick={() => handleNavClick(item.id)}
           title={item.label}
         >
           <div class="flex items-center gap-2.5">

@@ -1,19 +1,29 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import type { PaperDocument } from '../../stores/documentStore';
 
-  export let papers: PaperDocument[] = [];
-  export let activePaperId: string = '';
-  export let progressMap: Record<string, number> = {};
-  export let notesCountMap: Record<string, number> = {};
+  interface Props {
+    papers?: PaperDocument[];
+    activePaperId?: string;
+    progressMap?: Record<string, number>;
+    notesCountMap?: Record<string, number>;
+    onselect?: (data: { paper: PaperDocument }) => void;
+    onviewCitation?: (data: { paper: PaperDocument }) => void;
+    onviewNotes?: (data: { paper: PaperDocument }) => void;
+    onpreview?: (data: { paper: PaperDocument }) => void;
+    ondelete?: (data: { id: string }) => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    select: { paper: PaperDocument };
-    viewCitation: { paper: PaperDocument };
-    viewNotes: { paper: PaperDocument };
-    preview: { paper: PaperDocument };
-    delete: { id: string };
-  }>();
+  let {
+    papers = [],
+    activePaperId = '',
+    progressMap = {},
+    notesCountMap = {},
+    onselect,
+    onviewCitation,
+    onviewNotes,
+    onpreview,
+    ondelete
+  }: Props = $props();
 </script>
 
 <div class="w-full overflow-x-auto bg-[#1d2021] border border-[#3c3836] rounded-xl select-none">
@@ -66,8 +76,8 @@
           <td class="py-3 px-4">
             <div class="flex flex-col gap-0.5">
               <button
-                class="text-left font-bold text-[#ebdbb2] hover:text-[#fe8019] transition-colors truncate max-w-md block"
-                on:click={() => dispatch('select', { paper })}
+                class="text-left font-bold text-[#ebdbb2] hover:text-[#fe8019] transition-colors truncate max-w-md block cursor-pointer"
+                onclick={() => onselect?.({ paper })}
                 title={paper.title}
               >
                 {paper.title}
@@ -112,37 +122,37 @@
           <td class="py-3 px-4 text-right">
             <div class="inline-flex items-center gap-1.5">
               <button
-                class="px-2 py-1 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold text-xs rounded transition-colors"
-                on:click={() => dispatch('select', { paper })}
+                class="px-2 py-1 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold text-xs rounded transition-colors cursor-pointer"
+                onclick={() => onselect?.({ paper })}
                 title="進入閱讀工作台"
               >
                 研讀
               </button>
               <button
-                class="p-1 text-[#a89984] hover:text-[#83a598] hover:bg-[#282828] rounded transition-colors"
-                on:click={() => dispatch('viewCitation', { paper })}
+                class="p-1 text-[#a89984] hover:text-[#83a598] hover:bg-[#282828] rounded transition-colors cursor-pointer"
+                onclick={() => onviewCitation?.({ paper })}
                 title="引文星系圖譜"
               >
                 <span class="material-symbols-outlined text-[16px]">hub</span>
               </button>
               <button
-                class="p-1 text-[#a89984] hover:text-[#fabd2f] hover:bg-[#282828] rounded transition-colors"
-                on:click={() => dispatch('viewNotes', { paper })}
+                class="p-1 text-[#a89984] hover:text-[#fabd2f] hover:bg-[#282828] rounded transition-colors cursor-pointer"
+                onclick={() => onviewNotes?.({ paper })}
                 title="查看精讀筆記"
               >
                 <span class="material-symbols-outlined text-[16px]">draw</span>
               </button>
               <button
-                class="p-1 text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828] rounded transition-colors"
-                on:click={() => dispatch('preview', { paper })}
+                class="p-1 text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828] rounded transition-colors cursor-pointer"
+                onclick={() => onpreview?.({ paper })}
                 title="預覽大綱"
               >
                 <span class="material-symbols-outlined text-[16px]">visibility</span>
               </button>
               <button
                 type="button"
-                class="p-1 text-[#7c6f64] hover:text-[#fb4934] hover:bg-[#282828] rounded transition-colors"
-                on:click|stopPropagation={() => dispatch('delete', { id: paper.id })}
+                class="p-1 text-[#7c6f64] hover:text-[#fb4934] hover:bg-[#282828] rounded transition-colors cursor-pointer"
+                onclick={(e) => { e.stopPropagation(); ondelete?.({ id: paper.id }); }}
                 title="移除文獻"
               >
                 <span class="material-symbols-outlined text-[16px]">delete</span>

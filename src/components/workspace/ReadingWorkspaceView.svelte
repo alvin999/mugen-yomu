@@ -531,7 +531,7 @@
     focusTrack="{activeContextText} · Depth Level: {activePaper?.depthLevel || 'Academic Rigor'}"
     flowWpm={activePaper?.readingSpeedWpm || 265}
     embeddingDim={384}
-    on:openSemanticSearch={() => isSemanticSearchOpen = true}
+    onopenSemanticSearch={() => isSemanticSearchOpen = true}
   />
 
   <!-- Workspace Studio Layout -->

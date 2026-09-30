@@ -1,33 +1,47 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import type { CacheStats } from '../../services/cacheService';
 
-  export let totalPapers: number = 0;
-  export let readCount: number = 0;
-  export let inProgressCount: number = 0;
-  export let localMemoryMb: number = 0.8;
-  export let cacheStats: CacheStats | null = null;
-  export let searchQuery: string = '';
-  export let sortBy: 'recent' | 'progress' | 'title' | 'sections' = 'recent';
-  export let viewMode: 'grid' | 'table' = 'grid';
+  interface Props {
+    totalPapers?: number;
+    readCount?: number;
+    inProgressCount?: number;
+    localMemoryMb?: number;
+    cacheStats?: CacheStats | null;
+    searchQuery?: string;
+    sortBy?: 'recent' | 'progress' | 'title' | 'sections';
+    viewMode?: 'grid' | 'table';
+    onsearch?: (data: { query: string }) => void;
+    onsortChange?: (data: { sortBy: 'recent' | 'progress' | 'title' | 'sections' }) => void;
+    onviewModeChange?: (data: { mode: 'grid' | 'table' }) => void;
+    onopenImport?: () => void;
+    onexportBackup?: () => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    search: { query: string };
-    sortChange: { sortBy: 'recent' | 'progress' | 'title' | 'sections' };
-    viewModeChange: { mode: 'grid' | 'table' };
-    openImport: void;
-    exportBackup: void;
-  }>();
+  let {
+    totalPapers = 0,
+    readCount = 0,
+    inProgressCount = 0,
+    localMemoryMb = 0.8,
+    cacheStats = null,
+    searchQuery = $bindable(''),
+    sortBy = $bindable('recent'),
+    viewMode = $bindable('grid'),
+    onsearch,
+    onsortChange,
+    onviewModeChange,
+    onopenImport,
+    onexportBackup
+  }: Props = $props();
 
   function handleSearchInput(e: Event) {
     const query = (e.target as HTMLInputElement).value;
     searchQuery = query;
-    dispatch('search', { query });
+    onsearch?.({ query });
   }
 
   function handleSortChange(e: Event) {
     sortBy = (e.target as HTMLSelectElement).value as any;
-    dispatch('sortChange', { sortBy });
+    onsortChange?.({ sortBy });
   }
 </script>
 
@@ -91,14 +105,14 @@
       <input
         type="text"
         value={searchQuery}
-        on:input={handleSearchInput}
+        oninput={handleSearchInput}
         placeholder="搜尋文獻名稱、作者、arXiv ID、出處..."
         class="w-full bg-[#282828] border border-[#3c3836] focus:border-[#fe8019] text-[#ebdbb2] placeholder-[#7c6f64] rounded-lg pl-9 pr-8 py-1.5 text-xs outline-none transition-colors"
       />
       {#if searchQuery}
         <button
           class="absolute right-2.5 top-2 text-[#7c6f64] hover:text-[#ebdbb2]"
-          on:click={() => { searchQuery = ''; dispatch('search', { query: '' }); }}
+          onclick={() => { searchQuery = ''; onsearch?.({ query: '' }); }}
         >
           <span class="material-symbols-outlined text-[14px]">close</span>
         </button>
@@ -112,7 +126,7 @@
         <span class="material-symbols-outlined text-[14px] text-[#a89984]">sort</span>
         <select
           value={sortBy}
-          on:change={handleSortChange}
+          onchange={handleSortChange}
           class="bg-transparent text-xs text-[#ebdbb2] outline-none cursor-pointer font-mono"
         >
           <option value="recent" class="bg-[#282828]">最近研讀</option>
@@ -126,14 +140,14 @@
       <div class="flex items-center bg-[#282828] border border-[#3c3836] rounded-lg p-0.5">
         <button
           class="p-1 rounded flex items-center justify-center transition-colors {viewMode === 'grid' ? 'bg-[#3c3836] text-[#fe8019]' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
-          on:click={() => { viewMode = 'grid'; dispatch('viewModeChange', { mode: 'grid' }); }}
+          onclick={() => { viewMode = 'grid'; onviewModeChange?.({ mode: 'grid' }); }}
           title="Bento 網格檢視"
         >
           <span class="material-symbols-outlined text-[16px]">grid_view</span>
         </button>
         <button
           class="p-1 rounded flex items-center justify-center transition-colors {viewMode === 'table' ? 'bg-[#3c3836] text-[#fe8019]' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
-          on:click={() => { viewMode = 'table'; dispatch('viewModeChange', { mode: 'table' }); }}
+          onclick={() => { viewMode = 'table'; onviewModeChange?.({ mode: 'table' }); }}
           title="密集清單檢視"
         >
           <span class="material-symbols-outlined text-[16px]">table_rows</span>
@@ -145,7 +159,7 @@
       <!-- Export Backup Button -->
       <button
         class="px-2.5 py-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#a89984] text-[#a89984] hover:text-[#ebdbb2] rounded-lg text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
-        on:click={() => dispatch('exportBackup')}
+        onclick={() => onexportBackup?.()}
         title="匯出文獻庫 JSON 備份"
       >
         <span class="material-symbols-outlined text-[15px]">download</span>
@@ -155,7 +169,7 @@
       <!-- Import Paper Button -->
       <button
         class="px-3 py-1.5 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold rounded-lg text-xs flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
-        on:click={() => dispatch('openImport')}
+        onclick={() => onopenImport?.()}
       >
         <span class="material-symbols-outlined text-[16px]">add_circle</span>
         <span>匯入新文獻</span>

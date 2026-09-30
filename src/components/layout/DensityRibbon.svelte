@@ -1,32 +1,41 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { flowStore } from '../../stores/flowStore';
   import { embeddingStore } from '../../stores/embeddingStore';
   import FlowCockpitModal from './FlowCockpitModal.svelte';
 
-  export let focusTrack: string = '§ 3.2 Attention Mechanism · Depth Level: Formal Derivation';
-  export let flowWpm: number = 265;
-  export let embeddingDim: number = 384;
-
-  const dispatch = createEventDispatcher();
-  let isCockpitOpen: boolean = false;
-
-  $: activeEngineLabel = `語意檢索 (${embeddingDim}-dim)`;
-
-  function handleOpenSemanticRadar() {
-    dispatch('openSemanticSearch');
+  interface Props {
+    focusTrack?: string;
+    flowWpm?: number;
+    embeddingDim?: number;
+    onopenSemanticSearch?: () => void;
+    onopenCockpit?: () => void;
   }
 
-  $: currentTelemetry = $flowStore;
-  $: displayWpm = currentTelemetry?.currentWpm || flowWpm;
-  $: activeColor = currentTelemetry?.stateColor || '#b8bb26';
-  $: activeLabel = currentTelemetry?.stateLabel || '沉浸心流 ⚡';
-  $: isPaused = currentTelemetry?.isPaused || false;
-  $: isPacerActive = currentTelemetry?.isPacerActive || false;
+  let {
+    focusTrack = '§ 3.2 Attention Mechanism · Depth Level: Formal Derivation',
+    flowWpm = 265,
+    embeddingDim = 384,
+    onopenSemanticSearch,
+    onopenCockpit
+  }: Props = $props();
+
+  let isCockpitOpen: boolean = $state(false);
+
+  let activeEngineLabel = $derived(`語意檢索 (${embeddingDim}-dim)`);
+  let currentTelemetry = $derived($flowStore);
+  let displayWpm = $derived(currentTelemetry?.currentWpm || flowWpm);
+  let activeColor = $derived(currentTelemetry?.stateColor || '#b8bb26');
+  let activeLabel = $derived(currentTelemetry?.stateLabel || '沉浸心流 ⚡');
+  let isPaused = $derived(currentTelemetry?.isPaused || false);
+  let isPacerActive = $derived(currentTelemetry?.isPacerActive || false);
+
+  function handleOpenSemanticRadar() {
+    onopenSemanticSearch?.();
+  }
 
   function handleOpenCockpit() {
     isCockpitOpen = true;
-    dispatch('openCockpit');
+    onopenCockpit?.();
   }
 </script>
 
@@ -44,7 +53,7 @@
       type="button"
       class="flex items-center gap-1.5 font-mono text-[11px] px-2 py-0.5 rounded border transition-all cursor-pointer shadow-xs group {isPacerActive ? 'ring-1 ring-[#fe8019]/50' : ''} hover:brightness-110 active:scale-98"
       style="background-color: {activeColor}15; border-color: {activeColor}40; color: {activeColor};"
-      on:click={handleOpenCockpit}
+      onclick={handleOpenCockpit}
       title="點擊開啟閱讀心流與眼動遙測儀表板 (Flow Cockpit)"
     >
       <span class="material-symbols-outlined text-[13px] animate-pulse" style="color: {activeColor};">
@@ -73,7 +82,7 @@
     <button
       type="button"
       class="flex items-center gap-1.5 font-mono text-[11px] px-2 py-0.5 rounded border border-[#fabd2f]/30 bg-[#fabd2f]/10 text-[#fabd2f] hover:bg-[#fabd2f]/20 hover:border-[#fabd2f]/50 transition-all cursor-pointer shadow-xs active:scale-98 group"
-      on:click={handleOpenSemanticRadar}
+      onclick={handleOpenSemanticRadar}
       title="點擊開啟語意檢索雷達 (支援跨語言自然語意段落搜尋與 Local RAG)"
     >
       <span class="material-symbols-outlined text-[13px] text-[#fe8019] animate-pulse">radar</span>
@@ -88,4 +97,3 @@
   isOpen={isCockpitOpen}
   onclose={() => isCockpitOpen = false}
 />
-

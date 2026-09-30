@@ -1,24 +1,35 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import type { PaperDocument } from '../../stores/documentStore';
 
-  export let paper: PaperDocument | null = null;
-  export let isOpen: boolean = false;
-  export let progressPercent: number = 0;
-  export let notesCount: number = 0;
+  interface Props {
+    paper?: PaperDocument | null;
+    isOpen?: boolean;
+    progressPercent?: number;
+    notesCount?: number;
+    onclose?: () => void;
+    onselect?: (data: { paper: PaperDocument }) => void;
+    onviewCitation?: (data: { paper: PaperDocument }) => void;
+    onviewNotes?: (data: { paper: PaperDocument }) => void;
+    ondelete?: (data: { id: string }) => void;
+    onconvertToTraditional?: (data: { paper: PaperDocument }) => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    close: void;
-    select: { paper: PaperDocument };
-    viewCitation: { paper: PaperDocument };
-    viewNotes: { paper: PaperDocument };
-    delete: { id: string };
-    convertToTraditional: { paper: PaperDocument };
-  }>();
+  let {
+    paper = null,
+    isOpen = $bindable(false),
+    progressPercent = 0,
+    notesCount = 0,
+    onclose,
+    onselect,
+    onviewCitation,
+    onviewNotes,
+    ondelete,
+    onconvertToTraditional
+  }: Props = $props();
 
   function close() {
     isOpen = false;
-    dispatch('close');
+    onclose?.();
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -28,14 +39,14 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 {#if isOpen && paper}
   <!-- Backdrop for inspector drawer -->
   <div
     class="fixed inset-0 bg-black/50 backdrop-blur-xs z-40 transition-opacity"
-    on:click={close}
-    on:keydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') close(); }}
+    onclick={close}
+    onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') close(); }}
     role="button"
     tabindex="-1"
     aria-label="點擊關閉預覽抽屜"
@@ -52,8 +63,8 @@
         <span class="font-bold text-xs text-[#ebdbb2]">文獻卷宗大綱預覽</span>
       </div>
       <button
-        class="w-7 h-7 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828] transition-colors"
-        on:click={close}
+        class="w-7 h-7 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828] transition-colors cursor-pointer"
+        onclick={close}
         title="關閉 (ESC)"
       >
         <span class="material-symbols-outlined text-[18px]">close</span>
@@ -160,7 +171,7 @@
     <div class="p-3 bg-[#141617] border-t border-[#3c3836] flex items-center gap-2 shrink-0 select-none">
       <button
         class="flex-1 py-2 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-bold text-xs rounded-lg flex items-center justify-center gap-1.5 transition-colors shadow-sm cursor-pointer"
-        on:click={() => { dispatch('select', { paper }); close(); }}
+        onclick={() => { onselect?.({ paper }); close(); }}
       >
         <span class="material-symbols-outlined text-[16px]">menu_book</span>
         <span>立即進入研讀工作台</span>
@@ -168,7 +179,7 @@
 
       <button
         class="px-3 py-2 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#8ec07c]/60 text-[#8ec07c] hover:text-[#b8bb26] rounded-lg text-xs font-mono flex items-center gap-1 transition-colors cursor-pointer"
-        on:click={() => { dispatch('convertToTraditional', { paper }); }}
+        onclick={() => { onconvertToTraditional?.({ paper }); }}
         title="將此文獻轉換為台灣正體/繁體中文 (OpenCC S2TWP)"
       >
         <span class="material-symbols-outlined text-[16px]">translate</span>
@@ -177,7 +188,7 @@
 
       <button
         class="px-3 py-2 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#83a598] hover:text-[#ebdbb2] rounded-lg text-xs font-mono flex items-center gap-1 transition-colors cursor-pointer"
-        on:click={() => { dispatch('viewCitation', { paper }); close(); }}
+        onclick={() => { onviewCitation?.({ paper }); close(); }}
         title="查看文獻引文圖譜"
       >
         <span class="material-symbols-outlined text-[16px]">hub</span>
@@ -185,7 +196,7 @@
 
       <button
         class="px-3 py-2 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#fabd2f] hover:text-[#ebdbb2] rounded-lg text-xs font-mono flex items-center gap-1 transition-colors cursor-pointer"
-        on:click={() => { dispatch('viewNotes', { paper }); close(); }}
+        onclick={() => { onviewNotes?.({ paper }); close(); }}
         title="查看精讀筆記"
       >
         <span class="material-symbols-outlined text-[16px]">draw</span>
@@ -194,7 +205,7 @@
       <button
         type="button"
         class="px-2.5 py-2 bg-[#282828] hover:bg-[#1d2021] border border-[#3c3836] hover:border-[#fb4934]/60 text-[#a89984] hover:text-[#fb4934] rounded-lg text-xs font-mono flex items-center gap-1 transition-colors cursor-pointer"
-        on:click={() => { if (paper) { dispatch('delete', { id: paper.id }); close(); } }}
+        onclick={() => { if (paper) { ondelete?.({ id: paper.id }); close(); } }}
         title="自文獻庫移除此文獻"
       >
         <span class="material-symbols-outlined text-[16px]">delete</span>
