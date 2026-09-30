@@ -406,42 +406,19 @@
     {/if}
 
     <!-- Paragraph Quick Micro-Toolbar -->
-    <div class="flex items-center justify-between opacity-0 group-hover/para:opacity-100 {isParaFocused ? '!opacity-100' : ''} transition-opacity duration-150 text-[11px] font-mono text-[#a89984] border-b border-[#3c3836]/40 pb-1 mb-0.5">
-      <div class="flex items-center gap-1.5">
-        <span class="text-[#fe8019] font-bold">¶ {pIndex + 1}</span>
-        {#if isParaFocused && readingMode !== 'zen'}
-          <span class="text-[10px] bg-[#fe8019]/15 text-[#fe8019] border border-[#fe8019]/40 px-1.5 py-0.2 rounded font-sans">研讀焦點</span>
-        {/if}
-        {#if isParaFocused && isPacerActive}
-          <span class="text-[10px] bg-[#fe8019]/15 text-[#fe8019] border border-[#fe8019]/40 px-1.5 py-0.2 rounded font-mono flex items-center gap-1">
-            <span class="material-symbols-outlined text-[11px] animate-pulse text-[#fabd2f]">auto_read_play</span>
-            <span>{targetPacingWpm} wpm 節奏中</span>
-          </span>
-        {/if}
+    {#if readingMode !== 'zen'}
+      <div class="flex items-center justify-between opacity-0 group-hover/para:opacity-100 {isParaFocused ? '!opacity-100' : ''} transition-opacity duration-150 text-[11px] font-mono text-[#a89984] border-b border-[#3c3836]/40 pb-1 mb-0.5">
+        <div class="flex items-center gap-1.5">
+          <span class="text-[#fe8019] font-bold">¶ {pIndex + 1}</span>
+          {#if isParaFocused && isPacerActive}
+            <span class="text-[10px] bg-[#fe8019]/15 text-[#fe8019] border border-[#fe8019]/40 px-1.5 py-0.2 rounded font-mono flex items-center gap-1">
+              <span class="material-symbols-outlined text-[11px] animate-pulse text-[#fabd2f]">auto_read_play</span>
+              <span>{targetPacingWpm} wpm 節奏中</span>
+            </span>
+          {/if}
+        </div>
       </div>
-      <div class="flex items-center gap-1.5">
-        {#if readingMode !== 'zen'}
-          <button
-            type="button"
-            class="flex items-center gap-1 bg-[#1d2021] hover:bg-[#3c3836] text-[#fabd2f] hover:text-[#fe8019] border border-[#504945] px-2 py-0.5 rounded cursor-pointer transition-colors shadow-xs"
-            onclick={(e) => { e.stopPropagation(); onaskCompanion?.({ sec, pIndex, text: para }); }}
-            title="將此段設為研讀焦點並向 AI 伴讀提問"
-          >
-            <span class="material-symbols-outlined text-[13px]">psychology</span>
-            <span>伴讀提問</span>
-          </button>
-        {/if}
-        <button
-          type="button"
-          class="flex items-center gap-1 bg-[#1d2021] hover:bg-[#3c3836] text-[#8ec07c] hover:text-[#b8bb26] border border-[#504945] px-2 py-0.5 rounded cursor-pointer transition-colors shadow-xs"
-          onclick={(e) => { e.stopPropagation(); ontoggleTranslation?.({ secId: sec.id, pIndex, text: para }); }}
-          title="切換繁體中文精確翻譯"
-        >
-          <span class="material-symbols-outlined text-[13px]">translate</span>
-          <span>{showTranslation ? '收起翻譯' : '逐段對照'}</span>
-        </button>
-      </div>
-    </div>
+    {/if}
 
     <!-- English paragraph with inline KaTeX math and typography -->
     <p class="para-main-text font-serif text-[17px] text-[#ebdbb2]/95 leading-[33px] text-justify w-full tracking-[0.01em] select-text break-words">
