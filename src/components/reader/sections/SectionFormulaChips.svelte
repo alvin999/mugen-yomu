@@ -1,16 +1,20 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import type { ChapterSection, FormulaItem } from '../../../types/document';
   import { renderMath } from '../../../utils/katexUtils';
 
-  // svelte-ignore export_let_unused
-  export let sec: ChapterSection | undefined = undefined;
-  export let formulas: FormulaItem[] = [];
+  interface Props {
+    sec?: ChapterSection;
+    formulas?: FormulaItem[];
+    onjumpToFormulaStudio?: (detail: { formula: FormulaItem }) => void;
+    onlocateFormula?: (detail: { formulaId: string }) => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    jumpToFormulaStudio: { formula: FormulaItem };
-    locateFormula: { formulaId: string };
-  }>();
+  let {
+    sec = undefined,
+    formulas = [],
+    onjumpToFormulaStudio,
+    onlocateFormula
+  }: Props = $props();
 </script>
 
 {#if formulas && formulas.length > 0}
@@ -30,7 +34,7 @@
           <div class="flex items-center gap-2">
             <button
               class="font-mono text-[11px] text-[#fe8019] hover:text-[#fabd2f] bg-[#282828] hover:bg-[#32302f] border border-[#fe8019]/40 px-2 py-0.5 rounded flex items-center gap-1 transition-colors cursor-pointer"
-              on:click|stopPropagation={() => dispatch('jumpToFormulaStudio', { formula })}
+              onclick={(e) => { e.stopPropagation(); onjumpToFormulaStudio?.({ formula }); }}
               title="前往推導對照工作台，檢視嚴謹分步數學證明與張量維度"
             >
               <span class="material-symbols-outlined text-[13px]">schema</span>
@@ -38,7 +42,7 @@
             </button>
             <button
               class="font-mono text-[11px] text-[#8ec07c] hover:text-[#b8bb26] bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] px-2 py-0.5 rounded flex items-center gap-1 transition-colors cursor-pointer"
-              on:click|stopPropagation={() => dispatch('locateFormula', { formulaId: formula.id })}
+              onclick={(e) => { e.stopPropagation(); onlocateFormula?.({ formulaId: formula.id }); }}
               title="在當前文獻中定位對應段落"
             >
               <span class="material-symbols-outlined text-[13px]">my_location</span>

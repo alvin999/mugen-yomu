@@ -1,38 +1,63 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import type { ChapterSection } from '../../../types/document';
   import type { NormalizedParagraphItem } from '../../../utils/paragraphUtils';
-  import { renderMath, escapeHtml, copyLatexToClipboard } from '../../../utils/katexUtils';
+  import { renderMath, escapeHtml } from '../../../utils/katexUtils';
   import { countWords } from '../../../stores/flowStore';
   import ThemeCodeBlock from '../../common/ThemeCodeBlock.svelte';
 
-  export let item: NormalizedParagraphItem;
-  export let sec: ChapterSection;
-  export let totalTextParas: number = 1;
-  export let readingMode: 'bilingual' | 'split' | 'zen' | 'figures' = 'bilingual';
-  export let isParaFocused: boolean = false;
-  export let isPacerActive: boolean = false;
-  export let targetPacingWpm: number = 240;
-  export let showTranslation: boolean = false;
-  export let isTranslating: boolean = false;
-  export let isTyping: boolean = false;
-  export let translationText: string = '';
-  export let translationSource: string = '';
-  export let translationNotice: string = '';
-  export let copyToastText: string | null = null;
+  interface Props {
+    item: NormalizedParagraphItem;
+    sec: ChapterSection;
+    totalTextParas?: number;
+    readingMode?: 'bilingual' | 'split' | 'zen' | 'figures';
+    isParaFocused?: boolean;
+    isPacerActive?: boolean;
+    targetPacingWpm?: number;
+    showTranslation?: boolean;
+    isTranslating?: boolean;
+    isTyping?: boolean;
+    translationText?: string;
+    translationSource?: string;
+    translationNotice?: string;
+    copyToastText?: string | null;
+    onparagraphClick?: (detail: { secId: string; pIndex: number; text: string; clickCharIdx?: number }) => void;
+    onaskCompanion?: (detail: { sec: ChapterSection; pIndex: number; text: string }) => void;
+    ontoggleTranslation?: (detail: { secId: string; pIndex: number; text: string }) => void;
+    onretranslate?: (detail: { secId: string; pIndex: number; text: string }) => void;
+    onopenLightbox?: (detail: { url: string; caption?: string }) => void;
+    oncopyLatex?: (detail: { latex: string }) => void;
+    oncopyTranslation?: (detail: { text: string }) => void;
+    onsaveNote?: (detail: { title: string; text: string }) => void;
+    onskipTyping?: () => void;
+    onopenSettings?: () => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    paragraphClick: { secId: string; pIndex: number; text: string; clickCharIdx?: number };
-    askCompanion: { sec: ChapterSection; pIndex: number; text: string };
-    toggleTranslation: { secId: string; pIndex: number; text: string };
-    retranslate: { secId: string; pIndex: number; text: string };
-    openLightbox: { url: string; caption?: string };
-    copyLatex: { latex: string };
-    copyTranslation: { text: string };
-    saveNote: { title: string; text: string };
-    skipTyping: void;
-    openSettings: void;
-  }>();
+  let {
+    item,
+    sec,
+    totalTextParas = 1,
+    readingMode = 'bilingual',
+    isParaFocused = false,
+    isPacerActive = false,
+    targetPacingWpm = 240,
+    showTranslation = false,
+    isTranslating = false,
+    isTyping = false,
+    translationText = '',
+    translationSource = '',
+    translationNotice = '',
+    copyToastText = null,
+    onparagraphClick,
+    onaskCompanion,
+    ontoggleTranslation,
+    onretranslate,
+    onopenLightbox,
+    oncopyLatex,
+    oncopyTranslation,
+    onsaveNote,
+    onskipTyping,
+    onopenSettings
+  }: Props = $props();
 
   function formatInlineMarkdown(escapedText: string): string {
     if (!escapedText) return '';
@@ -127,21 +152,15 @@
     return parts.join('');
   }
 
-  /**
-   * 對段落內一個點按事件，計算點擊位置最接近的字元 index
-   * 利用 caretRangeFromPoint / caretPositionFromPoint 準確定位
-   */
   function getClickCharIdx(e: MouseEvent, textRootEl: HTMLElement | null): number {
     if (!textRootEl) return 0;
     try {
-      // 標準方法 (Chrome/Safari)
       if ((document as any).caretRangeFromPoint) {
         const range = (document as any).caretRangeFromPoint(e.clientX, e.clientY) as Range | null;
         if (range && range.startContainer.nodeType === Node.TEXT_NODE) {
           return getCharIndexInTextRoot(textRootEl, range.startContainer as Text, range.startOffset);
         }
       }
-      // Firefox 備案
       if ((document as any).caretPositionFromPoint) {
         const pos = (document as any).caretPositionFromPoint(e.clientX, e.clientY);
         if (pos && pos.offsetNode && pos.offsetNode.nodeType === Node.TEXT_NODE) {
@@ -154,9 +173,6 @@
     return 0;
   }
 
-  /**
-   * 計算特定文字節點 (textNode) 內 offset 在整個 textRoot 下所有文字節點累積的全局 char index
-   */
   function getCharIndexInTextRoot(root: HTMLElement, targetNode: Text, targetOffset: number): number {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     let charCount = 0;
@@ -172,18 +188,16 @@
 
   function handleParagraphWrapperClick(e: MouseEvent, pIndex: number, paraText: string) {
     e.stopPropagation();
-    // 若正在選取文字（滑鼠拖曳反白），不觸發段落焦點切換，保護選取狀態
     if (typeof window !== 'undefined') {
       const selection = window.getSelection();
       if (selection && selection.toString().trim().length > 0) {
         return;
       }
     }
-    // 計算點擊字元 index：尋找段落內 .para-main-text 元素
     const paraEl = (e.currentTarget as HTMLElement);
     const textRoot = paraEl.querySelector<HTMLElement>('.para-main-text') || paraEl.querySelector<HTMLElement>('p');
     const clickCharIdx = getClickCharIdx(e, textRoot);
-    dispatch('paragraphClick', { secId: sec.id, pIndex, text: paraText, clickCharIdx });
+    onparagraphClick?.({ secId: sec.id, pIndex, text: paraText, clickCharIdx });
   }
 </script>
 
@@ -207,7 +221,7 @@
       <div class="flex items-center gap-2 text-[#a89984]">
         <button
           class="hover:text-[#fe8019] flex items-center gap-1 text-[11px] cursor-pointer"
-          on:click|stopPropagation={() => dispatch('openLightbox', { url: item.url || '', caption: item.alt })}
+          onclick={(e) => { e.stopPropagation(); onopenLightbox?.({ url: item.url || '', caption: item.alt }); }}
           title="放大檢視"
         >
           <span class="material-symbols-outlined text-[13px]">fullscreen</span>
@@ -228,7 +242,7 @@
     <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
     <div
       class="w-full flex items-center justify-center p-2 rounded bg-[#141617] border border-[#3c3836] overflow-hidden cursor-zoom-in"
-      on:click|stopPropagation={() => dispatch('openLightbox', { url: item.url || '', caption: item.alt })}
+      onclick={(e) => { e.stopPropagation(); onopenLightbox?.({ url: item.url || '', caption: item.alt }); }}
     >
       <img
         src={item.url}
@@ -273,7 +287,7 @@
         {/if}
         <button
           class="text-[#a89984] hover:text-[#ebdbb2] text-[11px] flex items-center gap-1 cursor-pointer transition-colors bg-[#282828] border border-[#3c3836] px-2 py-0.5 rounded"
-          on:click|stopPropagation={() => dispatch('copyLatex', { latex: item.latex || '' })}
+          onclick={(e) => { e.stopPropagation(); oncopyLatex?.({ latex: item.latex || '' }); }}
           title="複製 LaTeX 程式原始碼"
         >
           <span class="material-symbols-outlined text-[13px]">content_copy</span>
@@ -312,7 +326,7 @@
         {/if}
         <button
           class="text-[#a89984] hover:text-[#ebdbb2] text-[11px] flex items-center gap-1 cursor-pointer transition-colors bg-[#1d2021] hover:bg-[#32302f] border border-[#3c3836] px-2 py-0.5 rounded"
-          on:click|stopPropagation={() => copyTableAsMarkdown(item.tableData)}
+          onclick={(e) => { e.stopPropagation(); copyTableAsMarkdown(item.tableData); }}
           title="複製 Markdown 表格語法"
         >
           <span class="material-symbols-outlined text-[13px]">content_copy</span>
@@ -320,7 +334,7 @@
         </button>
         <button
           class="text-[#a89984] hover:text-[#ebdbb2] text-[11px] flex items-center gap-1 cursor-pointer transition-colors bg-[#1d2021] hover:bg-[#32302f] border border-[#3c3836] px-2 py-0.5 rounded"
-          on:click|stopPropagation={() => copyTableAsTSV(item.tableData)}
+          onclick={(e) => { e.stopPropagation(); copyTableAsTSV(item.tableData); }}
           title="複製為 TSV 格式（可直接貼上至 Excel 或 Google 試算表）"
         >
           <span class="material-symbols-outlined text-[13px]">grid_on</span>
@@ -379,7 +393,7 @@
     data-para-key={key}
     data-para-text={para}
     data-sec-id={sec.id}
-    on:click={(e) => handleParagraphWrapperClick(e, pIndex, para)}
+    onclick={(e) => handleParagraphWrapperClick(e, pIndex, para)}
   >
     {#if isParaFocused && isPacerActive}
       <!-- Saccadic Flow Pacer Visual Beam Guide -->
@@ -410,7 +424,7 @@
           <button
             type="button"
             class="flex items-center gap-1 bg-[#1d2021] hover:bg-[#3c3836] text-[#fabd2f] hover:text-[#fe8019] border border-[#504945] px-2 py-0.5 rounded cursor-pointer transition-colors shadow-xs"
-            on:click|stopPropagation={() => dispatch('askCompanion', { sec, pIndex, text: para })}
+            onclick={(e) => { e.stopPropagation(); onaskCompanion?.({ sec, pIndex, text: para }); }}
             title="將此段設為研讀焦點並向 AI 伴讀提問"
           >
             <span class="material-symbols-outlined text-[13px]">psychology</span>
@@ -420,7 +434,7 @@
         <button
           type="button"
           class="flex items-center gap-1 bg-[#1d2021] hover:bg-[#3c3836] text-[#8ec07c] hover:text-[#b8bb26] border border-[#504945] px-2 py-0.5 rounded cursor-pointer transition-colors shadow-xs"
-          on:click|stopPropagation={() => dispatch('toggleTranslation', { secId: sec.id, pIndex, text: para })}
+          onclick={(e) => { e.stopPropagation(); ontoggleTranslation?.({ secId: sec.id, pIndex, text: para }); }}
           title="切換繁體中文精確翻譯"
         >
           <span class="material-symbols-outlined text-[13px]">translate</span>
@@ -439,7 +453,7 @@
       <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
       <div
         class="mt-1 p-4 bg-[#1d2021] border-l-4 border-[#fabd2f] rounded-r-xl flex flex-col gap-2 shadow-lg text-[#ebdbb2] animate-fade-in cursor-default"
-        on:click={() => { if (isTyping) dispatch('skipTyping'); }}
+        onclick={() => { if (isTyping) onskipTyping?.(); }}
         title={isTyping ? "點擊可立即跳過打字動畫顯示全文" : ""}
       >
         <div class="flex items-center justify-between text-[11px] font-mono text-[#a89984] border-b border-[#3c3836]/60 pb-2">
@@ -461,7 +475,7 @@
             <button
               type="button"
               class="hover:text-[#fe8019] flex items-center gap-0.5 cursor-pointer text-[#a89984] transition-colors"
-              on:click|stopPropagation={() => dispatch('copyTranslation', { text: translationText })}
+              onclick={(e) => { e.stopPropagation(); oncopyTranslation?.({ text: translationText }); }}
               title="複製繁體譯文"
             >
               <span class="material-symbols-outlined text-[13px]">content_copy</span>
@@ -470,10 +484,13 @@
             <button
               type="button"
               class="hover:text-[#fabd2f] flex items-center gap-0.5 cursor-pointer text-[#a89984] transition-colors"
-              on:click|stopPropagation={() => dispatch('saveNote', {
-                title: `對照筆記 · §${sec.title.split(' ')[0]} ¶${pIndex + 1}`,
-                text: `> ${para}\n\n**中文譯文**：\n${translationText}`
-              })}
+              onclick={(e) => {
+                e.stopPropagation();
+                onsaveNote?.({
+                  title: `對照筆記 · §${sec.title.split(' ')[0]} ¶${pIndex + 1}`,
+                  text: `> ${para}\n\n**中文譯文**：\n${translationText}`
+                });
+              }}
               title="將本段中英對照存入筆記庫"
             >
               <span class="material-symbols-outlined text-[13px]">save</span>
@@ -482,7 +499,7 @@
             <button
               type="button"
               class="hover:text-[#8ec07c] flex items-center gap-0.5 cursor-pointer text-[#a89984] transition-colors"
-              on:click|stopPropagation={() => dispatch('retranslate', { secId: sec.id, pIndex, text: para })}
+              onclick={(e) => { e.stopPropagation(); onretranslate?.({ secId: sec.id, pIndex, text: para }); }}
               title="重新向 AI 請求翻譯"
             >
               <span class="material-symbols-outlined text-[13px]">refresh</span>
@@ -501,7 +518,7 @@
               <button
                 type="button"
                 class="font-mono text-[10px] bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold px-2 py-0.5 rounded cursor-pointer transition-colors shadow-xs ml-auto shrink-0 flex items-center gap-1"
-                on:click|stopPropagation={() => dispatch('openSettings')}
+                onclick={(e) => { e.stopPropagation(); onopenSettings?.(); }}
               >
                 <span class="material-symbols-outlined text-[12px]">tune</span>
                 <span>前往設定金鑰</span>

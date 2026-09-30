@@ -1024,10 +1024,10 @@
         {isAbstractCollapsed}
         {isGeneratingAbstract}
         {abstractGenError}
-        on:selectAuthor={(e) => selectedAuthorInfo = selectedAuthorInfo === e.detail.author ? null : e.detail.author}
-        on:closeAuthorInfo={() => selectedAuthorInfo = null}
-        on:generateAbstract={handleGenerateAbstract}
-        on:toggleAbstract={() => isAbstractCollapsed = !isAbstractCollapsed}
+        onselectAuthor={(data) => selectedAuthorInfo = selectedAuthorInfo === data.author ? null : data.author}
+        oncloseAuthorInfo={() => selectedAuthorInfo = null}
+        ongenerateAbstract={handleGenerateAbstract}
+        ontoggleAbstract={() => isAbstractCollapsed = !isAbstractCollapsed}
       />
 
       <!-- Sections Stream -->
@@ -1047,8 +1047,8 @@
               {sec}
               {isFocused}
               {paper}
-              on:sectionClick={(e) => handleSectionClick(e.detail.secId)}
-              on:openOriginalToPage={(e) => dispatch('readerAction', { action: 'openOriginalToPage', ...e.detail })}
+              onsectionClick={(data) => handleSectionClick(data.secId)}
+              onopenOriginalToPage={(data) => dispatch('readerAction', { action: 'openOriginalToPage', ...data })}
             />
           {:else}
             <!-- Regular Content Section Card -->
@@ -1071,23 +1071,23 @@
               {loadingTerminologyId}
               {isSectionTranslating}
               deduplicatedFormulas={getDeduplicatedFormulas(sec)}
-              on:sectionClick={(e) => handleSectionClick(e.detail.secId)}
-              on:openOriginalToPage={(e) => dispatch('readerAction', { action: 'openOriginalToPage', ...e.detail })}
-              on:paragraphClick={(e) => handleParagraphClick(e.detail.secId, e.detail.pIndex, e.detail.text, e.detail.clickCharIdx)}
-              on:askCompanion={(e) => askCompanionAboutParagraph(e.detail.sec, e.detail.pIndex, e.detail.text)}
-              on:toggleTranslation={(e) => toggleParagraphTranslation(e.detail.secId, e.detail.pIndex, e.detail.text)}
-              on:retranslate={(e) => toggleParagraphTranslation(e.detail.secId, e.detail.pIndex, e.detail.text, true)}
-              on:openLightbox={(e) => openLightbox(e.detail.url, e.detail.caption)}
-              on:copyLatex={(e) => copyLatex(e.detail.latex)}
-              on:copyTranslation={(e) => copyTranslationText(e.detail.text)}
-              on:saveNote={(e) => dispatch('saveNote', e.detail)}
-              on:skipTyping={(e) => { isTypingMap[e.detail.key] = false; }}
-              on:openSettings={() => dispatch('readerAction', { action: 'openSettings' })}
-              on:jumpToFormulaStudio={(e) => dispatch('readerAction', { action: 'jumpToFormulaStudio', ...e.detail })}
-              on:locateFormula={(e) => jumpToFormulaLocation(e.detail.formula, e.detail.section, paper, activeSectionId, (sId) => { activeSectionId = sId; dispatch('selectSection', { sectionId: sId }); }, showToast)}
-              on:cognitiveAction={(e) => dispatch('readerAction', { action: e.detail.action, section: e.detail.sec })}
-              on:translateSection={(e) => translateEntireSection(e.detail.sec)}
-              on:addNote={(e) => dispatch('readerAction', { action: 'addNote', title: e.detail.title })}
+              onsectionClick={(data) => handleSectionClick(data.secId)}
+              onopenOriginalToPage={(data) => dispatch('readerAction', { action: 'openOriginalToPage', ...data })}
+              onparagraphClick={(data) => handleParagraphClick(data.secId, data.pIndex, data.text, data.clickCharIdx)}
+              onaskCompanion={(data) => askCompanionAboutParagraph(data.sec, data.pIndex, data.text)}
+              ontoggleTranslation={(data) => toggleParagraphTranslation(data.secId, data.pIndex, data.text)}
+              onretranslate={(data) => toggleParagraphTranslation(data.secId, data.pIndex, data.text, true)}
+              onopenLightbox={(data) => openLightbox(data.url, data.caption)}
+              oncopyLatex={(data) => copyLatex(data.latex)}
+              oncopyTranslation={(data) => copyTranslationText(data.text)}
+              onsaveNote={(data) => dispatch('saveNote', data)}
+              onskipTyping={(data) => { isTypingMap[data.key] = false; }}
+              onopenSettings={() => dispatch('readerAction', { action: 'openSettings' })}
+              onjumpToFormulaStudio={(data) => dispatch('readerAction', { action: 'jumpToFormulaStudio', ...data })}
+              onlocateFormula={(data) => jumpToFormulaLocation(data.formula, data.section, paper, activeSectionId, (sId) => { activeSectionId = sId; dispatch('selectSection', { sectionId: sId }); }, showToast)}
+              oncognitiveAction={(data) => dispatch('readerAction', { action: data.action, section: data.sec })}
+              ontranslateSection={(data) => translateEntireSection(data.sec)}
+              onaddNote={(data) => dispatch('readerAction', { action: 'addNote', title: data.title })}
             />
           {/if}
         {/each}

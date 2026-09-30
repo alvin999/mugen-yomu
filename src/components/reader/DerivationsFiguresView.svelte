@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import type { PaperDocument, FigureItem, FormulaItem } from '../../types/document';
   import { flattenSections } from '../../stores/readingStore';
   import {
@@ -25,63 +24,75 @@
   import FormulaDerivationPanel from './derivations/FormulaDerivationPanel.svelte';
   import DerivationScratchpadPanel from './derivations/DerivationScratchpadPanel.svelte';
 
-  export let paper: PaperDocument | null = null;
+  interface Props {
+    paper?: PaperDocument | null;
+    onbackToReader?: () => void;
+    onselectSection?: (detail: { id: string }) => void;
+    onsaveNote?: (detail: { title: string; text: string }) => void;
+    onupdatePaper?: (detail: { paper: PaperDocument }) => void;
+  }
 
-  const dispatch = createEventDispatcher();
+  let {
+    paper = null,
+    onbackToReader,
+    onselectSection,
+    onsaveNote,
+    onupdatePaper
+  }: Props = $props();
 
-  $: allSections = flattenSections(paper?.sections || []);
+  let allSections = $derived(flattenSections(paper?.sections || []));
 
   // 動態萃取當前文獻的所有圖表與公式 (使用獨立的 extractor 工具層)
-  $: dynamicFigures = extractDynamicFigures(paper, allSections);
-  $: dynamicFormulas = extractDynamicFormulas(paper, allSections);
+  let dynamicFigures = $derived(extractDynamicFigures(paper, allSections));
+  let dynamicFormulas = $derived(extractDynamicFormulas(paper, allSections));
 
   // 狀態變數
-  let selectedFigureIndex: number = 0;
-  let selectedFormulaIndex: number = 0;
+  let selectedFigureIndex = $state<number>(0);
+  let selectedFormulaIndex = $state<number>(0);
 
   // Fallback demo tabs when no extracted items exist
-  let activeFigureTab: 'fig1' | 'fig2' = 'fig1';
-  let activeDerivationTab: 'derivation1' | 'derivation2' | 'derivation3' = 'derivation1';
+  let activeFigureTab = $state<'fig1' | 'fig2'>('fig1');
+  let activeDerivationTab = $state<'derivation1' | 'derivation2' | 'derivation3'>('derivation1');
 
   // 右欄檢視模式：論文核心推導 vs 互動推導沙盒
-  let studioRightMode: 'derivation' | 'scratchpad' = 'derivation';
+  let studioRightMode = $state<'derivation' | 'scratchpad'>('derivation');
 
   // 全螢幕燈箱狀態
-  let isFigureLightboxOpen: boolean = false;
-  let lightboxImageUrl: string = '';
-  let lightboxTitle: string = '';
+  let isFigureLightboxOpen = $state<boolean>(false);
+  let lightboxImageUrl = $state<string>('');
+  let lightboxTitle = $state<string>('');
 
   // 圖表架構解構狀態
-  let currentFigureDeconstruction: FigureDeconstructionData | null = null;
-  let isAnalyzingFigure: boolean = false;
-  let figureAnalysisError: string = '';
+  let currentFigureDeconstruction = $state<FigureDeconstructionData | null>(null);
+  let isAnalyzingFigure = $state<boolean>(false);
+  let figureAnalysisError = $state<string>('');
 
   // 數學公式推導狀態
-  let currentFormulaDerivation: FormulaDerivationData | null = null;
-  let isDerivingFormula: boolean = false;
-  let formulaDerivationError: string = '';
+  let currentFormulaDerivation = $state<FormulaDerivationData | null>(null);
+  let isDerivingFormula = $state<boolean>(false);
+  let formulaDerivationError = $state<string>('');
 
   // 互動演算沙盒狀態 (CHECKLIST Item 8)
-  let scratchpadLatex: string = '\\mathrm{Attention}(Q, K, V) = \\mathrm{softmax}\\left(\\frac{QK^T}{\\sqrt{d_k}}\\right) V';
-  let scratchpadNotes: string = '驗證將維度 d_k 縮放除數代入後，能否將方差從 d_k 壓回單位 1';
-  let scratchpadDk: number = 64;
-  let scratchpadDotProduct: number = 16;
-  let batchSize: number = 2;
-  let seqLen: number = 512;
-  let dModel: number = 512;
-  let numHeads: number = 8;
-  let isVerifyingScratchpad: boolean = false;
-  let scratchpadAiResult: {
+  let scratchpadLatex = $state<string>('\\mathrm{Attention}(Q, K, V) = \\mathrm{softmax}\\left(\\frac{QK^T}{\\sqrt{d_k}}\\right) V');
+  let scratchpadNotes = $state<string>('驗證將維度 d_k 縮放除數代入後，能否將方差從 d_k 壓回單位 1');
+  let scratchpadDk = $state<number>(64);
+  let scratchpadDotProduct = $state<number>(16);
+  let batchSize = $state<number>(2);
+  let seqLen = $state<number>(512);
+  let dModel = $state<number>(512);
+  let numHeads = $state<number>(8);
+  let isVerifyingScratchpad = $state<boolean>(false);
+  let scratchpadAiResult = $state<{
     isValid: boolean;
     verdictTitle: string;
     critique: string;
     stepSuggestions: string[];
     correctedLatex?: string;
-  } | null = null;
+  } | null>(null);
 
   // 提示回饋氣泡
-  let copyToastText: string = '';
-  let noteToastText: string = '';
+  let copyToastText = $state<string>('');
+  let noteToastText = $state<string>('');
   let toastTimer: any = null;
 
   function showToast(text: string, isNote: boolean = false) {
@@ -146,7 +157,7 @@
       Object.assign(CLASSIC_FIGURE_DECONSTRUCTIONS, result.figureDeconstructions);
 
       paper = { ...paper };
-      dispatch('updatePaper', { paper });
+      onupdatePaper?.({ paper });
       showToast('✨ 程式初篩 + 輕量 AI 提煉完成！已為本篇建立專屬圖表推導');
     } catch (err: any) {
       scanError = err.message || '分析失敗';
@@ -157,17 +168,17 @@
   }
 
   // 響應當前選取之圖表更新解構資訊
-  $: {
+  $effect(() => {
     const activeFig = dynamicFigures[selectedFigureIndex]?.figure;
     if (activeFig) {
       loadFigureDeconstruction(activeFig);
     } else {
       currentFigureDeconstruction = CLASSIC_FIGURE_DECONSTRUCTIONS[activeFigureTab] || CLASSIC_FIGURE_DECONSTRUCTIONS.fig1;
     }
-  }
+  });
 
   // 響應當前選取之公式更新推導資訊
-  $: {
+  $effect(() => {
     const activeForm = dynamicFormulas[selectedFormulaIndex]?.formula;
     if (activeForm) {
       loadFormulaDerivation(activeForm);
@@ -180,18 +191,20 @@
         currentFormulaDerivation = CLASSIC_FORMULA_DERIVATIONS.eq_efficiency;
       }
     }
-  }
+  });
 
   // 響應沙盒數值即時計算
-  $: sanityResult = calculateNumericalSanity(scratchpadDk, scratchpadDotProduct);
-  $: tensorShapeResults = calculateTransformerShapes(batchSize, seqLen, dModel, numHeads);
+  let sanityResult = $derived(calculateNumericalSanity(scratchpadDk, scratchpadDotProduct));
+  let tensorShapeResults = $derived(calculateTransformerShapes(batchSize, seqLen, dModel, numHeads));
 
-  let lastPaperId: string = '';
-  $: if (paper && paper.id !== lastPaperId) {
-    lastPaperId = paper.id;
-    selectedFigureIndex = 0;
-    selectedFormulaIndex = 0;
-  }
+  let lastPaperId = $state<string>('');
+  $effect(() => {
+    if (paper && paper.id !== lastPaperId) {
+      lastPaperId = paper.id;
+      selectedFigureIndex = 0;
+      selectedFormulaIndex = 0;
+    }
+  });
 
   async function loadFigureDeconstruction(fig: FigureItem, forceAi: boolean = false) {
     figureAnalysisError = '';
@@ -314,7 +327,7 @@
   }
 
   function handleJumpToSection(secId: string) {
-    dispatch('selectSection', { id: secId });
+    onselectSection?.({ id: secId });
   }
 
   // 收錄推導至精讀筆記
@@ -340,7 +353,7 @@ ${stepsMarkdown}
 ${currentFormulaDerivation.physicalIntuition}
 `;
 
-    dispatch('saveNote', { title, text: content });
+    onsaveNote?.({ title, text: content });
     showToast('📝 推導證明已成功收錄至精讀筆記！', true);
   }
 
@@ -364,7 +377,7 @@ ${currentFigureDeconstruction.designDecisions.map(d => `- **${d.decision}**：${
 ${currentFigureDeconstruction.keyTakeaway}
 `;
 
-    dispatch('saveNote', { title, text: content });
+    onsaveNote?.({ title, text: content });
     showToast('📝 圖表架構解構已收錄至精讀筆記！', true);
   }
 
@@ -386,7 +399,7 @@ ${scratchpadNotes}
 ${scratchpadAiResult ? `### AI 導師審查講評\n**${scratchpadAiResult.verdictTitle}**\n${scratchpadAiResult.critique}` : ''}
 `;
 
-    dispatch('saveNote', { title, text: content });
+    onsaveNote?.({ title, text: content });
     showToast('📝 沙盒推導驗證已收錄至精讀筆記！', true);
   }
 
@@ -426,7 +439,7 @@ ${scratchpadAiResult ? `### AI 導師審查講評\n**${scratchpadAiResult.verdic
       <!-- Back to Reader Button -->
       <button
         class="font-mono text-xs px-2.5 py-1 rounded bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 text-[#ebdbb2] hover:text-[#fe8019] flex items-center gap-1 transition-colors cursor-pointer shadow-sm"
-        on:click={() => dispatch('backToReader')}
+        onclick={() => onbackToReader?.()}
         title="返回雙語伴讀工作區"
       >
         <span class="material-symbols-outlined text-[15px]">arrow_back</span>
@@ -461,7 +474,7 @@ ${scratchpadAiResult ? `### AI 導師審查講評\n**${scratchpadAiResult.verdic
       <!-- Heuristic Programmatic Scan Button -->
       <button
         class="font-mono text-xs px-2.5 py-1 rounded bg-[#fe8019]/15 hover:bg-[#fe8019]/25 border border-[#fe8019]/50 text-[#fe8019] hover:text-[#fabd2f] flex items-center gap-1.5 transition-colors font-semibold shadow-sm"
-        on:click={handleHeuristicScan}
+        onclick={handleHeuristicScan}
         disabled={isScanningHeuristically}
         title="使用本機程式演算法初篩，再以輕量微量 Prompt 交由 AI 提煉核心公式與圖表（極致節省 Token，免費方案友善）"
       >
@@ -478,7 +491,7 @@ ${scratchpadAiResult ? `### AI 導師審查講評\n**${scratchpadAiResult.verdic
       <div class="flex items-center bg-[#282828] border border-[#3c3836] p-0.5 rounded-lg shadow-inner">
         <button
           class="font-mono text-xs px-3 py-1 rounded-md font-medium transition-all flex items-center gap-1.5 {studioRightMode === 'derivation' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
-          on:click={() => studioRightMode = 'derivation'}
+          onclick={() => studioRightMode = 'derivation'}
           title="檢視論文核心公式的分步嚴謹數學推導、證明與張量維度"
         >
           <span class="material-symbols-outlined text-[14px]">functions</span>
@@ -486,7 +499,7 @@ ${scratchpadAiResult ? `### AI 導師審查講評\n**${scratchpadAiResult.verdic
         </button>
         <button
           class="font-mono text-xs px-3 py-1 rounded-md font-medium transition-all flex items-center gap-1.5 {studioRightMode === 'scratchpad' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
-          on:click={() => studioRightMode = 'scratchpad'}
+          onclick={() => studioRightMode = 'scratchpad'}
           title="開啟互動式 LaTeX 演算沙盒，代入數值試算與張量維度檢驗"
         >
           <span class="material-symbols-outlined text-[14px]">science</span>
@@ -511,14 +524,14 @@ ${scratchpadAiResult ? `### AI 導師審查講評\n**${scratchpadAiResult.verdic
       {currentFigureDeconstruction}
       {isAnalyzingFigure}
       {isScanningHeuristically}
-      on:selectFigure={(e) => { selectedFigureIndex = e.detail.index; }}
-      on:selectFallbackTab={(e) => { activeFigureTab = e.detail.tab; }}
-      on:analyzeFigure={(e) => loadFigureDeconstruction(e.detail.figure, true)}
-      on:heuristicScan={handleHeuristicScan}
-      on:captureToNotes={handleCaptureFigureToNotes}
-      on:openLightbox={(e) => openLightbox(e.detail.url, e.detail.title)}
-      on:jumpToSection={(e) => handleJumpToSection(e.detail.sectionId)}
-      on:switchRightMode={(e) => { studioRightMode = e.detail.mode; }}
+      onselectFigure={(data) => { selectedFigureIndex = data.index; }}
+      onselectFallbackTab={(data) => { activeFigureTab = data.tab; }}
+      onanalyzeFigure={(data) => loadFigureDeconstruction(data.figure, true)}
+      onheuristicScan={handleHeuristicScan}
+      oncaptureToNotes={handleCaptureFigureToNotes}
+      onopenLightbox={(data) => openLightbox(data.url, data.title)}
+      onjumpToSection={(data) => handleJumpToSection(data.sectionId)}
+      onswitchRightMode={(data) => { studioRightMode = data.mode; }}
     />
 
     <!-- RIGHT COLUMN: Mathematical Derivations & Interactive Scratchpad -->
@@ -531,13 +544,13 @@ ${scratchpadAiResult ? `### AI 導師審查講評\n**${scratchpadAiResult.verdic
         {currentFormulaDerivation}
         {isDerivingFormula}
         {isScanningHeuristically}
-        on:selectFormula={(e) => { selectedFormulaIndex = e.detail.index; }}
-        on:selectFallbackTab={(e) => { activeDerivationTab = e.detail.tab; }}
-        on:deriveFormula={(e) => loadFormulaDerivation(e.detail.formula, true)}
-        on:heuristicScan={handleHeuristicScan}
-        on:captureToNotes={handleCaptureDerivationToNotes}
-        on:jumpToSection={(e) => handleJumpToSection(e.detail.sectionId)}
-        on:toast={(e) => showToast(e.detail.text)}
+        onselectFormula={(data) => { selectedFormulaIndex = data.index; }}
+        onselectFallbackTab={(data) => { activeDerivationTab = data.tab; }}
+        onderiveFormula={(data) => loadFormulaDerivation(data.formula, true)}
+        onheuristicScan={handleHeuristicScan}
+        oncaptureToNotes={handleCaptureDerivationToNotes}
+        onjumpToSection={(data) => handleJumpToSection(data.sectionId)}
+        ontoast={(data) => showToast(data.text)}
       />
     {:else}
       <DerivationScratchpadPanel
@@ -553,8 +566,8 @@ ${scratchpadAiResult ? `### AI 導師審查講評\n**${scratchpadAiResult.verdic
         {tensorShapeResults}
         {isVerifyingScratchpad}
         {scratchpadAiResult}
-        on:verifyScratchpad={handleVerifyScratchpad}
-        on:captureToNotes={handleCaptureScratchpadToNotes}
+        onverifyScratchpad={handleVerifyScratchpad}
+        oncaptureToNotes={handleCaptureScratchpadToNotes}
       />
     {/if}
   </div>

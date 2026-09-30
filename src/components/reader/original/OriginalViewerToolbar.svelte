@@ -1,54 +1,90 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import type { PaperDocument, ChapterSection } from '../../../types/document';
 
-  export let paper: PaperDocument | null = null;
-  export let viewerMode: 'canvas' | 'text' | 'native' = 'canvas';
-  export let isPdf: boolean = false;
-  export let pdfDoc: any = null;
-  export let currentPage: number = 1;
-  export let totalPages: number = 1;
-  export let zoomLevel: number = 1.0;
-  export let isSyncEnabled: boolean = true;
-  export let isStringMatchActive: boolean = false;
-  export let isStringIndexing: boolean = false;
-  export let stringIndexProgress: number = 0;
-  export let isConvertingToPaper: boolean = false;
-  export let convertProgress: number = 0;
-  export let isLoadingPdf: boolean = false;
-  export let localPdfArrayBuffer: ArrayBuffer | null = null;
-  export let localPdfBlobUrl: string | null = null;
-  export let allSections: ChapterSection[] = [];
-  export let activeSectionId: string = '';
-  export let mode: 'split' | 'drawer' = 'split';
+  interface Props {
+    paper?: PaperDocument | null;
+    viewerMode?: 'canvas' | 'text' | 'native';
+    isPdf?: boolean;
+    pdfDoc?: any;
+    currentPage?: number;
+    totalPages?: number;
+    zoomLevel?: number;
+    isSyncEnabled?: boolean;
+    isStringMatchActive?: boolean;
+    isStringIndexing?: boolean;
+    stringIndexProgress?: number;
+    isConvertingToPaper?: boolean;
+    convertProgress?: number;
+    isLoadingPdf?: boolean;
+    localPdfArrayBuffer?: ArrayBuffer | null;
+    localPdfBlobUrl?: string | null;
+    allSections?: ChapterSection[];
+    activeSectionId?: string;
+    mode?: 'split' | 'drawer';
+    onsetZoom?: (detail: { zoom: number }) => void;
+    onsetViewerMode?: (detail: { mode: 'canvas' | 'text' | 'native' }) => void;
+    onretry?: () => void;
+    onopenExternal?: () => void;
+    onswitchToSplit?: () => void;
+    onclose?: () => void;
+    ontoggleSync?: () => void;
+    onselectSection?: (detail: { sectionId: string }) => void;
+    onprevPage?: () => void;
+    onnextPage?: () => void;
+    oninputPage?: (detail: { page: number }) => void;
+    onconvertToPaper?: () => void;
+    onfileSelect?: (detail: { event: Event }) => void;
+    onclearLocalPdf?: () => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    setZoom: { zoom: number };
-    setViewerMode: { mode: 'canvas' | 'text' | 'native' };
-    retry: void;
-    openExternal: void;
-    switchToSplit: void;
-    close: void;
-    toggleSync: void;
-    selectSection: { sectionId: string };
-    prevPage: void;
-    nextPage: void;
-    inputPage: { page: number };
-    convertToPaper: void;
-    fileSelect: { event: Event };
-    clearLocalPdf: void;
-  }>();
+  let {
+    paper = null,
+    viewerMode = 'canvas',
+    isPdf = false,
+    pdfDoc = null,
+    currentPage = 1,
+    totalPages = 1,
+    zoomLevel = 1.0,
+    isSyncEnabled = true,
+    isStringMatchActive = false,
+    isStringIndexing = false,
+    stringIndexProgress = 0,
+    isConvertingToPaper = false,
+    convertProgress = 0,
+    isLoadingPdf = false,
+    localPdfArrayBuffer = null,
+    localPdfBlobUrl = null,
+    allSections = [],
+    activeSectionId = '',
+    mode = 'split',
+    onsetZoom,
+    onsetViewerMode,
+    onretry,
+    onopenExternal,
+    onswitchToSplit,
+    onclose,
+    ontoggleSync,
+    onselectSection,
+    onprevPage,
+    onnextPage,
+    oninputPage,
+    onconvertToPaper,
+    onfileSelect,
+    onclearLocalPdf
+  }: Props = $props();
 
-  let fileInputRef: HTMLInputElement | null = null;
-  let pageInputVal: number = currentPage;
-  $: pageInputVal = currentPage;
+  let fileInputRef = $state<HTMLInputElement | null>(null);
+  let pageInputVal = $state<number>(1);
+  $effect(() => {
+    pageInputVal = currentPage;
+  });
 
   function handlePageCommit() {
     let p = parseInt(String(pageInputVal), 10);
     if (isNaN(p)) p = 1;
     if (p < 1) p = 1;
     if (p > totalPages) p = totalPages;
-    dispatch('inputPage', { page: p });
+    oninputPage?.({ page: p });
   }
 
   function formatSectionOption(sec: ChapterSection): string {
@@ -104,7 +140,7 @@
       <button
         class="px-2 py-0.5 rounded bg-[#fe8019]/20 hover:bg-[#fe8019] text-[#fe8019] hover:text-[#1d2021] border border-[#fe8019]/60 transition-colors flex items-center gap-1 text-[10px] font-mono font-bold cursor-pointer disabled:opacity-50"
         disabled={isConvertingToPaper}
-        on:click={() => dispatch('convertToPaper')}
+        onclick={() => onconvertToPaper?.()}
         title="將此 PDF 解析為章節，轉換為雙語研讀畫布"
       >
         {#if isConvertingToPaper}
@@ -122,13 +158,13 @@
       <div class="flex items-center bg-[#282828] border border-[#3c3836] rounded px-1 py-0.5 gap-1 text-[11px]">
         <button
           class="hover:text-[#ebdbb2] px-1 text-xs transition-colors cursor-pointer"
-          on:click={() => dispatch('setZoom', { zoom: zoomLevel - 0.2 })}
+          onclick={() => onsetZoom?.({ zoom: zoomLevel - 0.2 })}
           title="縮小"
         >-</button>
         <span class="text-[#fabd2f] font-mono w-9 text-center text-[10px]">{Math.round(zoomLevel * 100)}%</span>
         <button
           class="hover:text-[#ebdbb2] px-1 text-xs transition-colors cursor-pointer"
-          on:click={() => dispatch('setZoom', { zoom: zoomLevel + 0.2 })}
+          onclick={() => onsetZoom?.({ zoom: zoomLevel + 0.2 })}
           title="放大"
         >+</button>
       </div>
@@ -151,7 +187,7 @@
       <!-- Retry Button -->
       <button
         class="px-2 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 rounded text-[11px] text-[#fabd2f] flex items-center gap-1 transition-colors cursor-pointer"
-        on:click={() => dispatch('retry')}
+        onclick={() => onretry?.()}
         disabled={isLoadingPdf}
         title="重新載入 PDF 來源"
       >
@@ -162,7 +198,7 @@
       <!-- Local PDF Upload -->
       <button
         class="px-2 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#504945] rounded text-[11px] text-[#d5c4a1] flex items-center gap-1 transition-colors cursor-pointer"
-        on:click={() => fileInputRef?.click()}
+        onclick={() => fileInputRef?.click()}
         title="選取本機 PDF 檔案進行比對"
       >
         <span class="material-symbols-outlined text-[13px] text-[#fe8019]">upload_file</span>
@@ -173,13 +209,13 @@
         accept="application/pdf,.pdf"
         class="hidden"
         bind:this={fileInputRef}
-        on:change={(e) => dispatch('fileSelect', { event: e })}
+        onchange={(e) => onfileSelect?.({ event: e })}
       />
 
       {#if localPdfArrayBuffer || localPdfBlobUrl}
         <button
           class="px-1.5 py-1 text-[#fb4934] hover:bg-[#282828] rounded text-[10px] cursor-pointer"
-          on:click={() => dispatch('clearLocalPdf')}
+          onclick={() => onclearLocalPdf?.()}
           title="清除本地自訂 PDF"
         >
           復原預設
@@ -192,7 +228,7 @@
     <!-- Open External -->
     <button
       class="p-1 hover:bg-[#282828] hover:text-[#ebdbb2] rounded text-[#a89984] flex items-center transition-colors cursor-pointer"
-      on:click={() => dispatch('openExternal')}
+      onclick={() => onopenExternal?.()}
       title="在獨立新分頁開啟"
     >
       <span class="material-symbols-outlined text-[15px]">open_in_new</span>
@@ -202,7 +238,7 @@
     {#if mode === 'drawer'}
       <button
         class="px-2 py-1 bg-[#3c3836] hover:bg-[#504945] text-[#fabd2f] rounded text-[11px] flex items-center gap-1 font-semibold transition-colors cursor-pointer"
-        on:click={() => dispatch('switchToSplit')}
+        onclick={() => onswitchToSplit?.()}
         title="切換為左右 50/50 對照模式"
       >
         <span class="material-symbols-outlined text-[13px]">view_column</span>
@@ -211,7 +247,7 @@
 
       <button
         class="w-6 h-6 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828] transition-colors cursor-pointer ml-1"
-        on:click={() => dispatch('close')}
+        onclick={() => onclose?.()}
         title="收起抽屜 (Esc)"
       >
         <span class="material-symbols-outlined text-[16px]">close</span>
@@ -232,7 +268,7 @@
             ? 'bg-[#b8bb26]/15 border-[#b8bb26]/50 text-[#b8bb26] hover:bg-[#b8bb26]/25'
             : 'bg-[#3c3836]/40 border-[#504945] text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#3c3836]'
         }"
-        on:click={() => dispatch('toggleSync')}
+        onclick={() => ontoggleSync?.()}
         title={isSyncEnabled ? '目前已開啟雙向閱讀聯動（點擊以自由翻閱）' : '目前處於獨立模式（點擊重新鎖定進度）'}
       >
         <span class="material-symbols-outlined text-[13px]">{isSyncEnabled ? 'link' : 'link_off'}</span>
@@ -259,7 +295,7 @@
           class="bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#ebdbb2] text-[11px] rounded px-2 py-0.5 font-sans truncate max-w-[170px] sm:max-w-[240px] cursor-pointer focus:outline-none focus:border-[#fe8019] disabled:cursor-not-allowed"
           value={activeSectionId}
           disabled={viewerMode === 'native'}
-          on:change={(e) => dispatch('selectSection', { sectionId: e.currentTarget.value })}
+          onchange={(e) => onselectSection?.({ sectionId: e.currentTarget.value })}
           title={viewerMode === 'native' ? '原站受瀏覽器限制無法跨域跳轉章節，請切換至「排版」模式' : '章節快速跳轉對應頁面/區塊'}
         >
           {#each allSections as sec}
@@ -277,7 +313,7 @@
     <div class="flex items-center gap-1 shrink-0 font-mono text-[11px]">
       <button
         class="w-6 h-6 bg-[#282828] hover:bg-[#3c3836] disabled:opacity-30 border border-[#3c3836] rounded flex items-center justify-center text-[#d5c4a1] transition-colors cursor-pointer"
-        on:click={() => dispatch('prevPage')}
+        onclick={() => onprevPage?.()}
         disabled={currentPage <= 1}
         title="上一頁"
       >
@@ -291,8 +327,8 @@
           min="1"
           max={totalPages}
           bind:value={pageInputVal}
-          on:keydown={(e) => { if (e.key === 'Enter') handlePageCommit(); }}
-          on:blur={handlePageCommit}
+          onkeydown={(e) => { if (e.key === 'Enter') handlePageCommit(); }}
+          onblur={handlePageCommit}
           class="w-9 bg-[#282828] border border-[#504945] rounded text-center text-[#fabd2f] font-bold text-xs py-0.5 focus:outline-none focus:border-[#fe8019]"
         />
         <span class="text-[#a89984] text-[10px]">/ {totalPages} 頁</span>
@@ -300,7 +336,7 @@
 
       <button
         class="w-6 h-6 bg-[#282828] hover:bg-[#3c3836] disabled:opacity-30 border border-[#3c3836] rounded flex items-center justify-center text-[#d5c4a1] transition-colors cursor-pointer"
-        on:click={() => dispatch('nextPage')}
+        onclick={() => onnextPage?.()}
         disabled={currentPage >= totalPages}
         title="下一頁"
       >

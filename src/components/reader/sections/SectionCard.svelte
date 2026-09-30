@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import type { ChapterSection, FormulaItem, PaperDocument } from '../../../types/document';
   import { flowStore } from '../../../stores/flowStore';
   import { normalizeParagraphs } from '../../../utils/paragraphUtils';
@@ -8,51 +7,86 @@
   import SectionFormulaChips from './SectionFormulaChips.svelte';
   import CognitiveActionToolbar from './CognitiveActionToolbar.svelte';
 
-  export let sec: ChapterSection;
-  export let isFocused: boolean = false;
-  export let hasRead: boolean = false;
-  export let paper: PaperDocument | null = null;
-  export let readingMode: 'bilingual' | 'split' | 'zen' | 'figures' = 'bilingual';
+  interface Props {
+    sec: ChapterSection;
+    isFocused?: boolean;
+    hasRead?: boolean;
+    paper?: PaperDocument | null;
+    readingMode?: 'bilingual' | 'split' | 'zen' | 'figures';
+    focusedParagraphKey?: string;
+    showTranslationMap?: Record<string, boolean>;
+    translatingMap?: Record<string, boolean>;
+    isTypingMap?: Record<string, boolean>;
+    paragraphTranslations?: Record<string, string>;
+    translationSourceMap?: Record<string, string>;
+    translationNoticeMap?: Record<string, string>;
+    copyToastText?: string | null;
+    loadingIntuitionId?: string | null;
+    loadingSyntaxId?: string | null;
+    loadingTerminologyId?: string | null;
+    isSectionTranslating?: boolean;
+    deduplicatedFormulas?: FormulaItem[];
+    onsectionClick?: (detail: { secId: string }) => void;
+    onopenOriginalToPage?: (detail: { page: number; sectionId: string }) => void;
+    onparagraphClick?: (detail: { secId: string; pIndex: number; text: string; clickCharIdx?: number }) => void;
+    onaskCompanion?: (detail: { sec: ChapterSection; pIndex: number; text: string }) => void;
+    ontoggleTranslation?: (detail: { secId: string; pIndex: number; text: string }) => void;
+    onretranslate?: (detail: { secId: string; pIndex: number; text: string }) => void;
+    onopenLightbox?: (detail: { url: string; caption?: string }) => void;
+    oncopyLatex?: (detail: { latex: string }) => void;
+    oncopyTranslation?: (detail: { text: string }) => void;
+    onsaveNote?: (detail: any) => void;
+    onskipTyping?: (detail: { key: string }) => void;
+    onopenSettings?: () => void;
+    onjumpToFormulaStudio?: (detail: { formula: FormulaItem; section: ChapterSection }) => void;
+    onlocateFormula?: (detail: { formula: FormulaItem; section: ChapterSection }) => void;
+    oncognitiveAction?: (detail: { action: string; sec: ChapterSection }) => void;
+    ontranslateSection?: (detail: { sec: ChapterSection }) => void;
+    onaddNote?: (detail: { title: string }) => void;
+  }
 
-  export let focusedParagraphKey: string = '';
-  export let showTranslationMap: Record<string, boolean> = {};
-  export let translatingMap: Record<string, boolean> = {};
-  export let isTypingMap: Record<string, boolean> = {};
-  export let paragraphTranslations: Record<string, string> = {};
-  export let translationSourceMap: Record<string, string> = {};
-  export let translationNoticeMap: Record<string, string> = {};
-  export let copyToastText: string | null = null;
+  let {
+    sec,
+    isFocused = false,
+    hasRead = false,
+    paper = null,
+    readingMode = 'bilingual',
+    focusedParagraphKey = '',
+    showTranslationMap = {},
+    translatingMap = {},
+    isTypingMap = {},
+    paragraphTranslations = {},
+    translationSourceMap = {},
+    translationNoticeMap = {},
+    copyToastText = null,
+    loadingIntuitionId = null,
+    loadingSyntaxId = null,
+    loadingTerminologyId = null,
+    isSectionTranslating = false,
+    deduplicatedFormulas = [],
+    onsectionClick,
+    onopenOriginalToPage,
+    onparagraphClick,
+    onaskCompanion,
+    ontoggleTranslation,
+    onretranslate,
+    onopenLightbox,
+    oncopyLatex,
+    oncopyTranslation,
+    onsaveNote,
+    onskipTyping,
+    onopenSettings,
+    onjumpToFormulaStudio,
+    onlocateFormula,
+    oncognitiveAction,
+    ontranslateSection,
+    onaddNote
+  }: Props = $props();
 
-  export let loadingIntuitionId: string | null = null;
-  export let loadingSyntaxId: string | null = null;
-  export let loadingTerminologyId: string | null = null;
-  export let isSectionTranslating: boolean = false;
-  export let deduplicatedFormulas: FormulaItem[] = [];
-
-  const dispatch = createEventDispatcher<{
-    sectionClick: { secId: string };
-    openOriginalToPage: { page: number; sectionId: string };
-    paragraphClick: { secId: string; pIndex: number; text: string; clickCharIdx?: number };
-    askCompanion: { sec: ChapterSection; pIndex: number; text: string };
-    toggleTranslation: { secId: string; pIndex: number; text: string };
-    retranslate: { secId: string; pIndex: number; text: string };
-    openLightbox: { url: string; caption?: string };
-    copyLatex: { latex: string };
-    copyTranslation: { text: string };
-    saveNote: any;
-    skipTyping: { key: string };
-    openSettings: void;
-    jumpToFormulaStudio: { formula: FormulaItem; section: ChapterSection };
-    locateFormula: { formula: FormulaItem; section: ChapterSection };
-    cognitiveAction: { action: string; sec: ChapterSection };
-    translateSection: { sec: ChapterSection };
-    addNote: { title: string };
-  }>();
-
-  $: titleInfo = getSectionTitleParts(sec.title, sec.id);
-  $: normalizedParas = normalizeParagraphs(sec.paragraphs);
-  $: textParas = normalizedParas.filter(p => p.type === 'text' && p.text && p.text.trim().length > 0);
-  $: totalTextParas = textParas.length;
+  let titleInfo = $derived(getSectionTitleParts(sec.title, sec.id));
+  let normalizedParas = $derived(normalizeParagraphs(sec.paragraphs));
+  let textParas = $derived(normalizedParas.filter(p => p.type === 'text' && p.text && p.text.trim().length > 0));
+  let totalTextParas = $derived(textParas.length);
 </script>
 
 <section
@@ -70,7 +104,7 @@
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
   <div
     class="flex items-center justify-between gap-2 pb-2 mb-0.5 border-b border-[#3c3836]/60 cursor-pointer group/sec-header"
-    on:click={() => dispatch('sectionClick', { secId: sec.id })}
+    onclick={() => onsectionClick?.({ secId: sec.id })}
     title="點擊定位至此章節頂部"
   >
     <div class="flex items-baseline gap-2.5 min-w-0">
@@ -86,7 +120,7 @@
       {#if sec.page || paper?.pdfUrl || paper?.arxivId || paper?.type === 'web'}
         <button
           class="flex items-center gap-1 bg-[#282828] hover:bg-[#3c3836] border border-[#504945] hover:border-[#fe8019] px-2 py-0.5 rounded text-[11px] font-mono text-[#fabd2f] transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
-          on:click|stopPropagation={() => dispatch('openOriginalToPage', { page: sec.page || 1, sectionId: sec.id })}
+          onclick={(e) => { e.stopPropagation(); onopenOriginalToPage?.({ page: sec.page || 1, sectionId: sec.id }); }}
           title={paper?.type === 'web'
             ? (paper.pdfUrl ? `在原始抽屜開啟（第 ${sec.page || 1} 頁 / 章節）` : '在原始抽屜開啟原文網頁')
             : `在原始 PDF 檢視第 ${sec.page || 1} 頁`}
@@ -131,16 +165,16 @@
         translationSource={translationSourceMap[key] || ''}
         translationNotice={translationNoticeMap[key] || ''}
         {copyToastText}
-        on:paragraphClick={(e) => dispatch('paragraphClick', e.detail)}
-        on:askCompanion={(e) => dispatch('askCompanion', e.detail)}
-        on:toggleTranslation={(e) => dispatch('toggleTranslation', e.detail)}
-        on:retranslate={(e) => dispatch('retranslate', e.detail)}
-        on:openLightbox={(e) => dispatch('openLightbox', e.detail)}
-        on:copyLatex={(e) => dispatch('copyLatex', e.detail)}
-        on:copyTranslation={(e) => dispatch('copyTranslation', e.detail)}
-        on:saveNote={(e) => dispatch('saveNote', e.detail)}
-        on:skipTyping={() => dispatch('skipTyping', { key })}
-        on:openSettings={() => dispatch('openSettings')}
+        onparagraphClick={(e) => onparagraphClick?.(e)}
+        onaskCompanion={(e) => onaskCompanion?.(e)}
+        ontoggleTranslation={(e) => ontoggleTranslation?.(e)}
+        onretranslate={(e) => onretranslate?.(e)}
+        onopenLightbox={(e) => onopenLightbox?.(e)}
+        oncopyLatex={(e) => oncopyLatex?.(e)}
+        oncopyTranslation={(e) => oncopyTranslation?.(e)}
+        onsaveNote={(e) => onsaveNote?.(e)}
+        onskipTyping={() => onskipTyping?.({ key })}
+        onopenSettings={() => onopenSettings?.()}
       />
     {/each}
   </div>
@@ -149,8 +183,8 @@
   <SectionFormulaChips
     {sec}
     formulas={deduplicatedFormulas}
-    on:jumpToFormulaStudio={(e) => dispatch('jumpToFormulaStudio', { formula: e.detail.formula, section: sec })}
-    on:locateFormula={(e) => dispatch('locateFormula', { formula: e.detail.formulaId as any, section: sec })}
+    onjumpToFormulaStudio={(e) => onjumpToFormulaStudio?.({ formula: e.formula, section: sec })}
+    onlocateFormula={(e) => onlocateFormula?.({ formula: e.formulaId as any, section: sec })}
   />
 
   <!-- Inline Semantic Action Toolbar -->
@@ -163,11 +197,11 @@
       {loadingSyntaxId}
       {loadingTerminologyId}
       {isSectionTranslating}
-      on:showIntuition={(e) => dispatch('cognitiveAction', { action: 'showIntuition', sec: e.detail.sec })}
-      on:showSyntax={(e) => dispatch('cognitiveAction', { action: 'showSyntax', sec: e.detail.sec })}
-      on:showTerminology={(e) => dispatch('cognitiveAction', { action: 'showTerminology', sec: e.detail.sec })}
-      on:translateSection={(e) => dispatch('translateSection', { sec: e.detail.sec })}
-      on:addNote={(e) => dispatch('addNote', { title: e.detail.title })}
+      onshowIntuition={(e) => oncognitiveAction?.({ action: 'showIntuition', sec: e.sec })}
+      onshowSyntax={(e) => oncognitiveAction?.({ action: 'showSyntax', sec: e.sec })}
+      onshowTerminology={(e) => oncognitiveAction?.({ action: 'showTerminology', sec: e.sec })}
+      ontranslateSection={(e) => ontranslateSection?.({ sec: e.sec })}
+      onaddNote={(e) => onaddNote?.({ title: e.title })}
     />
   {/if}
 </section>

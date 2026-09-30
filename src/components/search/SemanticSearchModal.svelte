@@ -1,13 +1,10 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount } from 'svelte';
   import {
     searchSemantic,
     indexPaperChunks,
     reindexPaperChunks,
     extractChunksFromSections,
-    getEngineStatus,
-    setEmbeddingPreference,
-    resolveActiveProvider
+    getEngineStatus
   } from '../../services/embedding/hybridEmbeddingService';
   import type { SemanticSearchResult, EmbeddingEngineStatus } from '../../services/embedding/embeddingTypes';
 
@@ -16,35 +13,45 @@
     formatSearchHighlight
   } from '../../utils/textSearchMatcher';
 
-  export let isOpen: boolean = false;
-  export let paperId: string = '';
-  export let sections: any[] = [];
-
-  const dispatch = createEventDispatcher<{
-    close: void;
-    selectParagraph: {
+  interface Props {
+    isOpen?: boolean;
+    paperId?: string;
+    sections?: any[];
+    onclose?: () => void;
+    onselectParagraph?: (detail: {
       sectionId: string;
       paragraphIndex: number;
       text: string;
       query?: string;
       charIndex?: number;
       matchedText?: string;
-    };
-    openSettings: void;
-  }>();
-
-  let query: string = '';
-  let isSearching: boolean = false;
-  let isIndexing: boolean = false;
-  let indexingProgress: { current: number; total: number } = { current: 0, total: 0 };
-  let searchResults: SemanticSearchResult[] = [];
-  let status: EmbeddingEngineStatus | null = null;
-  let hasSearched: boolean = false;
-  let searchError: string = '';
-
-  $: if (isOpen && paperId) {
-    refreshStatus();
+    }) => void;
+    onopenSettings?: () => void;
   }
+
+  let {
+    isOpen = $bindable(false),
+    paperId = '',
+    sections = [],
+    onclose,
+    onselectParagraph,
+    onopenSettings
+  }: Props = $props();
+
+  let query = $state('');
+  let isSearching = $state(false);
+  let isIndexing = $state(false);
+  let indexingProgress = $state({ current: 0, total: 0 });
+  let searchResults = $state<SemanticSearchResult[]>([]);
+  let status = $state<EmbeddingEngineStatus | null>(null);
+  let hasSearched = $state(false);
+  let searchError = $state('');
+
+  $effect(() => {
+    if (isOpen && paperId) {
+      refreshStatus();
+    }
+  });
 
   async function refreshStatus() {
     try {
@@ -127,17 +134,15 @@
 
   function handleKeyDown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
-      dispatch('close');
+      onclose?.();
     } else if (e.key === 'Enter') {
       handleSearch();
     }
   }
 
-  import { embeddingStore, refreshPaperEmbeddingStatus } from '../../stores/embeddingStore';
-
   function handleSelect(item: SemanticSearchResult) {
     const matchInfo = findBestMatchCharIndex(item.text, query);
-    dispatch('selectParagraph', {
+    onselectParagraph?.({
       sectionId: item.sectionId || '',
       paragraphIndex: item.paragraphIndex,
       text: item.text,
@@ -145,21 +150,22 @@
       charIndex: matchInfo.charIndex,
       matchedText: matchInfo.matchedText
     });
-    dispatch('close');
+    onclose?.();
   }
+
   function focusOnMount(el: HTMLElement) {
     setTimeout(() => el?.focus(), 50);
   }
 </script>
 
-<svelte:window on:keydown={handleKeyDown} />
+<svelte:window onkeydown={handleKeyDown} />
 
 {#if isOpen}
   <!-- Backdrop -->
+  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
   <div
     class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in"
-    on:click|self={() => dispatch('close')}
-    on:keydown={(e) => { if (e.key === 'Escape') dispatch('close'); }}
+    onclick={(e) => { if (e.target === e.currentTarget) onclose?.(); }}
     tabindex="-1"
     role="dialog"
     aria-modal="true"
@@ -187,8 +193,8 @@
         <div class="flex items-center gap-1.5">
           <button
             type="button"
-            class="p-1 rounded-lg text-[#a89984] hover:text-[#fbf1c7] hover:bg-[#3c3836] transition-colors"
-            on:click={() => dispatch('close')}
+            class="p-1 rounded-lg text-[#a89984] hover:text-[#fbf1c7] hover:bg-[#3c3836] transition-colors cursor-pointer"
+            onclick={() => onclose?.()}
             aria-label="關閉"
           >
             <span class="material-symbols-outlined text-[20px]">close</span>
@@ -211,9 +217,9 @@
           />
           <button
             type="button"
-            class="absolute right-2 px-3 py-1 bg-[#fe8019] hover:bg-[#d65d0e] active:scale-95 text-white font-medium text-xs rounded-md shadow transition-all flex items-center gap-1 disabled:opacity-50"
+            class="absolute right-2 px-3 py-1 bg-[#fe8019] hover:bg-[#d65d0e] active:scale-95 text-white font-medium text-xs rounded-md shadow transition-all flex items-center gap-1 disabled:opacity-50 cursor-pointer"
             disabled={isSearching || isIndexing || !query.trim()}
-            on:click={handleSearch}
+            onclick={handleSearch}
           >
             {#if isSearching}
               <span class="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
@@ -246,7 +252,7 @@
               <button
                 type="button"
                 class="text-xs text-[#a89984] hover:text-[#fabd2f] hover:underline flex items-center gap-1 transition-colors cursor-pointer"
-                on:click={handleReindexNow}
+                onclick={handleReindexNow}
                 title="重新為當前文獻運算向量索引"
               >
                 <span class="material-symbols-outlined text-[13px]">refresh</span>
@@ -256,7 +262,7 @@
               <button
                 type="button"
                 class="text-xs text-[#fe8019] hover:underline flex items-center gap-0.5 cursor-pointer"
-                on:click={handleIndexNow}
+                onclick={handleIndexNow}
               >
                 <span class="material-symbols-outlined text-[13px]">bolt</span>
                 立即建立索引
@@ -305,10 +311,10 @@
             {@const matchInfo = findBestMatchCharIndex(item.text, query)}
             <div
               class="p-3.5 rounded-lg border {matchInfo.isDirectMatch ? 'border-[#fe8019]/60 bg-[#fe8019]/[0.05] shadow-[0_0_12px_rgba(254,128,25,0.09)]' : 'border-[#3c3836] bg-[#282828]/40'} hover:bg-[#32302f] hover:border-[#fabd2f]/50 transition-all cursor-pointer group"
-              on:click={() => handleSelect(item)}
+              onclick={() => handleSelect(item)}
               role="button"
               tabindex="0"
-              on:keydown={(e) => e.key === 'Enter' && handleSelect(item)}
+              onkeydown={(e) => e.key === 'Enter' && handleSelect(item)}
             >
               <div class="flex items-center justify-between mb-2">
                 <div class="flex items-center flex-wrap gap-2">

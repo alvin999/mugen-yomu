@@ -1,18 +1,24 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import type { ChapterSection, PaperDocument } from '../../../types/document';
   import { getSectionTitleParts } from '../controllers/readerScrollManager';
 
-  export let sec: ChapterSection;
-  export let isFocused: boolean = false;
-  export let paper: PaperDocument | null = null;
+  interface Props {
+    sec: ChapterSection;
+    isFocused?: boolean;
+    paper?: PaperDocument | null;
+    onsectionClick?: (detail: { secId: string }) => void;
+    onopenOriginalToPage?: (detail: { page: number; sectionId: string }) => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    sectionClick: { secId: string };
-    openOriginalToPage: { page: number; sectionId: string };
-  }>();
+  let {
+    sec,
+    isFocused = false,
+    paper = null,
+    onsectionClick,
+    onopenOriginalToPage
+  }: Props = $props();
 
-  $: titleInfo = getSectionTitleParts(sec.title, sec.id);
+  let titleInfo = $derived(getSectionTitleParts(sec.title, sec.id));
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
@@ -23,7 +29,7 @@
       ? 'bg-[#32302f]/50 -mx-3 sm:-mx-4 px-3 sm:px-4 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.3)]'
       : 'hover:border-[#fe8019]/70'
   }"
-  on:click={() => dispatch('sectionClick', { secId: sec.id })}
+  onclick={() => onsectionClick?.({ secId: sec.id })}
 >
   <div class="absolute -left-1 top-4 bottom-4 w-1.5 bg-[#fe8019] rounded-full transition-opacity duration-300 {isFocused ? 'focus-lens-bar opacity-100' : 'opacity-0 pointer-events-none'}"></div>
 
@@ -41,7 +47,7 @@
       {#if sec.page || paper?.pdfUrl || paper?.arxivId || paper?.type === 'web'}
         <button
           class="flex items-center gap-1 bg-[#282828] hover:bg-[#3c3836] border border-[#504945] hover:border-[#fe8019] px-2.5 py-1 rounded text-xs font-mono text-[#fabd2f] transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
-          on:click|stopPropagation={() => dispatch('openOriginalToPage', { page: sec.page || 1, sectionId: sec.id })}
+          onclick={(e) => { e.stopPropagation(); onopenOriginalToPage?.({ page: sec.page || 1, sectionId: sec.id }); }}
           title={paper?.type === 'web'
             ? (paper.pdfUrl ? `在原始抽屜開啟（第 ${sec.page || 1} 頁 / 章節）` : '在原始抽屜開啟原文網頁')
             : `在原始 PDF 檢視第 ${sec.page || 1} 頁`}

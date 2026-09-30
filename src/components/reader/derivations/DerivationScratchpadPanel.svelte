@@ -1,33 +1,48 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { renderMath } from '../../../utils/katexUtils';
   import type { SanityResult, TensorShapeResult } from '../../../services/derivationSimulator';
 
-  export let scratchpadLatex: string = '\\mathrm{Attention}(Q, K, V) = \\mathrm{softmax}\\left(\\frac{QK^T}{\\sqrt{d_k}}\\right) V';
-  export let scratchpadNotes: string = '驗證將維度 d_k 縮放除數代入後，能否將方差從 d_k 壓回單位 1';
-  export let scratchpadDk: number = 64;
-  export let scratchpadDotProduct: number = 16;
-  export let batchSize: number = 2;
-  export let seqLen: number = 512;
-  export let dModel: number = 512;
-  export let numHeads: number = 8;
-  export let sanityResult: SanityResult;
-  export let tensorShapeResults: TensorShapeResult = [];
-  export let isVerifyingScratchpad: boolean = false;
-  export let scratchpadAiResult: {
-    isValid: boolean;
-    verdictTitle: string;
-    critique: string;
-    stepSuggestions: string[];
-    correctedLatex?: string;
-  } | null = null;
+  interface Props {
+    scratchpadLatex?: string;
+    scratchpadNotes?: string;
+    scratchpadDk?: number;
+    scratchpadDotProduct?: number;
+    batchSize?: number;
+    seqLen?: number;
+    dModel?: number;
+    numHeads?: number;
+    sanityResult: SanityResult;
+    tensorShapeResults?: TensorShapeResult;
+    isVerifyingScratchpad?: boolean;
+    scratchpadAiResult?: {
+      isValid: boolean;
+      verdictTitle: string;
+      critique: string;
+      stepSuggestions: string[];
+      correctedLatex?: string;
+    } | null;
+    onverifyScratchpad?: () => void;
+    oncaptureToNotes?: () => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    verifyScratchpad: void;
-    captureToNotes: void;
-  }>();
+  let {
+    scratchpadLatex = $bindable('\\mathrm{Attention}(Q, K, V) = \\mathrm{softmax}\\left(\\frac{QK^T}{\\sqrt{d_k}}\\right) V'),
+    scratchpadNotes = $bindable('驗證將維度 d_k 縮放除數代入後，能否將方差從 d_k 壓回單位 1'),
+    scratchpadDk = $bindable(64),
+    scratchpadDotProduct = $bindable(16),
+    batchSize = $bindable(2),
+    seqLen = $bindable(512),
+    dModel = $bindable(512),
+    numHeads = $bindable(8),
+    sanityResult,
+    tensorShapeResults = [],
+    isVerifyingScratchpad = false,
+    scratchpadAiResult = null,
+    onverifyScratchpad,
+    oncaptureToNotes
+  }: Props = $props();
 
-  let scratchpadTab: 'numeric' | 'tensors' | 'ai-verify' = 'numeric';
+  let scratchpadTab = $state<'numeric' | 'tensors' | 'ai-verify'>('numeric');
 
   function insertSymbolToScratchpad(symbol: string) {
     scratchpadLatex += symbol;
@@ -45,7 +60,7 @@
       <div class="flex items-center gap-2">
         <button
           class="font-mono text-[10px] bg-[#282828] hover:bg-[#32302f] border border-[#fe8019]/50 text-[#fe8019] px-2.5 py-1 rounded flex items-center gap-1 transition-colors"
-          on:click={() => dispatch('verifyScratchpad')}
+          onclick={() => onverifyScratchpad?.()}
           disabled={isVerifyingScratchpad}
         >
           {#if isVerifyingScratchpad}
@@ -58,7 +73,7 @@
         </button>
         <button
           class="font-mono text-[10px] bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#fabd2f] hover:text-[#fe8019] px-2.5 py-1 rounded flex items-center gap-1 transition-colors"
-          on:click={() => dispatch('captureToNotes')}
+          onclick={() => oncaptureToNotes?.()}
         >
           <span class="material-symbols-outlined text-[13px]">save</span>
           <span>收錄沙盒筆記</span>
@@ -83,7 +98,7 @@
       ] as sym}
         <button
           class="font-mono text-xs px-2 py-0.5 rounded bg-[#282828] hover:bg-[#32302f] text-[#d5c4a1] hover:text-[#fe8019] border border-[#3c3836] shrink-0"
-          on:click={() => insertSymbolToScratchpad(sym.insert)}
+          onclick={() => insertSymbolToScratchpad(sym.insert)}
         >
           {sym.label}
         </button>
@@ -121,14 +136,14 @@
   <div class="flex items-center gap-2 border-b border-[#3c3836] pb-2">
     <button
       class="font-mono text-xs px-3 py-1 rounded font-semibold transition-colors flex items-center gap-1 {scratchpadTab === 'numeric' ? 'bg-[#3c3836] text-[#fe8019] border border-[#fe8019]/40' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
-      on:click={() => scratchpadTab = 'numeric'}
+      onclick={() => scratchpadTab = 'numeric'}
     >
       <span class="material-symbols-outlined text-[13px]">pin</span>
       <span>數值代入試算沙盒</span>
     </button>
     <button
       class="font-mono text-xs px-3 py-1 rounded font-semibold transition-colors flex items-center gap-1 {scratchpadTab === 'tensors' ? 'bg-[#3c3836] text-[#fe8019] border border-[#fe8019]/40' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
-      on:click={() => scratchpadTab = 'tensors'}
+      onclick={() => scratchpadTab = 'tensors'}
     >
       <span class="material-symbols-outlined text-[13px]">grid_view</span>
       <span>張量維度推演器</span>
@@ -136,7 +151,7 @@
     {#if scratchpadAiResult}
       <button
         class="font-mono text-xs px-3 py-1 rounded font-semibold transition-colors flex items-center gap-1 {scratchpadTab === 'ai-verify' ? 'bg-[#3c3836] text-[#8ec07c] border border-[#8ec07c]/40' : 'text-[#8ec07c] hover:text-[#ebdbb2]'}"
-        on:click={() => scratchpadTab = 'ai-verify'}
+        onclick={() => scratchpadTab = 'ai-verify'}
       >
         <span class="material-symbols-outlined text-[13px]">psychology</span>
         <span>AI 導師審查講評</span>

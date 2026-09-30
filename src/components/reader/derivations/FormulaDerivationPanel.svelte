@@ -1,57 +1,74 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import type { PaperDocument, FormulaItem } from '../../../types/document';
   import type { FormulaDerivationData } from '../../../types/derivation';
   import type { ExtractedFormulaItem } from '../../../utils/derivationExtractor';
   import { renderMath, copyLatexToClipboard } from '../../../utils/katexUtils';
 
-  // svelte-ignore export_let_unused
-  export let paper: PaperDocument | null = null;
-  export let dynamicFormulas: ExtractedFormulaItem[] = [];
-  export let selectedFormulaIndex: number = 0;
-  export let activeDerivationTab: 'derivation1' | 'derivation2' | 'derivation3' = 'derivation1';
-  export let currentFormulaDerivation: FormulaDerivationData | null = null;
-  export let isDerivingFormula: boolean = false;
-  export let isScanningHeuristically: boolean = false;
+  interface Props {
+    paper?: PaperDocument | null;
+    dynamicFormulas?: ExtractedFormulaItem[];
+    selectedFormulaIndex?: number;
+    activeDerivationTab?: 'derivation1' | 'derivation2' | 'derivation3';
+    currentFormulaDerivation?: FormulaDerivationData | null;
+    isDerivingFormula?: boolean;
+    isScanningHeuristically?: boolean;
+    onselectFormula?: (detail: { index: number }) => void;
+    onselectFallbackTab?: (detail: { tab: 'derivation1' | 'derivation2' | 'derivation3' }) => void;
+    onderiveFormula?: (detail: { formula: FormulaItem }) => void;
+    onheuristicScan?: () => void;
+    oncaptureToNotes?: () => void;
+    onjumpToSection?: (detail: { sectionId: string }) => void;
+    ontoast?: (detail: { text: string }) => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    selectFormula: { index: number };
-    selectFallbackTab: { tab: 'derivation1' | 'derivation2' | 'derivation3' };
-    deriveFormula: { formula: FormulaItem };
-    heuristicScan: void;
-    captureToNotes: void;
-    jumpToSection: { sectionId: string };
-    toast: { text: string };
-  }>();
+  let {
+    paper = null,
+    dynamicFormulas = [],
+    selectedFormulaIndex = 0,
+    activeDerivationTab = 'derivation1',
+    currentFormulaDerivation = null,
+    isDerivingFormula = false,
+    isScanningHeuristically = false,
+    onselectFormula,
+    onselectFallbackTab,
+    onderiveFormula,
+    onheuristicScan,
+    oncaptureToNotes,
+    onjumpToSection,
+    ontoast
+  }: Props = $props();
 
-  $: activeFormulaItem = dynamicFormulas[selectedFormulaIndex];
+  let activeFormulaItem = $derived(dynamicFormulas[selectedFormulaIndex]);
 
-  $: activeSectionProvenanceId =
+  let activeSectionProvenanceId = $derived(
     activeFormulaItem?.sectionId ||
     currentFormulaDerivation?.sourceSectionId ||
-    '';
+    ''
+  );
 
-  $: activeSectionProvenanceTitle = (() => {
+  let activeSectionProvenanceTitle = $derived((() => {
     const raw =
       activeFormulaItem?.sectionTitle ||
       currentFormulaDerivation?.sourceSectionTitle ||
       (dynamicFormulas.length === 0 ? '3.2.1 Scaled Dot-Product Attention' : '文獻主體章節');
     return raw.replace(/^§\s*/, '').trim();
-  })();
+  })());
 
-  $: activePageProvenance =
+  let activePageProvenance = $derived(
     activeFormulaItem?.formula.page ||
     currentFormulaDerivation?.sourcePage ||
-    (dynamicFormulas.length === 0 ? 'p. 4' : '');
+    (dynamicFormulas.length === 0 ? 'p. 4' : '')
+  );
 
-  $: activeContextSnippet =
+  let activeContextSnippet = $derived(
     activeFormulaItem?.formula.sourceContextSnippet ||
     currentFormulaDerivation?.sourceContextSnippet ||
-    '';
+    ''
+  );
 
   function handleCopyLatex(latex: string) {
     copyLatexToClipboard(latex);
-    dispatch('toast', { text: 'LaTeX 原始碼已複製！' });
+    ontoast?.({ text: 'LaTeX 原始碼已複製！' });
   }
 </script>
 
@@ -63,7 +80,7 @@
         {#each dynamicFormulas as item, idx}
           <button
             class="font-mono text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 shrink-0 {selectedFormulaIndex === idx ? 'bg-[#3c3836] text-[#fe8019] font-semibold border border-[#fe8019]/40 shadow-sm' : 'text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2]'}"
-            on:click={() => dispatch('selectFormula', { index: idx })}
+            onclick={() => onselectFormula?.({ index: idx })}
             title="來源出處：§ {item.sectionTitle || '未指定'}"
           >
             <span class="material-symbols-outlined text-[13px]">functions</span>
@@ -81,7 +98,7 @@
         {#if activeFormulaItem}
           <button
             class="font-mono text-[10px] bg-[#282828] hover:bg-[#32302f] border border-[#fe8019]/50 text-[#fe8019] px-2 py-1 rounded flex items-center gap-1 transition-colors shadow-sm"
-            on:click={() => dispatch('deriveFormula', { formula: activeFormulaItem.formula })}
+            onclick={() => activeFormulaItem && onderiveFormula?.({ formula: activeFormulaItem.formula })}
             disabled={isDerivingFormula}
           >
             {#if isDerivingFormula}
@@ -95,7 +112,7 @@
         {/if}
         <button
           class="font-mono text-[10px] bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#fabd2f] hover:text-[#fe8019] px-2 py-1 rounded flex items-center gap-1 transition-colors"
-          on:click={() => dispatch('captureToNotes')}
+          onclick={() => oncaptureToNotes?.()}
           title="將分步數學推導與證明收錄至精讀筆記"
         >
           <span class="material-symbols-outlined text-[13px]">edit_note</span>
@@ -112,21 +129,21 @@
         </span>
         <button
           class="font-mono text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1 shrink-0 {activeDerivationTab === 'derivation1' ? 'bg-[#3c3836] text-[#fe8019] font-semibold border border-[#fe8019]/40' : 'text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2]'}"
-          on:click={() => dispatch('selectFallbackTab', { tab: 'derivation1' })}
+          onclick={() => onselectFallbackTab?.({ tab: 'derivation1' })}
         >
           <span class="material-symbols-outlined text-[13px]">functions</span>
           <span>Eq (1): 縮放點積注意力</span>
         </button>
         <button
           class="font-mono text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1 shrink-0 {activeDerivationTab === 'derivation2' ? 'bg-[#3c3836] text-[#fe8019] font-semibold border border-[#fe8019]/40' : 'text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2]'}"
-          on:click={() => dispatch('selectFallbackTab', { tab: 'derivation2' })}
+          onclick={() => onselectFallbackTab?.({ tab: 'derivation2' })}
         >
           <span class="material-symbols-outlined text-[13px]">calculate</span>
           <span>Eq (2): 多頭子空間投影</span>
         </button>
         <button
           class="font-mono text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1 shrink-0 {activeDerivationTab === 'derivation3' ? 'bg-[#3c3836] text-[#fe8019] font-semibold border border-[#fe8019]/40' : 'text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2]'}"
-          on:click={() => dispatch('selectFallbackTab', { tab: 'derivation3' })}
+          onclick={() => onselectFallbackTab?.({ tab: 'derivation3' })}
         >
           <span class="material-symbols-outlined text-[13px]">speed</span>
           <span>說明書: 認知效能模型</span>
@@ -134,7 +151,7 @@
       </div>
       <button
         class="font-mono text-[10px] bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#fabd2f] hover:text-[#fe8019] px-2 py-1 rounded flex items-center gap-1 transition-colors shrink-0"
-        on:click={() => dispatch('captureToNotes')}
+        onclick={() => oncaptureToNotes?.()}
       >
         <span class="material-symbols-outlined text-[13px]">edit_note</span>
         <span>收錄至筆記</span>
@@ -156,7 +173,7 @@
         </div>
         <button
           class="px-2.5 py-1 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-bold rounded flex items-center gap-1 shrink-0 transition-colors shadow-sm"
-          on:click={() => dispatch('heuristicScan')}
+          onclick={() => onheuristicScan?.()}
           disabled={isScanningHeuristically}
         >
           {#if isScanningHeuristically}
@@ -180,7 +197,7 @@
           <div class="flex items-center gap-2">
             <button
               class="font-mono text-[10px] text-[#a89984] hover:text-[#ebdbb2] bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] px-2 py-0.5 rounded flex items-center gap-1"
-              on:click={() => handleCopyLatex(currentFormulaDerivation?.latexText || '')}
+              onclick={() => handleCopyLatex(currentFormulaDerivation?.latexText || '')}
               title="複製 LaTeX 公式原始碼"
             >
               <span class="material-symbols-outlined text-[12px]">content_copy</span>
@@ -189,7 +206,7 @@
             {#if activeSectionProvenanceId}
               <button
                 class="font-mono text-[10px] text-[#8ec07c] hover:underline flex items-center gap-0.5 cursor-pointer shrink-0"
-                on:click={() => dispatch('jumpToSection', { sectionId: activeSectionProvenanceId })}
+                onclick={() => onjumpToSection?.({ sectionId: activeSectionProvenanceId })}
               >
                 <span>跳轉至章節</span>
                 <span class="material-symbols-outlined text-[12px]">arrow_forward</span>
@@ -216,7 +233,7 @@
             <button
               type="button"
               class="font-mono text-[10px] text-[#8ec07c] hover:text-[#b8bb26] hover:bg-[#282828] border border-[#8ec07c]/40 px-2 py-0.5 rounded flex items-center gap-1 transition-colors cursor-pointer shrink-0"
-              on:click={() => dispatch('jumpToSection', { sectionId: activeSectionProvenanceId })}
+              onclick={() => onjumpToSection?.({ sectionId: activeSectionProvenanceId })}
               title="跳轉回文獻並定位到該章節原文"
             >
               <span class="material-symbols-outlined text-[12px]">my_location</span>

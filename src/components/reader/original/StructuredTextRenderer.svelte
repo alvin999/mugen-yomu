@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount, tick } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import type { PaperDocument, ChapterSection } from '../../../types/document';
   import { normalizeParagraphs } from '../../../utils/paragraphUtils';
   import { renderMath } from '../../../utils/katexUtils';
@@ -7,22 +7,34 @@
   import ThemeCodeBlock from '../../common/ThemeCodeBlock.svelte';
   import { marked } from 'marked';
 
-  export let paper: PaperDocument | null = null;
-  export let allSections: ChapterSection[] = [];
-  export let activeSectionId: string = '';
-  export let mode: 'split' | 'drawer' = 'split';
-  export let isPdf: boolean = false;
-  export let paperTheme: 'parchment' | 'dark' = 'parchment';
+  interface Props {
+    paper?: PaperDocument | null;
+    allSections?: ChapterSection[];
+    activeSectionId?: string;
+    mode?: 'split' | 'drawer';
+    isPdf?: boolean;
+    paperTheme?: 'parchment' | 'dark';
+    onsectionClick?: (detail: { sectionId: string }) => void;
+    onsectionScroll?: (detail: { sectionId: string }) => void;
+    onopenLightbox?: (detail: { url: string; caption?: string }) => void;
+    onretryPdf?: () => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    sectionClick: { sectionId: string };
-    sectionScroll: { sectionId: string };
-    openLightbox: { url: string; caption?: string };
-    retryPdf: void;
-  }>();
+  let {
+    paper = null,
+    allSections = [],
+    activeSectionId = '',
+    mode = 'split',
+    isPdf = false,
+    paperTheme = 'parchment',
+    onsectionClick,
+    onsectionScroll,
+    onopenLightbox,
+    onretryPdf
+  }: Props = $props();
 
-  let containerElement: HTMLDivElement | null = null;
-  let paperFontSize: 'normal' | 'large' = 'normal';
+  let containerElement = $state<HTMLDivElement | null>(null);
+  let paperFontSize = $state<'normal' | 'large'>('normal');
 
   let lastTargetSectionId = '';
   let isProgrammaticScroll = false;
@@ -30,10 +42,12 @@
   let scrollThrottleTimer: any = null;
 
   // 監聽閱讀器端傳入的 activeSectionId，自動平滑捲動至該章節
-  $: if (activeSectionId && activeSectionId !== lastTargetSectionId && containerElement) {
-    lastTargetSectionId = activeSectionId;
-    scrollToSection(activeSectionId);
-  }
+  $effect(() => {
+    if (activeSectionId && activeSectionId !== lastTargetSectionId && containerElement) {
+      lastTargetSectionId = activeSectionId;
+      scrollToSection(activeSectionId);
+    }
+  });
 
   function scrollToSection(secId: string) {
     if (!containerElement) return;
@@ -102,7 +116,7 @@
     if (currentInViewId && currentInViewId !== activeSectionId) {
       lastTargetSectionId = currentInViewId;
       pdfViewerStore.setActiveWebSection(currentInViewId);
-      dispatch('sectionScroll', { sectionId: currentInViewId });
+      onsectionScroll?.({ sectionId: currentInViewId });
     }
   }
 
@@ -123,10 +137,12 @@
 
   // 當文獻切換時，自動還原該篇滾動進度
   let lastPaperId = '';
-  $: if (paper?.id && paper.id !== lastPaperId) {
-    lastPaperId = paper.id;
-    restoreScrollPosition();
-  }
+  $effect(() => {
+    if (paper?.id && paper.id !== lastPaperId) {
+      lastPaperId = paper.id;
+      restoreScrollPosition();
+    }
+  });
 
   function renderRichParagraph(text: string): string {
     if (!text) return '';
@@ -169,7 +185,7 @@
 
 <div
   bind:this={containerElement}
-  on:scroll={handleScroll}
+  onscroll={handleScroll}
   class="w-full h-full overflow-y-auto overflow-x-hidden flex flex-col items-center select-text font-serif scroll-smooth"
 >
   <!-- Structured Reader View Control Header -->
@@ -189,7 +205,7 @@
       <div class="flex items-center bg-[#282828] border border-[#3c3836] rounded p-0.5 text-[11px]">
         <button
           class="px-2 py-0.5 rounded transition-colors flex items-center gap-1 cursor-pointer {paperTheme === 'parchment' ? 'bg-[#fcfbf9] text-[#1d2021] font-bold shadow-xs' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
-          on:click={() => paperTheme = 'parchment'}
+          onclick={() => paperTheme = 'parchment'}
           title="經典米白論文紙張"
         >
           <span>📜</span>
@@ -197,7 +213,7 @@
         </button>
         <button
           class="px-2 py-0.5 rounded transition-colors flex items-center gap-1 cursor-pointer {paperTheme === 'dark' ? 'bg-[#fe8019] text-[#1d2021] font-bold shadow-xs' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
-          on:click={() => paperTheme = 'dark'}
+          onclick={() => paperTheme = 'dark'}
           title="深邃學者夜間模式"
         >
           <span>🌙</span>
@@ -209,12 +225,12 @@
       <div class="flex items-center bg-[#282828] border border-[#3c3836] rounded p-0.5 text-[11px]">
         <button
           class="px-1.5 py-0.5 rounded transition-colors cursor-pointer {paperFontSize === 'normal' ? 'bg-[#3c3836] text-[#ebdbb2] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
-          on:click={() => paperFontSize = 'normal'}
+          onclick={() => paperFontSize = 'normal'}
           title="標準字體"
         >A</button>
         <button
           class="px-1.5 py-0.5 rounded transition-colors cursor-pointer {paperFontSize === 'large' ? 'bg-[#3c3836] text-[#ebdbb2] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
-          on:click={() => paperFontSize = 'large'}
+          onclick={() => paperFontSize = 'large'}
           title="放大字體"
         >A+</button>
       </div>
@@ -222,7 +238,7 @@
       {#if isPdf}
         <button
           class="text-[#fabd2f] hover:underline cursor-pointer flex items-center gap-0.5 text-[11px] ml-1"
-          on:click={() => dispatch('retryPdf')}
+          onclick={() => onretryPdf?.()}
           title="嘗試載入 PDF 向量畫布"
         >
           <span class="material-symbols-outlined text-[13px]">brush</span>
@@ -299,10 +315,17 @@
             }"
           >
             <!-- Section Heading -->
-            <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
             <div
+              role="button"
+              tabindex="0"
               class="flex items-baseline justify-between gap-2 border-b border-current/20 pb-1.5 mb-3 cursor-pointer group/sec-header"
-              on:click={() => dispatch('sectionClick', { sectionId: sec.id })}
+              onclick={() => onsectionClick?.({ sectionId: sec.id })}
+              onkeydown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onsectionClick?.({ sectionId: sec.id });
+                }
+              }}
               title="點擊定位章節"
             >
               <h2 class="font-serif text-base sm:text-lg font-bold flex items-baseline gap-2 {paperTheme === 'parchment' ? 'text-[#1c1b1a]' : 'text-[#fbf1c7]'} group-hover/sec-header:text-[#fe8019] transition-colors">
@@ -334,10 +357,21 @@
                       ? 'bg-[#f4efe6] border-[#ded7ca]'
                       : 'bg-[#141617] border-[#3c3836]'
                   }">
-                    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
                     <div
+                      role="button"
+                      tabindex="0"
                       class="w-full flex items-center justify-center p-2 rounded cursor-zoom-in group"
-                      on:click|stopPropagation={() => dispatch('openLightbox', { url: item.url || '', caption: item.alt })}
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        onopenLightbox?.({ url: item.url || '', caption: item.alt });
+                      }}
+                      onkeydown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onopenLightbox?.({ url: item.url || '', caption: item.alt });
+                        }
+                      }}
                     >
                       <img
                         src={item.url}

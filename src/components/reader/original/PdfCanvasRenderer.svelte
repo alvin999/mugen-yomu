@@ -1,17 +1,25 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount } from 'svelte';
+  interface Props {
+    pdfDoc?: any;
+    currentPage?: number;
+    isLoadingPdf?: boolean;
+    isRenderingPage?: boolean;
+    renderError?: string | null;
+    canvasElement?: HTMLCanvasElement | null;
+    onretry?: () => void;
+    onopenExternal?: () => void;
+  }
 
-  export let pdfDoc: any = null;
-  export let currentPage: number = 1;
-  export let isLoadingPdf: boolean = false;
-  export let isRenderingPage: boolean = false;
-  export let renderError: string | null = null;
-  export let canvasElement: HTMLCanvasElement | null = null;
-
-  const dispatch = createEventDispatcher<{
-    retry: void;
-    openExternal: void;
-  }>();
+  let {
+    pdfDoc = null,
+    currentPage = 1,
+    isLoadingPdf = false,
+    isRenderingPage = false,
+    renderError = null,
+    canvasElement = $bindable(null),
+    onretry,
+    onopenExternal
+  }: Props = $props();
 </script>
 
 <div class="w-full h-full p-4 overflow-auto">
@@ -49,10 +57,9 @@
       </div>
 
       <div class="flex flex-wrap items-center justify-center gap-2 mt-2">
-
         <button
           class="px-3 py-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#ebdbb2] rounded text-xs transition-colors cursor-pointer flex items-center gap-1"
-          on:click={() => dispatch('retry')}
+          onclick={() => onretry?.()}
         >
           <span class="material-symbols-outlined text-[14px]">sync</span>
           <span>重新載入</span>
@@ -60,7 +67,7 @@
 
         <button
           class="px-3 py-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#8ec07c] hover:text-[#b8bb26] rounded text-xs transition-colors cursor-pointer flex items-center gap-1"
-          on:click={() => dispatch('openExternal')}
+          onclick={() => onopenExternal?.()}
         >
           <span class="material-symbols-outlined text-[14px]">open_in_new</span>
           <span>獨立新分頁開啟</span>

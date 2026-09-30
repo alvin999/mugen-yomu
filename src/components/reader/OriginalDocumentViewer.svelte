@@ -452,26 +452,26 @@
     {allSections}
     {activeSectionId}
     {mode}
-    on:setZoom={(e) => setZoom(e.detail.zoom)}
-    on:setViewerMode={(e) => {
-      pdfViewerStore.setViewerMode(e.detail.mode);
-      if (e.detail.mode === 'canvas') {
+    onsetZoom={(data) => setZoom(data.zoom)}
+    onsetViewerMode={(data) => {
+      pdfViewerStore.setViewerMode(data.mode);
+      if (data.mode === 'canvas') {
         if (pdfDoc) triggerPageRender(currentPage);
         else handleRetry();
       }
     }}
-    on:retry={handleRetry}
-    on:openExternal={handleOpenExternal}
-    on:switchToSplit={() => dispatch('switchToSplit')}
-    on:close={() => dispatch('close')}
-    on:toggleSync={toggleSync}
-    on:selectSection={(e) => handleSectionSelect(e.detail.sectionId)}
-    on:prevPage={handlePrevPage}
-    on:nextPage={handleNextPage}
-    on:inputPage={(e) => jumpToPage(e.detail.page, { fromUser: true })}
-    on:convertToPaper={handleConvertToPaper}
-    on:fileSelect={(e) => handleFileSelect(e.detail.event)}
-    on:clearLocalPdf={clearLocalPdf}
+    onretry={handleRetry}
+    onopenExternal={handleOpenExternal}
+    onswitchToSplit={() => dispatch('switchToSplit')}
+    onclose={() => dispatch('close')}
+    ontoggleSync={toggleSync}
+    onselectSection={(data) => handleSectionSelect(data.sectionId)}
+    onprevPage={handlePrevPage}
+    onnextPage={handleNextPage}
+    oninputPage={(data) => jumpToPage(data.page, { fromUser: true })}
+    onconvertToPaper={handleConvertToPaper}
+    onfileSelect={(data) => handleFileSelect(data.event)}
+    onclearLocalPdf={clearLocalPdf}
   />
 
   <!-- Drag-and-Drop Overlay Indicator -->
@@ -493,8 +493,8 @@
         {isRenderingPage}
         {renderError}
         bind:canvasElement
-        on:retry={handleRetry}
-        on:openExternal={handleOpenExternal}
+        onretry={handleRetry}
+        onopenExternal={handleOpenExternal}
       />
     {:else if isWeb && webUrl}
       <div class="w-full h-full flex flex-col relative bg-[#141617]">

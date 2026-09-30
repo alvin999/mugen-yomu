@@ -1,30 +1,40 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import type { PaperDocument } from '../../../types/document';
   import AuthorInfoModal from './AuthorInfoModal.svelte';
 
-  export let paper: PaperDocument | null = null;
-  export let selectedAuthorInfo: string | null = null;
-  export let isAbstractCollapsed: boolean = false;
-  export let isGeneratingAbstract: boolean = false;
-  export let abstractGenError: string = '';
+  interface Props {
+    paper?: PaperDocument | null;
+    selectedAuthorInfo?: string | null;
+    isAbstractCollapsed?: boolean;
+    isGeneratingAbstract?: boolean;
+    abstractGenError?: string;
+    onselectAuthor?: (detail: { author: string }) => void;
+    oncloseAuthorInfo?: () => void;
+    ongenerateAbstract?: () => void;
+    ontoggleAbstract?: () => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    selectAuthor: { author: string };
-    closeAuthorInfo: void;
-    generateAbstract: void;
-    toggleAbstract: void;
-  }>();
+  let {
+    paper = null,
+    selectedAuthorInfo = null,
+    isAbstractCollapsed = false,
+    isGeneratingAbstract = false,
+    abstractGenError = '',
+    onselectAuthor,
+    oncloseAuthorInfo,
+    ongenerateAbstract,
+    ontoggleAbstract
+  }: Props = $props();
 
-  $: hasValidChineseSummary = Boolean(
+  let hasValidChineseSummary = $derived(Boolean(
     paper?.abstract?.chineseSummary &&
     paper.abstract.chineseSummary.trim().length > 0 &&
     !paper.abstract.chineseSummary.includes('此文獻已由 MUGEN YOMU')
-  );
+  ));
 
-  $: rawEnglishAbstract = (paper?.abstract?.english || '').trim();
-  $: isEnglishJinaNoise = rawEnglishAbstract.startsWith('Title:') || rawEnglishAbstract.startsWith('URL Source:');
-  $: cleanEnglishAbstract = isEnglishJinaNoise ? '' : rawEnglishAbstract;
+  let rawEnglishAbstract = $derived((paper?.abstract?.english || '').trim());
+  let isEnglishJinaNoise = $derived(rawEnglishAbstract.startsWith('Title:') || rawEnglishAbstract.startsWith('URL Source:'));
+  let cleanEnglishAbstract = $derived(isEnglishJinaNoise ? '' : rawEnglishAbstract);
 </script>
 
 {#if paper}
@@ -74,8 +84,8 @@
     <AuthorInfoModal
       authors={paper.authors || []}
       {selectedAuthorInfo}
-      onselectAuthor={(data) => dispatch('selectAuthor', { author: data.author })}
-      oncloseAuthorInfo={() => dispatch('closeAuthorInfo')}
+      onselectAuthor={(data) => onselectAuthor?.({ author: data.author })}
+      oncloseAuthorInfo={() => oncloseAuthorInfo?.()}
     />
 
     <!-- Abstract Collapsible Card -->
@@ -101,7 +111,7 @@
           {:else if !hasValidChineseSummary}
             <button
               class="font-mono text-[10px] bg-[#fe8019]/20 hover:bg-[#fe8019]/30 border border-[#fe8019]/50 hover:border-[#fe8019] text-[#fabd2f] px-2.5 py-0.5 rounded flex items-center gap-1 transition-all cursor-pointer shadow-sm active:scale-95"
-              on:click={() => dispatch('generateAbstract')}
+              onclick={() => ongenerateAbstract?.()}
               title="由 AI 提煉論文核心導讀"
             >
               <span class="material-symbols-outlined text-[12px]">auto_awesome</span>
@@ -110,7 +120,7 @@
           {:else}
             <button
               class="font-mono text-[10px] text-[#a89984] hover:text-[#fabd2f] flex items-center gap-0.5 transition-colors cursor-pointer"
-              on:click={() => dispatch('generateAbstract')}
+              onclick={() => ongenerateAbstract?.()}
               title="重新調用 AI 精煉核心導讀"
             >
               <span class="material-symbols-outlined text-[12px]">refresh</span>
@@ -120,7 +130,7 @@
 
           <button
             class="font-mono text-[10px] text-[#a89984] hover:text-[#ebdbb2] flex items-center gap-0.5 transition-colors cursor-pointer ml-1"
-            on:click={() => dispatch('toggleAbstract')}
+            onclick={() => ontoggleAbstract?.()}
           >
             <span>{isAbstractCollapsed ? '展開' : '收起'}</span>
             <span class="material-symbols-outlined text-[13px]">{isAbstractCollapsed ? 'expand_more' : 'expand_less'}</span>
@@ -135,7 +145,7 @@
               <span>{abstractGenError}</span>
               <button
                 class="underline hover:text-[#ebdbb2] cursor-pointer text-[10px]"
-                on:click={() => dispatch('generateAbstract')}
+                onclick={() => ongenerateAbstract?.()}
               >
                 重試
               </button>

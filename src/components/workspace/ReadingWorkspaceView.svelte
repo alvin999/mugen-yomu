@@ -248,8 +248,9 @@
     if (selectedText) activeSelectedText = selectedText;
   }
 
-  function handleSemanticSelectParagraph(event: CustomEvent<{ sectionId: string; paragraphIndex: number; text: string; query?: string; charIndex?: number; matchedText?: string }>) {
-    const { sectionId, paragraphIndex, text, query, charIndex } = event.detail;
+  function handleSemanticSelectParagraph(event: { sectionId: string; paragraphIndex: number; text: string; query?: string; charIndex?: number; matchedText?: string } | CustomEvent<{ sectionId: string; paragraphIndex: number; text: string; query?: string; charIndex?: number; matchedText?: string }>) {
+    const detail = 'detail' in event ? event.detail : event;
+    const { sectionId, paragraphIndex, text, query, charIndex } = detail;
     if (sectionId) {
       // 避免 source: 'outline' 觸發 scrollToTarget 重置到章節首字
       selectSection({ sectionId, source: 'semantic', noScroll: true });
@@ -513,11 +514,12 @@
     }
   }
 
-  function handleSaveNote(e: CustomEvent<{ title: string; text: string }>) {
+  function handleSaveNote(e: CustomEvent<{ title: string; text: string }> | { title: string; text: string }) {
+    const detail = 'detail' in e ? e.detail : e;
     if (activePaper) {
       addNoteToPaper({
-        title: e.detail.title,
-        text: e.detail.text,
+        title: detail.title,
+        text: detail.text,
         paperId: activePaper.id,
         paperTitle: activePaper.title,
         sectionId: activeSectionId,
@@ -603,13 +605,13 @@
     <div class="flex-1 overflow-hidden">
       <DerivationsFiguresView
         paper={activePaper}
-        on:backToReader={() => readingMode = 'bilingual'}
-        on:selectSection={(e) => {
+        onbackToReader={() => readingMode = 'bilingual'}
+        onselectSection={(data) => {
           readingMode = 'bilingual';
-          handleSelectSection(e);
+          handleSelectSection(data);
         }}
-        on:saveNote={handleSaveNote}
-        on:updatePaper={(e) => dispatch('updatePaper', { paper: e.detail.paper })}
+        onsaveNote={handleSaveNote}
+        onupdatePaper={(data) => dispatch('updatePaper', { paper: data.paper })}
       />
     </div>
   {:else}
@@ -731,9 +733,9 @@
     isOpen={isSemanticSearchOpen}
     paperId={activePaper?.id || ''}
     sections={activePaper?.sections || []}
-    on:close={() => isSemanticSearchOpen = false}
-    on:selectParagraph={handleSemanticSelectParagraph}
-    on:openSettings={() => {
+    onclose={() => isSemanticSearchOpen = false}
+    onselectParagraph={handleSemanticSelectParagraph}
+    onopenSettings={() => {
       isSemanticSearchOpen = false;
       dispatch('openSettings');
     }}

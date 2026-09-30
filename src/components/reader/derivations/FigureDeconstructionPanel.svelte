@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import type { PaperDocument, FigureItem } from '../../../types/document';
   import type { FigureDeconstructionData } from '../../../types/derivation';
   import type { ExtractedFigureItem } from '../../../utils/derivationExtractor';
@@ -7,39 +6,56 @@
   import { normalizeAcademicImageUrl } from '../../../utils/academicImageUtils';
   import { getDomainAdaptedFigurePipeline } from '../../../services/derivationService';
 
-  export let paper: PaperDocument | null = null;
-  export let dynamicFigures: ExtractedFigureItem[] = [];
-  export let selectedFigureIndex: number = 0;
-  export let activeFigureTab: 'fig1' | 'fig2' = 'fig1';
-  export let currentFigureDeconstruction: FigureDeconstructionData | null = null;
-  export let isAnalyzingFigure: boolean = false;
-  export let isScanningHeuristically: boolean = false;
+  interface Props {
+    paper?: PaperDocument | null;
+    dynamicFigures?: ExtractedFigureItem[];
+    selectedFigureIndex?: number;
+    activeFigureTab?: 'fig1' | 'fig2';
+    currentFigureDeconstruction?: FigureDeconstructionData | null;
+    isAnalyzingFigure?: boolean;
+    isScanningHeuristically?: boolean;
+    onselectFigure?: (detail: { index: number }) => void;
+    onselectFallbackTab?: (detail: { tab: 'fig1' | 'fig2' }) => void;
+    onanalyzeFigure?: (detail: { figure: FigureItem }) => void;
+    onheuristicScan?: () => void;
+    oncaptureToNotes?: () => void;
+    onopenLightbox?: (detail: { url: string; title: string }) => void;
+    onjumpToSection?: (detail: { sectionId: string }) => void;
+    onswitchRightMode?: (detail: { mode: 'derivation' | 'scratchpad' }) => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    selectFigure: { index: number };
-    selectFallbackTab: { tab: 'fig1' | 'fig2' };
-    analyzeFigure: { figure: FigureItem };
-    heuristicScan: void;
-    captureToNotes: void;
-    openLightbox: { url: string; title: string };
-    jumpToSection: { sectionId: string };
-    switchRightMode: { mode: 'derivation' | 'scratchpad' };
-  }>();
+  let {
+    paper = null,
+    dynamicFigures = [],
+    selectedFigureIndex = 0,
+    activeFigureTab = 'fig1',
+    currentFigureDeconstruction = null,
+    isAnalyzingFigure = false,
+    isScanningHeuristically = false,
+    onselectFigure,
+    onselectFallbackTab,
+    onanalyzeFigure,
+    onheuristicScan,
+    oncaptureToNotes,
+    onopenLightbox,
+    onjumpToSection,
+    onswitchRightMode
+  }: Props = $props();
 
-  let figureZoom: number = 100;
-  let brokenImageUrls: Record<string, boolean> = {};
-  let figureCanvasViewMode: 'auto' | 'topology' | 'image' = 'auto';
+  let figureZoom = $state<number>(100);
+  let brokenImageUrls = $state<Record<string, boolean>>({});
+  let figureCanvasViewMode = $state<'auto' | 'topology' | 'image'>('auto');
 
-  $: activeItem = dynamicFigures[selectedFigureIndex];
-  $: rawImg = activeItem?.figure?.imageUrl?.trim() || '';
-  $: isBroken = Boolean(rawImg && brokenImageUrls[rawImg]);
-  $: hasImg = Boolean(rawImg && !isBroken);
-  $: showTopology = figureCanvasViewMode === 'topology' || (!hasImg && figureCanvasViewMode !== 'image');
+  let activeItem = $derived(dynamicFigures[selectedFigureIndex]);
+  let rawImg = $derived(activeItem?.figure?.imageUrl?.trim() || '');
+  let isBroken = $derived(Boolean(rawImg && brokenImageUrls[rawImg]));
+  let hasImg = $derived(Boolean(rawImg && !isBroken));
+  let showTopology = $derived(figureCanvasViewMode === 'topology' || (!hasImg && figureCanvasViewMode !== 'image'));
 
-  $: isML = /transformer|attention|neural|deep learning|resnet|machine learning|reinforcement|language model|convolution/i.test(paper?.title || '');
-  $: adaptedTopology = getDomainAdaptedFigurePipeline(paper?.title || '', activeItem?.figure?.name || '');
+  let isML = $derived(/transformer|attention|neural|deep learning|resnet|machine learning|reinforcement|language model|convolution/i.test(paper?.title || ''));
+  let adaptedTopology = $derived(getDomainAdaptedFigurePipeline(paper?.title || '', activeItem?.figure?.name || ''));
 
-  $: topologySteps = (() => {
+  let topologySteps = $derived((() => {
     const rawSteps = currentFigureDeconstruction?.dataFlowSteps && currentFigureDeconstruction.dataFlowSteps.length > 0
       ? currentFigureDeconstruction.dataFlowSteps.slice(0, 3)
       : adaptedTopology.dataFlowSteps;
@@ -49,9 +65,9 @@
       }
       return s;
     });
-  })();
+  })());
 
-  $: displaySteps = (() => {
+  let displaySteps = $derived((() => {
     if (!currentFigureDeconstruction) return [];
     const adapted = getDomainAdaptedFigurePipeline(paper?.title || '', currentFigureDeconstruction.name);
     return currentFigureDeconstruction.dataFlowSteps.map((s, idx) => {
@@ -60,7 +76,7 @@
       }
       return s;
     });
-  })();
+  })());
 </script>
 
 <div class="h-full flex flex-col bg-[#1d2021]/70 overflow-hidden">
@@ -71,8 +87,8 @@
         {#each dynamicFigures as item, idx}
           <button
             class="font-mono text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1 shrink-0 {selectedFigureIndex === idx ? 'bg-[#3c3836] text-[#fe8019] font-semibold border border-[#fe8019]/40 shadow-sm' : 'text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2]'}"
-            on:click={() => {
-              dispatch('selectFigure', { index: idx });
+            onclick={() => {
+              onselectFigure?.({ index: idx });
               figureZoom = 100;
             }}
           >
@@ -86,7 +102,7 @@
       <div class="flex items-center gap-1 shrink-0">
         <button
           class="w-6 h-6 rounded flex items-center justify-center bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] text-xs font-mono"
-          on:click={() => figureZoom = Math.max(50, figureZoom - 20)}
+          onclick={() => figureZoom = Math.max(50, figureZoom - 20)}
           title="縮小圖片"
         >
           -
@@ -94,14 +110,14 @@
         <span class="font-mono text-[10px] text-[#a89984] w-9 text-center">{figureZoom}%</span>
         <button
           class="w-6 h-6 rounded flex items-center justify-center bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] text-xs font-mono"
-          on:click={() => figureZoom = Math.min(250, figureZoom + 20)}
+          onclick={() => figureZoom = Math.min(250, figureZoom + 20)}
           title="放大圖片"
         >
           +
         </button>
         <button
           class="w-6 h-6 rounded flex items-center justify-center bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#fe8019] text-xs"
-          on:click={() => figureZoom = 100}
+          onclick={() => figureZoom = 100}
           title="重設縮放 (100%)"
         >
           <span class="material-symbols-outlined text-[13px]">restart_alt</span>
@@ -117,14 +133,14 @@
         </span>
         <button
           class="font-mono text-xs px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 {activeFigureTab === 'fig1' ? 'bg-[#3c3836] text-[#fe8019] font-semibold border border-[#fe8019]/40' : 'text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2]'}"
-          on:click={() => dispatch('selectFallbackTab', { tab: 'fig1' })}
+          onclick={() => onselectFallbackTab?.({ tab: 'fig1' })}
         >
           <span class="material-symbols-outlined text-[14px]">account_tree</span>
           <span>Fig 1: Transformer 全景拓撲</span>
         </button>
         <button
           class="font-mono text-xs px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 {activeFigureTab === 'fig2' ? 'bg-[#3c3836] text-[#fe8019] font-semibold border border-[#fe8019]/40' : 'text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2]'}"
-          on:click={() => dispatch('selectFallbackTab', { tab: 'fig2' })}
+          onclick={() => onselectFallbackTab?.({ tab: 'fig2' })}
         >
           <span class="material-symbols-outlined text-[14px]">device_hub</span>
           <span>Fig 2: 點積注意力電路</span>
@@ -147,7 +163,7 @@
         </div>
         <button
           class="px-2.5 py-1 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-bold rounded flex items-center gap-1 shrink-0 transition-colors shadow-sm"
-          on:click={() => dispatch('heuristicScan')}
+          onclick={() => onheuristicScan?.()}
           disabled={isScanningHeuristically}
         >
           {#if isScanningHeuristically}
@@ -185,14 +201,14 @@
               <div class="flex items-center bg-[#1d2021] border border-[#3c3836] rounded p-0.5 text-[10px] font-mono">
                 <button
                   class="px-1.5 py-0.5 rounded transition-colors {figureCanvasViewMode !== 'topology' ? 'bg-[#3c3836] text-[#fabd2f] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
-                  on:click={() => figureCanvasViewMode = 'image'}
+                  onclick={() => figureCanvasViewMode = 'image'}
                   title="顯示論文原始圖片"
                 >
                   原圖
                 </button>
                 <button
                   class="px-1.5 py-0.5 rounded transition-colors {figureCanvasViewMode === 'topology' ? 'bg-[#3c3836] text-[#fe8019] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
-                  on:click={() => figureCanvasViewMode = 'topology'}
+                  onclick={() => figureCanvasViewMode = 'topology'}
                   title="切換為資料流拓撲向量視圖"
                 >
                   拓撲
@@ -203,7 +219,7 @@
             {#if !showTopology && hasImg}
               <button
                 class="font-mono text-[10px] bg-[#32302f] hover:bg-[#3c3836] border border-[#504945] text-[#ebdbb2] hover:text-[#fe8019] px-2 py-0.5 rounded flex items-center gap-1 transition-colors"
-                on:click={() => dispatch('openLightbox', { url: normalizeAcademicImageUrl(rawImg), title: activeItem.figure.name })}
+                onclick={() => activeItem && onopenLightbox?.({ url: normalizeAcademicImageUrl(rawImg), title: activeItem.figure.name })}
               >
                 <span class="material-symbols-outlined text-[12px]">fullscreen</span>
                 <span>全螢幕</span>
@@ -213,7 +229,7 @@
             {#if activeItem.sectionId}
               <button
                 class="font-mono text-[10px] text-[#8ec07c] hover:underline flex items-center gap-0.5 cursor-pointer shrink-0"
-                on:click={() => dispatch('jumpToSection', { sectionId: activeItem.sectionId || '' })}
+                onclick={() => onjumpToSection?.({ sectionId: activeItem.sectionId || '' })}
               >
                 <span>跳轉章節</span>
                 <span class="material-symbols-outlined text-[12px]">arrow_forward</span>
@@ -370,8 +386,8 @@
               referrerpolicy="no-referrer"
               style="transform: scale({figureZoom / 100}); transform-origin: center center;"
               class="max-h-[360px] max-w-full object-contain rounded transition-transform duration-200 cursor-zoom-in"
-              on:click={() => dispatch('openLightbox', { url: normalizeAcademicImageUrl(rawImg), title: activeItem.figure.name })}
-              on:error={() => {
+              onclick={() => activeItem && onopenLightbox?.({ url: normalizeAcademicImageUrl(rawImg), title: activeItem.figure.name })}
+              onerror={() => {
                 if (rawImg) brokenImageUrls[rawImg] = true;
               }}
               loading="lazy"
@@ -478,7 +494,7 @@
             {#if activeItem}
               <button
                 class="font-mono text-[10px] bg-[#282828] hover:bg-[#32302f] border border-[#fe8019]/50 text-[#fe8019] px-2 py-0.5 rounded flex items-center gap-1 transition-colors"
-                on:click={() => dispatch('analyzeFigure', { figure: activeItem.figure })}
+                onclick={() => activeItem && onanalyzeFigure?.({ figure: activeItem.figure })}
                 disabled={isAnalyzingFigure}
               >
                 {#if isAnalyzingFigure}
@@ -492,7 +508,7 @@
             {/if}
             <button
               class="font-mono text-[10px] bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#fabd2f] hover:text-[#fe8019] px-2 py-0.5 rounded flex items-center gap-1 transition-colors"
-              on:click={() => dispatch('captureToNotes')}
+              onclick={() => oncaptureToNotes?.()}
               title="將此圖表架構與資料流解構收錄至精讀筆記"
             >
               <span class="material-symbols-outlined text-[12px]">edit_note</span>
@@ -569,7 +585,7 @@
             </div>
             <button
               class="font-mono text-[10px] text-[#fabd2f] hover:underline flex items-center gap-0.5 cursor-pointer"
-              on:click={() => dispatch('switchRightMode', { mode: 'derivation' })}
+              onclick={() => onswitchRightMode?.({ mode: 'derivation' })}
             >
               <span>檢視對應推導</span>
               <span class="material-symbols-outlined text-[12px]">arrow_forward</span>
