@@ -2,16 +2,16 @@
   import { vimCursorState, vimConfigStore, updateVimConfig, setVimHelpOpen } from '../../stores/vimCursorStore';
   import { flowStore } from '../../stores/flowStore';
 
-  export let readingMode: string = 'bilingual';
+  interface Props {
+    readingMode?: string;
+  }
 
-  $: isHelpOpen = $vimCursorState.isHelpOpen;
+  let { readingMode = 'bilingual' }: Props = $props();
+
+  let isHelpOpen = $derived($vimCursorState.isHelpOpen);
 
   function toggleHelp() {
     setVimHelpOpen(!isHelpOpen);
-  }
-
-  function toggleVim() {
-    updateVimConfig({ isVimEnabled: !$vimConfigStore.isVimEnabled });
   }
 
   function toggleBlink() {
@@ -31,8 +31,8 @@
             <span>Vim 游標導引快捷鍵</span>
           </div>
           <button
-            class="text-[#a89984] hover:text-[#ebdbb2] text-[14px] px-1"
-            on:click={toggleHelp}
+            class="text-[#a89984] hover:text-[#ebdbb2] text-[14px] px-1 cursor-pointer"
+            onclick={toggleHelp}
             title="關閉速查卡"
           >✕</button>
         </div>
@@ -81,7 +81,7 @@
             彈跳強度: {($vimConfigStore.bounceStrength ?? 60) === 0 ? '關閉' : `${$vimConfigStore.bounceStrength ?? 60}%`}
           </span>
           <label class="flex items-center gap-1.5 cursor-pointer hover:text-[#ebdbb2]">
-            <input type="checkbox" checked={$vimConfigStore.isBlinkEnabled} on:change={toggleBlink} class="accent-[#fe8019]" />
+            <input type="checkbox" checked={$vimConfigStore.isBlinkEnabled} onchange={toggleBlink} class="accent-[#fe8019]" />
             <span>閃爍游標</span>
           </label>
         </div>
@@ -121,7 +121,7 @@
       <button
         type="button"
         class="ml-1 text-[#a89984] hover:text-[#fe8019] cursor-pointer transition-colors"
-        on:click={toggleHelp}
+        onclick={toggleHelp}
         title="按 ? 或點擊查看 Vim 閱讀快捷鍵"
       >
         <span class="material-symbols-outlined text-[14px]">help_outline</span>
