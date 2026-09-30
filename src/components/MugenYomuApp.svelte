@@ -286,8 +286,9 @@
     refreshCacheStats();
   }
 
-  function handleJumpToSectionFromNotes(e: CustomEvent<{ paperId: string; sectionId: string }>) {
-    const { paperId, sectionId } = e.detail;
+  function handleJumpToSectionFromNotes(e: CustomEvent<{ paperId: string; sectionId: string }> | { paperId: string; sectionId: string }) {
+    const detail = 'detail' in e ? e.detail : e;
+    const { paperId, sectionId } = detail;
     const found = paperLibrary.find(p => p.id === paperId || p.id.includes(paperId));
     if (found && found.id !== activePaperId) {
       setPaper(found);
@@ -399,15 +400,15 @@
         <CognitiveNotesView
           {paperLibrary}
           {activePaper}
-          on:jumpToSection={handleJumpToSectionFromNotes}
-          on:backToWorkspace={() => currentMainView = 'workspace'}
+          onjumpToSection={handleJumpToSectionFromNotes}
+          onbackToWorkspace={() => currentMainView = 'workspace'}
         />
       {:else if currentMainView === 'citation-graph'}
         <CitationGraphView
           paper={activePaper}
-          on:backToWorkspace={() => currentMainView = 'workspace'}
-          on:loadPaper={handleLoadPaperFromCitation}
-          on:updateCitationGraph={handleUpdateCitationGraph}
+          onbackToWorkspace={() => currentMainView = 'workspace'}
+          onloadPaper={handleLoadPaperFromCitation}
+          onupdateCitationGraph={handleUpdateCitationGraph}
         />
       {:else}
         <!-- Reading Workspace Studio View -->

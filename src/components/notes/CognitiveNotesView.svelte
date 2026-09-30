@@ -1,38 +1,46 @@
 <script lang="ts">
-  import { onMount, createEventDispatcher } from 'svelte';
+  import { onMount } from 'svelte';
   import type { PaperDocument } from '../../stores/documentStore';
   import NotesLibraryNav from './NotesLibraryNav.svelte';
   import NotesExplorerList, { type NoteEntry } from './NotesExplorerList.svelte';
   import NotesEditorCanvas from './NotesEditorCanvas.svelte';
 
-  export let paperLibrary: PaperDocument[] = [];
-  export let activePaper: PaperDocument | null = null;
+  interface Props {
+    paperLibrary?: PaperDocument[];
+    activePaper?: PaperDocument | null;
+    onjumpToSection?: (detail: { paperId: string; sectionId: string }) => void;
+    onbackToWorkspace?: () => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    jumpToSection: { paperId: string; sectionId: string };
-    backToWorkspace: void;
-  }>();
+  let {
+    paperLibrary = [],
+    activePaper = null,
+    onjumpToSection,
+    onbackToWorkspace
+  }: Props = $props();
 
   // 狀態管理
-  let activePaperFilterId: string = activePaper?.id || 'all';
-  let isStarredFilter: boolean = false;
-  let selectedNoteIndex: number = 0;
-  let editorViewMode: 'split' | 'edit' | 'preview' = 'split';
-  let toastMessage: string = '';
+  let activePaperFilterId = $state(activePaper?.id || 'all');
+  let isStarredFilter = $state(false);
+  let selectedNoteIndex = $state(0);
+  let editorViewMode = $state<'split' | 'edit' | 'preview'>('split');
+  let toastMessage = $state('');
   let toastTimer: any = null;
 
   // 所有收錄的筆記平坦陣列
-  let allNotes: NoteEntry[] = [];
-  let paperNotesCountMap: Record<string, number> = {};
+  let allNotes = $state<NoteEntry[]>([]);
+  let paperNotesCountMap = $state<Record<string, number>>({});
 
   onMount(() => {
     loadAllNotes();
   });
 
-  $: if (activePaper) {
-    // 若外部更新了 activePaper，若目前正在查看該篇，同步筆記
-    loadAllNotes();
-  }
+  $effect(() => {
+    if (activePaper) {
+      // 若外部更新了 activePaper，若目前正在查看該篇，同步筆記
+      loadAllNotes();
+    }
+  });
 
   function loadAllNotes() {
     if (typeof window === 'undefined') return;
@@ -88,19 +96,23 @@
   }
 
   // 根據目前選中的文獻與星號過濾筆記
-  $: filteredNotes = allNotes.filter(n => {
-    if (isStarredFilter && !n.isPinned) return false;
-    if (activePaperFilterId !== 'all' && n.paperId !== activePaperFilterId) return false;
-    return true;
-  });
+  let filteredNotes = $derived(
+    allNotes.filter(n => {
+      if (isStarredFilter && !n.isPinned) return false;
+      if (activePaperFilterId !== 'all' && n.paperId !== activePaperFilterId) return false;
+      return true;
+    })
+  );
 
   // 當前選中的筆記實體
-  $: currentNote = filteredNotes[selectedNoteIndex] || null;
+  let currentNote = $derived(filteredNotes[selectedNoteIndex] || null);
 
   // 當前過濾欄的文獻標題
-  $: currentFilterPaperTitle = activePaperFilterId === 'all'
-    ? '全部文獻筆記'
-    : (paperLibrary.find(p => p.id === activePaperFilterId)?.title || '精選文獻');
+  let currentFilterPaperTitle = $derived(
+    activePaperFilterId === 'all'
+      ? '全部文獻筆記'
+      : (paperLibrary.find(p => p.id === activePaperFilterId)?.title || '精選文獻')
+  );
 
   function handleAddNote() {
     const targetPaper = (activePaperFilterId !== 'all' ? paperLibrary.find(p => p.id === activePaperFilterId) : activePaper) || paperLibrary[0];
@@ -156,7 +168,7 @@
 
   function handleJumpToSource(note: NoteEntry) {
     if (!note.paperId) return;
-    dispatch('jumpToSection', {
+    onjumpToSection?.({
       paperId: note.paperId,
       sectionId: note.sectionId || ''
     });
@@ -242,7 +254,7 @@
     <div class="flex items-center gap-2">
       <button
         class="px-2.5 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#504945] hover:border-[#fabd2f] text-[#fabd2f] rounded-lg text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer"
-        on:click={() => handleCopyMarkdown()}
+        onclick={() => handleCopyMarkdown()}
         title="複製目前篩選的所有筆記為 Markdown"
       >
         <span class="material-symbols-outlined text-[14px]">content_copy</span>
@@ -251,7 +263,7 @@
 
       <button
         class="px-3 py-1 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-bold rounded-lg text-xs flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
-        on:click={() => handleExportMarkdown()}
+        onclick={() => handleExportMarkdown()}
         title="匯出目前所有筆記為 .md 檔案"
       >
         <span class="material-symbols-outlined text-[15px]">download</span>
@@ -262,7 +274,7 @@
 
       <button
         class="px-2.5 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] rounded-lg text-xs font-mono flex items-center gap-1 transition-colors cursor-pointer"
-        on:click={() => dispatch('backToWorkspace')}
+        onclick={() => onbackToWorkspace?.()}
         title="返回閱讀工作台"
       >
         <span class="material-symbols-outlined text-[14px]">close</span>
@@ -280,9 +292,9 @@
       bind:isStarredFilter
       {paperNotesCountMap}
       totalNotesCount={allNotes.length}
-      on:selectFilter={(e) => { activePaperFilterId = e.detail.paperId; selectedNoteIndex = 0; }}
-      on:toggleStarred={(e) => { isStarredFilter = e.detail.isStarred; selectedNoteIndex = 0; }}
-      on:backToWorkspace={() => dispatch('backToWorkspace')}
+      onselectFilter={(e) => { activePaperFilterId = e.paperId; selectedNoteIndex = 0; }}
+      ontoggleStarred={(e) => { isStarredFilter = e.isStarred; selectedNoteIndex = 0; }}
+      onbackToWorkspace={() => onbackToWorkspace?.()}
     />
 
     <!-- Col 2: Notes Explorer & Search List (w-80) -->
@@ -290,21 +302,21 @@
       notes={filteredNotes}
       bind:selectedIndex={selectedNoteIndex}
       currentPaperTitle={currentFilterPaperTitle}
-      on:selectNote={(e) => selectedNoteIndex = e.detail.index}
-      on:addNote={handleAddNote}
-      on:deleteNote={(e) => handleDeleteNote(e.detail.index)}
-      on:togglePin={(e) => handleTogglePin(e.detail.index)}
+      onselectNote={(e) => selectedNoteIndex = e.index}
+      onaddNote={handleAddNote}
+      ondeleteNote={(e) => handleDeleteNote(e.index)}
+      ontogglePin={(e) => handleTogglePin(e.index)}
     />
 
     <!-- Col 3: Deep Markdown & KaTeX Canvas (flex-1) -->
     <NotesEditorCanvas
       note={currentNote}
       bind:viewMode={editorViewMode}
-      on:updateNote={(e) => handleUpdateNote(e.detail.note)}
-      on:jumpToSource={(e) => handleJumpToSource(e.detail.note)}
-      on:deleteNote={() => handleDeleteNote(selectedNoteIndex)}
-      on:copyMarkdown={() => currentNote && handleCopyMarkdown(currentNote)}
-      on:exportMarkdown={() => currentNote && handleExportMarkdown(currentNote)}
+      onupdateNote={(e) => handleUpdateNote(e.note)}
+      onjumpToSource={(e) => handleJumpToSource(e.note)}
+      ondeleteNote={() => handleDeleteNote(selectedNoteIndex)}
+      oncopyMarkdown={() => currentNote && handleCopyMarkdown(currentNote)}
+      onexportMarkdown={() => currentNote && handleExportMarkdown(currentNote)}
     />
   </div>
 </div>

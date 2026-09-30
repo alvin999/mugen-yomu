@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy, createEventDispatcher } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import {
     getCitationGraphForPaper,
     isPresetCitationPaper,
@@ -23,13 +23,19 @@
   import CitationGraphControls from './CitationGraphControls.svelte';
   import CitationDetailPanel from './CitationDetailPanel.svelte';
 
-  export let paper: PaperDocument | null = null;
+  interface Props {
+    paper?: PaperDocument | null;
+    onbackToWorkspace?: () => void;
+    onupdateCitationGraph?: (data: { paperId: string; citationGraph: CitationGraphData }) => void;
+    onloadPaper?: (data: { paperId: string }) => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    backToWorkspace: void;
-    updateCitationGraph: { paperId: string; citationGraph: CitationGraphData };
-    loadPaper: { paperId: string };
-  }>();
+  let {
+    paper = null,
+    onbackToWorkspace,
+    onupdateCitationGraph,
+    onloadPaper
+  }: Props = $props();
 
   // Layout & View States
   let layoutMode: 'galaxy' | 'timeline' = 'galaxy';
@@ -66,13 +72,15 @@
   let analysisError: string | null = null;
   let dismissedBanner: boolean = false;
 
-  $: isPreset = isPresetCitationPaper(paper || {});
-  $: isAnalyzed = hasCustomCitationGraph(paper || {});
-  $: showUnanalyzedBanner = Boolean(paper && !isPreset && !isAnalyzed && !isAnalyzing && !dismissedBanner);
+  let isPreset = $derived(isPresetCitationPaper(paper || {}));
+  let isAnalyzed = $derived(hasCustomCitationGraph(paper || {}));
+  let showUnanalyzedBanner = $derived(Boolean(paper && !isPreset && !isAnalyzed && !isAnalyzing && !dismissedBanner));
 
   // 當 paper 變更時重置圖譜資料
-  $: rawGraph = getCitationGraphForPaper(paper || {});
-  $: initGraphData(rawGraph);
+  $effect(() => {
+    const rawGraph = getCitationGraphForPaper(paper || {});
+    initGraphData(rawGraph);
+  });
 
   async function handleStartAnalysis(forceRefresh: boolean = false) {
     if (!paper || isAnalyzing) return;
@@ -92,7 +100,7 @@
       paper.citationGraph = newGraph;
       initGraphData(newGraph);
 
-      dispatch('updateCitationGraph', {
+      onupdateCitationGraph?.({
         paperId: paper.id,
         citationGraph: newGraph
       });
@@ -105,35 +113,35 @@
   }
 
   // 選中的節點物件
-  $: selectedNode = simNodes.find(n => n.id === selectedNodeId) || simNodes.find(n => n.category === 'core') || simNodes[0] || null;
+  let selectedNode = $derived(simNodes.find(n => n.id === selectedNodeId) || simNodes.find(n => n.category === 'core') || simNodes[0] || null);
 
   // 搜尋與類別篩選器過濾
-  $: visibleNodes = simNodes.filter(n => {
+  let visibleNodes = $derived(simNodes.filter(n => {
     const matchesCat = filterCategory === 'all' || n.category === filterCategory;
     const matchesSearch = !searchQuery.trim() ||
       n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       n.authors.some(a => a.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesCat && matchesSearch;
-  });
+  }));
 
-  $: visibleNodeIds = new Set(visibleNodes.map(n => n.id));
+  let visibleNodeIds = $derived(new Set(visibleNodes.map(n => n.id)));
 
-  $: visibleEdges = simEdges.filter(e => {
+  let visibleEdges = $derived(simEdges.filter(e => {
     const sId = typeof e.source === 'string' ? e.source : (e.source as any)?.id;
     const tId = typeof e.target === 'string' ? e.target : (e.target as any)?.id;
     return visibleNodeIds.has(sId) && visibleNodeIds.has(tId);
-  });
+  }));
 
   // 顏色與樣式對應表 (隨當前主題動態切換)
-  $: themeMeta = getCurrentThemeMeta($currentTheme);
-  $: graphColors = themeMeta.graphColors || {
+  let themeMeta = $derived(getCurrentThemeMeta($currentTheme));
+  let graphColors = $derived(themeMeta.graphColors || {
     core: '#fe8019',
     foundational: '#b8bb26',
     derivative: '#83a598',
     methodological: '#d3869b'
-  };
+  });
 
-  $: categoryMeta = {
+  let categoryMeta = $derived({
     core: {
       name: '核心研讀主文',
       color: graphColors.core,
@@ -158,7 +166,7 @@
       bgBadge: `color-mix(in srgb, ${graphColors.methodological} 15%, transparent)`,
       borderBadge: `color-mix(in srgb, ${graphColors.methodological} 40%, transparent)`
     }
-  } as Record<CitationCategory, { name: string; color: string; bgBadge: string; borderBadge: string }>;
+  } as Record<CitationCategory, { name: string; color: string; bgBadge: string; borderBadge: string }>);
 
   function initGraphData(graph: CitationGraphData) {
     if (!graph || !graph.nodes || graph.nodes.length === 0) return;
@@ -312,7 +320,7 @@
   }
 
   function handleLoadTargetPaper(data: { paperId: string }) {
-    dispatch('loadPaper', { paperId: data.paperId });
+    onloadPaper?.({ paperId: data.paperId });
   }
 
   onMount(() => {
@@ -332,8 +340,8 @@
 <div
   class="w-full h-full flex flex-col bg-[#141617] select-none overflow-hidden relative"
   bind:this={containerElement}
-  on:mousemove={handleMouseMove}
-  on:mouseup={handleMouseUp}
+  onmousemove={handleMouseMove}
+  onmouseup={handleMouseUp}
   role="region"
   aria-label="引用文獻關聯圖譜互動視圖"
 >
@@ -349,12 +357,12 @@
     {isAnalyzing}
     {isAnalyzed}
     {analysisStatus}
-    on:backToWorkspace={() => dispatch('backToWorkspace')}
-    on:switchLayout={(e) => switchLayout(e.detail)}
-    on:startAnalysis={(e) => handleStartAnalysis(e.detail.forceRefresh)}
-    on:zoomIn={() => zoom = Math.min(2.5, zoom + 0.15)}
-    on:zoomOut={() => zoom = Math.max(0.4, zoom - 0.15)}
-    on:resetViewport={resetViewport}
+    onbackToWorkspace={() => onbackToWorkspace?.()}
+    onswitchLayout={(mode) => switchLayout(mode)}
+    onstartAnalysis={(data) => handleStartAnalysis(data.forceRefresh)}
+    onzoomIn={() => zoom = Math.min(2.5, zoom + 0.15)}
+    onzoomOut={() => zoom = Math.max(0.4, zoom - 0.15)}
+    onresetViewport={resetViewport}
   />
 
   <!-- ==================== MAIN SVG CANVAS & DOSSIER SPLIT ==================== -->
@@ -379,8 +387,8 @@
               </div>
             </div>
             <button
-              class="text-[#a89984] hover:text-[#ebdbb2] p-1 rounded hover:bg-[#282828] transition-colors shrink-0"
-              on:click={() => dismissedBanner = true}
+              class="text-[#a89984] hover:text-[#ebdbb2] p-1 rounded hover:bg-[#282828] transition-colors shrink-0 cursor-pointer"
+              onclick={() => dismissedBanner = true}
               title="關閉提示"
             >
               <span class="material-symbols-outlined text-[16px]">close</span>
@@ -389,14 +397,14 @@
 
           <div class="flex items-center justify-end gap-2 pt-2 border-t border-[#3c3836]">
             <button
-              class="px-3 py-1.5 rounded-lg text-xs font-mono text-[#a89984] hover:text-[#ebdbb2] transition-colors"
-              on:click={() => dismissedBanner = true}
+              class="px-3 py-1.5 rounded-lg text-xs font-mono text-[#a89984] hover:text-[#ebdbb2] transition-colors cursor-pointer"
+              onclick={() => dismissedBanner = true}
             >
               暫以預設備援瀏覽
             </button>
             <button
               class="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#fe8019] hover:bg-[#d65d0e] text-[#141617] text-xs font-bold font-mono transition-all shadow-md hover:shadow-lg cursor-pointer"
-              on:click={() => handleStartAnalysis(false)}
+              onclick={() => handleStartAnalysis(false)}
             >
               <span class="material-symbols-outlined text-[15px]">psychology</span>
               <span>⚡ 立即啟動 AI 深度引文分析</span>
@@ -424,7 +432,7 @@
       <div class="absolute bottom-12 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#282828] border border-[#cc241d] text-xs text-[#ebdbb2] shadow-2xl animate-fade-in">
         <span class="material-symbols-outlined text-[17px] text-[#fb4934]">error</span>
         <span class="text-[11px] font-mono">{analysisError}</span>
-        <button class="ml-2 px-2 py-0.5 rounded bg-[#3c3836] text-[10px] text-[#ebdbb2] hover:bg-[#504945]" on:click={() => analysisError = null}>關閉</button>
+        <button class="ml-2 px-2 py-0.5 rounded bg-[#3c3836] text-[10px] text-[#ebdbb2] hover:bg-[#504945] cursor-pointer" onclick={() => analysisError = null}>關閉</button>
       </div>
     {/if}
     
@@ -433,8 +441,8 @@
     <svg
       id="graph-bg"
       class="flex-1 w-full h-full cursor-grab active:cursor-grabbing {isPanning ? 'cursor-grabbing' : ''}"
-      on:mousedown={handleMouseDownSvg}
-      on:wheel={handleWheel}
+      onmousedown={handleMouseDownSvg}
+      onwheel={handleWheel}
       role="application"
       aria-label="引文關聯圖譜畫布"
     >
@@ -559,10 +567,10 @@
               transform="translate({node.x}, {node.y})"
               class="cursor-pointer transition-opacity duration-200"
               opacity={isConnected ? 1 : 0.2}
-              on:mousedown={(e) => startDragNode(node, e)}
-              on:mouseenter={() => hoveredNodeId = node.id}
-              on:mouseleave={() => hoveredNodeId = null}
-              on:click={() => selectedNodeId = node.id}
+              onmousedown={(e) => startDragNode(node, e)}
+              onmouseenter={() => hoveredNodeId = node.id}
+              onmouseleave={() => hoveredNodeId = null}
+              onclick={() => selectedNodeId = node.id}
             >
               <!-- Selected Aura Pulse -->
               {#if isSelected}

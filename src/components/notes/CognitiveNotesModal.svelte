@@ -1,27 +1,36 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import type { PaperDocument } from '../../stores/documentStore';
 
-  export let isOpen: boolean = false;
-  export let activePaper: PaperDocument | null = null;
-  export let notes: Array<{ title: string; text: string; time: string }> = [];
+  interface Props {
+    isOpen?: boolean;
+    activePaper?: PaperDocument | null;
+    notes?: Array<{ title: string; text: string; time: string }>;
+    onclose?: () => void;
+    onupdateNotes?: (detail: { notes: Array<{ title: string; text: string; time: string }> }) => void;
+  }
 
-  const dispatch = createEventDispatcher();
+  let {
+    isOpen = $bindable(false),
+    activePaper = null,
+    notes = $bindable([]),
+    onclose,
+    onupdateNotes
+  }: Props = $props();
 
-  let newNoteTitle: string = '';
-  let newNoteText: string = '';
-  let isAddingNote: boolean = false;
-  let editingIndex: number | null = null;
-  let editTitle: string = '';
-  let editText: string = '';
-  let copyFeedback: string = '';
+  let newNoteTitle = $state('');
+  let newNoteText = $state('');
+  let isAddingNote = $state(false);
+  let editingIndex = $state<number | null>(null);
+  let editTitle = $state('');
+  let editText = $state('');
+  let copyFeedback = $state('');
   let copyFeedbackTimer: any = null;
 
   function close() {
     isOpen = false;
     isAddingNote = false;
     editingIndex = null;
-    dispatch('close');
+    onclose?.();
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -44,7 +53,7 @@
     newNoteTitle = '';
     newNoteText = '';
     isAddingNote = false;
-    dispatch('updateNotes', { notes });
+    onupdateNotes?.({ notes });
   }
 
   function handleStartEdit(index: number) {
@@ -62,7 +71,7 @@
     };
     notes = [...notes];
     editingIndex = null;
-    dispatch('updateNotes', { notes });
+    onupdateNotes?.({ notes });
   }
 
   function handleCancelEdit() {
@@ -73,14 +82,14 @@
     if (!confirm('確定要刪除此則精讀筆記嗎？')) return;
     notes = notes.filter((_, i) => i !== index);
     if (editingIndex === index) editingIndex = null;
-    dispatch('updateNotes', { notes });
+    onupdateNotes?.({ notes });
   }
 
   function handleClearAllNotes() {
     if (!confirm('確定要清空當前文獻的所有精讀筆記嗎？此操作無法還原。')) return;
     notes = [];
     editingIndex = null;
-    dispatch('updateNotes', { notes });
+    onupdateNotes?.({ notes });
   }
 
   function handleAddSampleNote() {
@@ -90,7 +99,7 @@
       time: new Date().toLocaleTimeString()
     };
     notes = [sample, ...notes];
-    dispatch('updateNotes', { notes });
+    onupdateNotes?.({ notes });
   }
 
   function generateMarkdown(): string {
@@ -157,18 +166,18 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 {#if isOpen}
   <div class="fixed inset-0 z-50 flex items-center justify-center p-4 select-none" role="dialog" aria-modal="true">
     <!-- Backdrop -->
     <div
       class="fixed inset-0 bg-black/75 backdrop-blur-sm cursor-default"
-      on:click={close}
+      onclick={close}
       role="button"
       tabindex="-1"
       aria-label="點擊關閉筆記面板"
-      on:keydown={(e) => (e.key === 'Escape' || e.key === 'Enter') && close()}
+      onkeydown={(e) => (e.key === 'Escape' || e.key === 'Enter') && close()}
     ></div>
 
     <!-- Modal Container (select-text enabled for reading and copying) -->
@@ -200,7 +209,7 @@
         <div class="flex items-center gap-1.5">
           <button
             class="px-2.5 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fabd2f]/50 text-[#fabd2f] rounded-lg text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer"
-            on:click={() => isAddingNote = !isAddingNote}
+            onclick={() => isAddingNote = !isAddingNote}
             title="手動新增筆記"
           >
             <span class="material-symbols-outlined text-[15px]">{isAddingNote ? 'close' : 'add'}</span>
@@ -209,7 +218,7 @@
 
           <button
             class="w-8 h-8 rounded-lg flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828] transition-colors"
-            on:click={close}
+            onclick={close}
             title="關閉 (ESC)"
           >
             <span class="material-symbols-outlined text-[18px]">close</span>
@@ -239,14 +248,14 @@
           <div class="flex items-center justify-end gap-2">
             <button
               class="px-3 py-1 text-xs text-[#a89984] hover:text-[#ebdbb2] transition-colors"
-              on:click={() => { isAddingNote = false; newNoteText = ''; }}
+              onclick={() => { isAddingNote = false; newNoteText = ''; }}
             >
               取消
             </button>
             <button
               class="px-3.5 py-1 bg-[#fe8019] hover:bg-[#d65d0e] disabled:opacity-50 disabled:cursor-not-allowed text-[#1d2021] font-semibold text-xs rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"
               disabled={!newNoteText.trim()}
-              on:click={handleAddNote}
+              onclick={handleAddNote}
             >
               <span class="material-symbols-outlined text-[14px]">save</span>
               <span>儲存至筆記庫</span>
@@ -262,7 +271,7 @@
             <span class="material-symbols-outlined text-[14px]">check_circle</span>
             <span>{copyFeedback}</span>
           </div>
-          <button class="text-[#a89984] hover:text-[#ebdbb2]" on:click={() => copyFeedback = ''}>
+          <button class="text-[#a89984] hover:text-[#ebdbb2]" onclick={() => copyFeedback = ''}>
             <span class="material-symbols-outlined text-[12px]">close</span>
           </button>
         </div>
@@ -283,14 +292,14 @@
             <div class="flex items-center gap-2">
               <button
                 class="px-3 py-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#504945] hover:border-[#fabd2f]/50 text-[#fabd2f] rounded-lg text-xs font-mono flex items-center gap-1.5 transition-colors"
-                on:click={handleAddSampleNote}
+                onclick={handleAddSampleNote}
               >
                 <span class="material-symbols-outlined text-[15px]">auto_stories</span>
                 <span>載入精讀範例筆記</span>
               </button>
               <button
                 class="px-3 py-1.5 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold rounded-lg text-xs flex items-center gap-1.5 transition-colors shadow-sm"
-                on:click={() => isAddingNote = true}
+                onclick={() => isAddingNote = true}
               >
                 <span class="material-symbols-outlined text-[15px]">add</span>
                 <span>手動新增第一筆</span>
@@ -330,14 +339,14 @@
                   {#if editingIndex === idx}
                     <button
                       class="w-6 h-6 rounded flex items-center justify-center text-[#b8bb26] hover:bg-[#1d2021] transition-colors"
-                      on:click={() => handleSaveEdit(idx)}
+                      onclick={() => handleSaveEdit(idx)}
                       title="儲存修改"
                     >
                       <span class="material-symbols-outlined text-[15px]">done</span>
                     </button>
                     <button
                       class="w-6 h-6 rounded flex items-center justify-center text-[#a89984] hover:bg-[#1d2021] transition-colors"
-                      on:click={handleCancelEdit}
+                      onclick={handleCancelEdit}
                       title="取消編輯"
                     >
                       <span class="material-symbols-outlined text-[15px]">close</span>
@@ -345,21 +354,21 @@
                   {:else}
                     <button
                       class="w-6 h-6 rounded flex items-center justify-center text-[#a89984] hover:text-[#fabd2f] hover:bg-[#1d2021] transition-colors"
-                      on:click={() => handleCopySingle(note)}
+                      onclick={() => handleCopySingle(note)}
                       title="複製本則筆記"
                     >
                       <span class="material-symbols-outlined text-[14px]">content_copy</span>
                     </button>
                     <button
                       class="w-6 h-6 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#1d2021] transition-colors"
-                      on:click={() => handleStartEdit(idx)}
+                      onclick={() => handleStartEdit(idx)}
                       title="編輯筆記"
                     >
                       <span class="material-symbols-outlined text-[14px]">edit</span>
                     </button>
                     <button
                       class="w-6 h-6 rounded flex items-center justify-center text-[#a89984] hover:text-[#fb4934] hover:bg-[#1d2021] transition-colors"
-                      on:click={() => handleDeleteNote(idx)}
+                      onclick={() => handleDeleteNote(idx)}
                       title="刪除筆記"
                     >
                       <span class="material-symbols-outlined text-[14px]">delete</span>
@@ -395,7 +404,7 @@
           {#if notes.length > 0}
             <button
               class="text-[11px] text-[#7c6f64] hover:text-[#fb4934] flex items-center gap-1 transition-colors"
-              on:click={handleClearAllNotes}
+              onclick={handleClearAllNotes}
               title="清空所有筆記"
             >
               <span class="material-symbols-outlined text-[13px]">delete_sweep</span>
@@ -408,7 +417,7 @@
           {#if notes.length > 0}
             <button
               class="px-3 py-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#504945] hover:border-[#fabd2f]/60 text-[#fabd2f] rounded-lg text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer"
-              on:click={handleCopyMarkdown}
+              onclick={handleCopyMarkdown}
               title="將所有筆記複製為 Markdown"
             >
               <span class="material-symbols-outlined text-[15px]">content_copy</span>
@@ -417,7 +426,7 @@
 
             <button
               class="px-3.5 py-1.5 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold rounded-lg text-xs flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
-              on:click={handleExportFile}
+              onclick={handleExportFile}
               title="將精讀筆記下載為 .md 檔案"
             >
               <span class="material-symbols-outlined text-[15px]">download</span>
@@ -427,7 +436,7 @@
 
           <button
             class="px-3 py-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] rounded-lg text-xs transition-colors"
-            on:click={close}
+            onclick={close}
           >
             關閉
           </button>

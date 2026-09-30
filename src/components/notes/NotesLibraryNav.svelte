@@ -1,27 +1,36 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import type { PaperDocument } from '../../stores/documentStore';
 
-  export let paperLibrary: PaperDocument[] = [];
-  export let activePaperFilterId: string = 'all'; // 'all' or paper.id
-  export let paperNotesCountMap: Record<string, number> = {};
-  export let totalNotesCount: number = 0;
-  export let isStarredFilter: boolean = false;
+  interface Props {
+    paperLibrary?: PaperDocument[];
+    activePaperFilterId?: string;
+    paperNotesCountMap?: Record<string, number>;
+    totalNotesCount?: number;
+    isStarredFilter?: boolean;
+    onselectFilter?: (detail: { paperId: string }) => void;
+    ontoggleStarred?: (detail: { isStarred: boolean }) => void;
+    onbackToWorkspace?: () => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    selectFilter: { paperId: string };
-    toggleStarred: { isStarred: boolean };
-    backToWorkspace: void;
-  }>();
+  let {
+    paperLibrary = [],
+    activePaperFilterId = $bindable('all'),
+    paperNotesCountMap = {},
+    totalNotesCount = 0,
+    isStarredFilter = $bindable(false),
+    onselectFilter,
+    ontoggleStarred,
+    onbackToWorkspace
+  }: Props = $props();
 
   function handleSelect(paperId: string) {
     activePaperFilterId = paperId;
-    dispatch('selectFilter', { paperId });
+    onselectFilter?.({ paperId });
   }
 
   function handleToggleStarred() {
     isStarredFilter = !isStarredFilter;
-    dispatch('toggleStarred', { isStarred: isStarredFilter });
+    ontoggleStarred?.({ isStarred: isStarredFilter });
   }
 </script>
 
@@ -43,7 +52,7 @@
     <div class="flex flex-col gap-1 pt-1">
       <button
         class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer {activePaperFilterId === 'all' && !isStarredFilter ? 'bg-[#3c3836] text-[#fe8019] font-bold border-l-2 border-[#fe8019]' : 'text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2]'}"
-        on:click={() => { isStarredFilter = false; handleSelect('all'); }}
+        onclick={() => { isStarredFilter = false; handleSelect('all'); }}
       >
         <div class="flex items-center gap-2">
           <span class="material-symbols-outlined text-[16px]">folder_copy</span>
@@ -56,7 +65,7 @@
 
       <button
         class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer {isStarredFilter ? 'bg-[#3c3836] text-[#fabd2f] font-bold border-l-2 border-[#fabd2f]' : 'text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2]'}"
-        on:click={handleToggleStarred}
+        onclick={handleToggleStarred}
       >
         <div class="flex items-center gap-2">
           <span class="material-symbols-outlined text-[16px] text-[#fabd2f]">star</span>
@@ -77,7 +86,7 @@
         {@const isSelected = activePaperFilterId === paper.id && !isStarredFilter}
         <button
           class="w-full flex items-center justify-between p-2 rounded-lg text-left transition-colors cursor-pointer group {isSelected ? 'bg-[#282828] border border-[#fe8019]/60 shadow-sm' : 'hover:bg-[#282828] border border-transparent'}"
-          on:click={() => { isStarredFilter = false; handleSelect(paper.id); }}
+          onclick={() => { isStarredFilter = false; handleSelect(paper.id); }}
           title={paper.title}
         >
           <div class="flex flex-col min-w-0 flex-1 pr-1.5">
@@ -114,7 +123,7 @@
 
     <button
       class="w-full py-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] rounded-lg text-xs font-mono flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-      on:click={() => dispatch('backToWorkspace')}
+      onclick={() => onbackToWorkspace?.()}
     >
       <span class="material-symbols-outlined text-[15px]">arrow_back</span>
       <span>返回閱讀工作台</span>

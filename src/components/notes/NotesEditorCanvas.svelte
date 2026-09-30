@@ -1,20 +1,28 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { renderNoteMarkdown } from '../../utils/markdownNoteRenderer';
   import type { NoteEntry } from './NotesExplorerList.svelte';
 
-  export let note: NoteEntry | null = null;
-  export let viewMode: 'split' | 'edit' | 'preview' = 'split';
+  interface Props {
+    note?: NoteEntry | null;
+    viewMode?: 'split' | 'edit' | 'preview';
+    onupdateNote?: (detail: { note: NoteEntry }) => void;
+    onjumpToSource?: (detail: { note: NoteEntry }) => void;
+    ondeleteNote?: () => void;
+    oncopyMarkdown?: () => void;
+    onexportMarkdown?: () => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    updateNote: { note: NoteEntry };
-    jumpToSource: { note: NoteEntry };
-    deleteNote: void;
-    copyMarkdown: void;
-    exportMarkdown: void;
-  }>();
+  let {
+    note = null,
+    viewMode = $bindable('split'),
+    onupdateNote,
+    onjumpToSource,
+    ondeleteNote,
+    oncopyMarkdown,
+    onexportMarkdown
+  }: Props = $props();
 
-  let autoSaveMessage: string = '✓ 已即時同步本機';
+  let autoSaveMessage = $state('✓ 已即時同步本機');
   let autoSaveTimer: any = null;
 
   function triggerAutoSave() {
@@ -22,7 +30,7 @@
     if (autoSaveTimer) clearTimeout(autoSaveTimer);
     autoSaveTimer = setTimeout(() => {
       if (note) {
-        dispatch('updateNote', { note });
+        onupdateNote?.({ note });
       }
       autoSaveMessage = '✓ 已即時同步本機';
     }, 400);
@@ -60,7 +68,7 @@
     }, 10);
   }
 
-  $: renderedHtml = note ? renderNoteMarkdown(note.text) : '';
+  let renderedHtml = $derived(note ? renderNoteMarkdown(note.text) : '');
 </script>
 
 <main class="flex-1 flex flex-col bg-[#282828] h-full overflow-hidden select-text">
@@ -86,7 +94,7 @@
         {#if note.sectionTitle || note.sectionId}
           <button
             class="px-2 py-0.5 bg-[#fe8019]/10 hover:bg-[#fe8019]/25 border border-[#fe8019]/40 text-[#fe8019] rounded text-xs font-mono flex items-center gap-1 transition-colors cursor-pointer"
-            on:click={() => dispatch('jumpToSource', { note })}
+            onclick={() => onjumpToSource?.({ note })}
             title="點擊切換回閱讀工作台並定位至該段落"
           >
             <span class="material-symbols-outlined text-[13px]">my_location</span>
@@ -105,21 +113,21 @@
         <div class="flex items-center bg-[#282828] border border-[#3c3836] rounded-lg p-0.5">
           <button
             class="px-2 py-0.5 text-xs font-mono rounded transition-colors {viewMode === 'split' ? 'bg-[#3c3836] text-[#fe8019] font-semibold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
-            on:click={() => viewMode = 'split'}
+            onclick={() => viewMode = 'split'}
             title="雙欄對照 (編輯與預覽)"
           >
             雙欄
           </button>
           <button
             class="px-2 py-0.5 text-xs font-mono rounded transition-colors {viewMode === 'edit' ? 'bg-[#3c3836] text-[#fe8019] font-semibold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
-            on:click={() => viewMode = 'edit'}
+            onclick={() => viewMode = 'edit'}
             title="純編輯模式"
           >
             編輯
           </button>
           <button
             class="px-2 py-0.5 text-xs font-mono rounded transition-colors {viewMode === 'preview' ? 'bg-[#3c3836] text-[#fe8019] font-semibold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
-            on:click={() => viewMode = 'preview'}
+            onclick={() => viewMode = 'preview'}
             title="純預覽閱讀模式"
           >
             預覽
@@ -129,7 +137,7 @@
         <!-- Copy Markdown -->
         <button
           class="p-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fabd2f] text-[#fabd2f] rounded-lg text-xs transition-colors cursor-pointer"
-          on:click={() => dispatch('copyMarkdown')}
+          onclick={() => oncopyMarkdown?.()}
           title="複製此則 Markdown"
         >
           <span class="material-symbols-outlined text-[15px]">content_copy</span>
@@ -138,7 +146,7 @@
         <!-- Export File -->
         <button
           class="p-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019] text-[#fe8019] rounded-lg text-xs transition-colors cursor-pointer"
-          on:click={() => dispatch('exportMarkdown')}
+          onclick={() => onexportMarkdown?.()}
           title="匯出此則為 .md 檔案"
         >
           <span class="material-symbols-outlined text-[15px]">download</span>
@@ -147,7 +155,7 @@
         <!-- Delete -->
         <button
           class="p-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fb4934] text-[#a89984] hover:text-[#fb4934] rounded-lg text-xs transition-colors cursor-pointer"
-          on:click={() => dispatch('deleteNote')}
+          onclick={() => ondeleteNote?.()}
           title="刪除此筆記"
         >
           <span class="material-symbols-outlined text-[15px]">delete</span>
@@ -160,7 +168,7 @@
       <input
         type="text"
         value={note.title}
-        on:input={handleTitleInput}
+        oninput={handleTitleInput}
         placeholder="筆記標題..."
         class="flex-1 bg-transparent text-lg font-bold text-[#ebdbb2] focus:text-[#fe8019] placeholder-[#7c6f64] outline-none border-b border-transparent focus:border-[#fe8019]/40 py-1 transition-colors"
       />
@@ -172,13 +180,13 @@
     <!-- Quick Markdown Formatting Bar (Only when editor is visible) -->
     {#if viewMode !== 'preview'}
       <div class="px-6 py-1.5 bg-[#1d2021]/80 border-b border-[#3c3836] flex items-center gap-1 select-none overflow-x-auto">
-        <button class="px-2 py-0.5 rounded text-xs font-bold text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]" on:click={() => insertFormatting('**', '**')} title="粗體 (**)">B</button>
-        <button class="px-2 py-0.5 rounded text-xs italic text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]" on:click={() => insertFormatting('*', '*')} title="斜體 (*)">I</button>
-        <button class="px-2 py-0.5 rounded text-xs font-mono text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]" on:click={() => insertFormatting('`', '`')} title="行內代碼 (`代碼`)">&lt;/&gt;</button>
-        <button class="px-2 py-0.5 rounded text-xs text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]" on:click={() => insertFormatting('> ')} title="引用塊 (&gt;)">Quote</button>
-        <button class="px-2 py-0.5 rounded text-xs text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]" on:click={() => insertFormatting('- ')} title="清單 (-)">List</button>
-        <button class="px-2 py-0.5 rounded text-xs font-mono text-[#fabd2f] hover:bg-[#282828]" on:click={() => insertFormatting('$', '$')} title="行內 LaTeX 公式 ($式$)">$ 式 $</button>
-        <button class="px-2 py-0.5 rounded text-xs font-mono text-[#fe8019] hover:bg-[#282828]" on:click={() => insertFormatting('$$\n', '\n$$')} title="獨立區塊 LaTeX 公式 ($$式$$)">$$ 區塊式 $$</button>
+        <button class="px-2 py-0.5 rounded text-xs font-bold text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]" onclick={() => insertFormatting('**', '**')} title="粗體 (**)">B</button>
+        <button class="px-2 py-0.5 rounded text-xs italic text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]" onclick={() => insertFormatting('*', '*')} title="斜體 (*)">I</button>
+        <button class="px-2 py-0.5 rounded text-xs font-mono text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]" onclick={() => insertFormatting('`', '`')} title="行內代碼 (`代碼`)">&lt;/&gt;</button>
+        <button class="px-2 py-0.5 rounded text-xs text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]" onclick={() => insertFormatting('> ')} title="引用塊 (&gt;)">Quote</button>
+        <button class="px-2 py-0.5 rounded text-xs text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]" onclick={() => insertFormatting('- ')} title="清單 (-)">List</button>
+        <button class="px-2 py-0.5 rounded text-xs font-mono text-[#fabd2f] hover:bg-[#282828]" onclick={() => insertFormatting('$', '$')} title="行內 LaTeX 公式 ($式$)">$ 式 $</button>
+        <button class="px-2 py-0.5 rounded text-xs font-mono text-[#fe8019] hover:bg-[#282828]" onclick={() => insertFormatting('$$\n', '\n$$')} title="獨立區塊 LaTeX 公式 ($$式$$)">$$ 區塊式 $$</button>
       </div>
     {/if}
 
@@ -190,7 +198,7 @@
           <textarea
             id="note-markdown-textarea"
             value={note.text}
-            on:input={handleTextInput}
+            oninput={handleTextInput}
             placeholder="請輸入 Markdown 格式精讀筆記、論證心得、LaTeX 公式 ($...$ 或 $$...$$)..."
             class="w-full flex-1 bg-transparent text-[#d5c4a1] placeholder-[#7c6f64] font-mono text-xs leading-relaxed resize-none outline-none border-none"
           ></textarea>

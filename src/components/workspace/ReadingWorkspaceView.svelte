@@ -130,9 +130,10 @@
     }
   }
 
-  function handleToggleSectionRead(e: CustomEvent<{ id: string }>) {
+  function handleToggleSectionRead(e: CustomEvent<{ id: string }> | { id: string }) {
     if (!activePaper) return;
-    const { updatedPaper, hasChange } = toggleSectionReadState(activePaper, e.detail.id);
+    const id = 'detail' in e ? e.detail.id : e.id;
+    const { updatedPaper, hasChange } = toggleSectionReadState(activePaper, id);
     if (hasChange) {
       dispatch('updatePaper', { paper: updatedPaper });
     }
@@ -223,8 +224,9 @@
     }
   }
 
-  function handleSelectSection(event: CustomEvent<{ id?: string; sectionId?: string; source?: string; noScroll?: boolean }>) {
-    selectSection(event.detail || {});
+  function handleSelectSection(event: CustomEvent<{ id?: string; sectionId?: string; source?: string; noScroll?: boolean }> | { id?: string; sectionId?: string; source?: string; noScroll?: boolean }) {
+    const detail = (event && 'detail' in event ? event.detail : event) || {};
+    selectSection(detail);
   }
 
   function handleSectionChanged(event: CustomEvent<{ sectionId: string }>) {
@@ -288,8 +290,9 @@
     }
   }
 
-  function handleSelectFigure(event: CustomEvent<{ figId: string; imageUrl?: string; name?: string }>) {
-    const { imageUrl, name } = event.detail;
+  function handleSelectFigure(event: CustomEvent<{ figId: string; imageUrl?: string; name?: string }> | { figId: string; imageUrl?: string; name?: string }) {
+    const detail = (event && 'detail' in event ? event.detail : event) || {};
+    const { imageUrl, name } = detail;
     if (imageUrl && readerRef && (readerRef as any).openLightbox) {
       (readerRef as any).openLightbox(imageUrl, name || '學術圖表預覽');
     } else {
@@ -297,13 +300,14 @@
     }
   }
 
-  function handleSelectEquation(event: CustomEvent<{ eqId: string; sectionId?: string; formulaNumber?: string }>) {
+  function handleSelectEquation(event: CustomEvent<{ eqId: string; sectionId?: string; formulaNumber?: string }> | { eqId: string; sectionId?: string; formulaNumber?: string }) {
     if (readingMode === 'figures') {
       readingMode = 'bilingual';
     }
-    const targetEqId = event.detail.eqId;
-    const targetSecId = event.detail.sectionId;
-    const formulaNumber = event.detail.formulaNumber;
+    const detail = (event && 'detail' in event ? event.detail : event) || {};
+    const targetEqId = detail.eqId;
+    const targetSecId = detail.sectionId;
+    const formulaNumber = detail.formulaNumber;
 
     if (activePaper?.sections) {
       const allSecs = flattenSections(activePaper.sections);
@@ -623,12 +627,12 @@
           {activeSectionId}
           arxivId={activePaper?.arxivId}
           sourceUrl={activePaper?.sourceUrl}
-          on:selectSection={handleSelectSection}
-          on:selectFigure={handleSelectFigure}
-          on:selectEquation={handleSelectEquation}
-          on:openFiguresStudio={() => readingMode = 'figures'}
-          on:toggleSectionRead={handleToggleSectionRead}
-          on:resetProgress={handleResetProgress}
+          onselectSection={handleSelectSection}
+          onselectFigure={handleSelectFigure}
+          onselectEquation={handleSelectEquation}
+          onopenFiguresStudio={() => readingMode = 'figures'}
+          ontoggleSectionRead={handleToggleSectionRead}
+          onresetProgress={handleResetProgress}
         />
       {/if}
 

@@ -13,26 +13,35 @@
 </script>
 
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  interface Props {
+    notes?: NoteEntry[];
+    selectedIndex?: number;
+    currentPaperTitle?: string;
+    onselectNote?: (detail: { index: number }) => void;
+    onaddNote?: () => void;
+    ondeleteNote?: (detail: { index: number }) => void;
+    ontogglePin?: (detail: { index: number }) => void;
+  }
 
-  export let notes: NoteEntry[] = [];
-  export let selectedIndex: number = 0;
-  export let currentPaperTitle: string = '全部文獻';
+  let {
+    notes = [],
+    selectedIndex = $bindable(0),
+    currentPaperTitle = '全部文獻',
+    onselectNote,
+    onaddNote,
+    ondeleteNote,
+    ontogglePin
+  }: Props = $props();
 
-  const dispatch = createEventDispatcher<{
-    selectNote: { index: number };
-    addNote: void;
-    deleteNote: { index: number };
-    togglePin: { index: number };
-  }>();
+  let searchQuery = $state('');
 
-  let searchQuery: string = '';
-
-  $: filteredNotes = notes.map((note, index) => ({ note, index })).filter(({ note }) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (note.title || '').toLowerCase().includes(q) || (note.text || '').toLowerCase().includes(q);
-  });
+  let filteredNotes = $derived(
+    notes.map((note, index) => ({ note, index })).filter(({ note }) => {
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase();
+      return (note.title || '').toLowerCase().includes(q) || (note.text || '').toLowerCase().includes(q);
+    })
+  );
 </script>
 
 <section class="w-80 bg-[#1d2021] border-r border-[#3c3836] flex flex-col justify-between shrink-0 h-full select-none">
@@ -48,7 +57,7 @@
 
       <button
         class="px-2 py-1 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-bold text-xs rounded-lg flex items-center gap-1 transition-colors shadow-sm cursor-pointer shrink-0"
-        on:click={() => dispatch('addNote')}
+        onclick={() => onaddNote?.()}
         title="手動新增一筆精讀觀點"
       >
         <span class="material-symbols-outlined text-[15px]">add</span>
@@ -68,7 +77,7 @@
       {#if searchQuery}
         <button
           class="absolute right-2 top-1.5 text-[#7c6f64] hover:text-[#ebdbb2]"
-          on:click={() => searchQuery = ''}
+          onclick={() => searchQuery = ''}
         >
           <span class="material-symbols-outlined text-[13px]">close</span>
         </button>
@@ -89,10 +98,10 @@
         {@const isSelected = selectedIndex === index}
         <div
           class="p-2.5 rounded-xl border text-left transition-all cursor-pointer relative group flex flex-col gap-1.5 {isSelected ? 'bg-[#282828] border-[#fe8019] shadow-sm' : 'bg-[#282828]/40 border-[#3c3836] hover:border-[#504945] hover:bg-[#282828]/80'}"
-          on:click={() => dispatch('selectNote', { index })}
+          onclick={() => onselectNote?.({ index })}
           role="button"
           tabindex="0"
-          on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && dispatch('selectNote', { index })}
+          onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && onselectNote?.({ index })}
         >
           <!-- Card Top: Title & Pin/Delete -->
           <div class="flex items-start justify-between gap-1.5">
@@ -103,14 +112,14 @@
             <div class="flex items-center gap-0.5 shrink-0">
               <button
                 class="w-5 h-5 rounded flex items-center justify-center transition-colors {note.isPinned ? 'text-[#fabd2f]' : 'text-[#504945] opacity-0 group-hover:opacity-100 hover:text-[#fabd2f]'}"
-                on:click|stopPropagation={() => dispatch('togglePin', { index })}
+                onclick={(e) => { e.stopPropagation(); ontogglePin?.({ index }); }}
                 title={note.isPinned ? '取消釘選' : '釘選此筆記'}
               >
                 <span class="material-symbols-outlined text-[13px]">{note.isPinned ? 'star' : 'star_border'}</span>
               </button>
               <button
                 class="w-5 h-5 rounded flex items-center justify-center text-[#504945] hover:text-[#fb4934] transition-colors opacity-0 group-hover:opacity-100"
-                on:click|stopPropagation={() => dispatch('deleteNote', { index })}
+                onclick={(e) => { e.stopPropagation(); ondeleteNote?.({ index }); }}
                 title="刪除筆記"
               >
                 <span class="material-symbols-outlined text-[13px]">delete</span>

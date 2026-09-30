@@ -1,17 +1,44 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import type { ChapterSection, PaperDocument, FigureItem, FormulaItem } from '../../stores/documentStore';
   import { calculateReadingStats } from '../../stores/readingStore';
 
-  export let sections: ChapterSection[] = [];
-  export let paper: PaperDocument | null = null;
-  export let activeSectionId: string = '3.2.1';
-  export let arxivId: string | undefined = undefined;
-  export let sourceUrl: string | undefined = undefined;
+  export interface DashboardFormulaItem {
+    formula: FormulaItem;
+    sectionId: string;
+    sectionTitle: string;
+    page?: string;
+    sourceContextSnippet?: string;
+  }
 
-  const dispatch = createEventDispatcher();
+  interface Props {
+    sections?: ChapterSection[];
+    paper?: PaperDocument | null;
+    activeSectionId?: string;
+    arxivId?: string;
+    sourceUrl?: string;
+    onselectSection?: (detail: { id: string; source: string }) => void;
+    ontoggleSectionRead?: (detail: { id: string }) => void;
+    onresetProgress?: () => void;
+    onselectFigure?: (detail: { figId: string; imageUrl?: string; name?: string }) => void;
+    onselectEquation?: (detail: { eqId: string; sectionId?: string; formulaNumber?: string }) => void;
+    onopenFiguresStudio?: () => void;
+  }
 
-  let searchQuery: string = '';
+  let {
+    sections = [],
+    paper = null,
+    activeSectionId = $bindable('3.2.1'),
+    arxivId = undefined,
+    sourceUrl = undefined,
+    onselectSection,
+    ontoggleSectionRead,
+    onresetProgress,
+    onselectFigure,
+    onselectEquation,
+    onopenFiguresStudio
+  }: Props = $props();
+
+  let searchQuery = $state('');
 
   function normalizeAcademicImageUrl(rawUrl: string): string {
     if (!rawUrl) return '';
@@ -23,7 +50,7 @@
   }
 
   // 聚合當前文獻的所有圖表 (Figures Dashboard)
-  $: allPaperFigures = (() => {
+  let allPaperFigures = $derived.by(() => {
     const list: FigureItem[] = [];
     const seenUrls = new Set<string>();
 
@@ -52,16 +79,16 @@
     extractFromSecs(sections);
 
     return list;
-  })();
+  });
 
-  $: readingStats = calculateReadingStats(sections);
-  $: deepCoveragePercent = readingStats.deepCoveragePercent;
-  $: skimCoveragePercent = readingStats.skimCoveragePercent;
-  $: deepWords = readingStats.deepWords;
-  $: totalWords = readingStats.totalWords;
+  let readingStats = $derived(calculateReadingStats(sections));
+  let deepCoveragePercent = $derived(readingStats.deepCoveragePercent);
+  let skimCoveragePercent = $derived(readingStats.skimCoveragePercent);
+  let deepWords = $derived(readingStats.deepWords);
+  let totalWords = $derived(readingStats.totalWords);
 
   // Filter sections recursively based on search query
-  $: filteredSections = filterSections(sections, searchQuery.toLowerCase().trim());
+  let filteredSections = $derived(filterSections(sections, searchQuery.toLowerCase().trim()));
 
   function filterSections(secs: ChapterSection[], query: string): ChapterSection[] {
     if (!query) return secs;
@@ -84,30 +111,30 @@
 
   function selectSection(id: string) {
     activeSectionId = id;
-    dispatch('selectSection', { id, source: 'outline' });
+    onselectSection?.({ id, source: 'outline' });
   }
 
   function toggleSectionRead(id: string, e: MouseEvent) {
     e.stopPropagation();
-    dispatch('toggleSectionRead', { id });
+    ontoggleSectionRead?.({ id });
   }
 
   function resetProgress() {
     if (confirm('確定要重設本篇論文的閱讀進度嗎？')) {
-      dispatch('resetProgress');
+      onresetProgress?.();
     }
   }
 
-  function selectFigure(figId: string) {
-    dispatch('selectFigure', { figId });
+  function selectFigure(figId: string, imageUrl?: string, name?: string) {
+    onselectFigure?.({ figId, imageUrl, name });
   }
 
   function selectEquation(eqId: string, sectionId?: string, formulaNumber?: string) {
-    dispatch('selectEquation', { eqId, sectionId, formulaNumber });
+    onselectEquation?.({ eqId, sectionId, formulaNumber });
   }
 
   // 取得當前文獻的第一個圖表
-  $: firstFigure = (() => {
+  let firstFigure = $derived.by(() => {
     for (const sec of sections) {
       if (sec.figures && sec.figures.length > 0) return sec.figures[0];
       if (sec.children) {
@@ -117,18 +144,10 @@
       }
     }
     return null;
-  })();
-
-  export interface DashboardFormulaItem {
-    formula: FormulaItem;
-    sectionId: string;
-    sectionTitle: string;
-    page?: string;
-    sourceContextSnippet?: string;
-  }
+  });
 
   // 聚合當前文獻的所有函數公式並記錄章節出處 (Provenance Tracking)
-  $: allPaperFormulas = (() => {
+  let allPaperFormulas = $derived.by(() => {
     const list: DashboardFormulaItem[] = [];
     const seenLatex = new Set<string>();
 
@@ -214,13 +233,17 @@
 
     extractFromSecs(sections);
     return list;
-  })();
+  });
 
-  let activeFormulaIndex: number = 0;
-  $: if (activeFormulaIndex >= allPaperFormulas.length && allPaperFormulas.length > 0) {
-    activeFormulaIndex = 0;
-  }
-  $: currentDashboardFormula = allPaperFormulas[activeFormulaIndex] || null;
+  let activeFormulaIndex = $state(0);
+
+  $effect(() => {
+    if (activeFormulaIndex >= allPaperFormulas.length && allPaperFormulas.length > 0) {
+      activeFormulaIndex = 0;
+    }
+  });
+
+  let currentDashboardFormula = $derived(allPaperFormulas[activeFormulaIndex] || null);
 
   function nextFormula(e: MouseEvent) {
     e.stopPropagation();
@@ -236,12 +259,11 @@
     }
   }
 
-  let collapsedSections: Record<string, boolean> = {};
+  let collapsedSections = $state<Record<string, boolean>>({});
 
   function toggleSectionCollapse(id: string, e: MouseEvent) {
     e.stopPropagation();
     collapsedSections[id] = !collapsedSections[id];
-    collapsedSections = { ...collapsedSections };
   }
 </script>
 
@@ -259,7 +281,7 @@
       {#if searchQuery}
         <button
           class="absolute right-2 text-[#a89984] hover:text-[#ebdbb2]"
-          on:click={() => searchQuery = ''}
+          onclick={() => searchQuery = ''}
         >
           <span class="material-symbols-outlined text-[14px]">close</span>
         </button>
@@ -285,7 +307,7 @@
           </span>
           <button
             class="text-[#a89984] hover:text-[#fe8019] transition-colors p-0.5 rounded cursor-pointer"
-            on:click={resetProgress}
+            onclick={resetProgress}
             title="重設此篇閱讀進度"
           >
             <span class="material-symbols-outlined text-[13px]">restart_alt</span>
@@ -337,7 +359,7 @@
               <button
                 type="button"
                 class="hover:scale-125 transition-transform flex items-center shrink-0 cursor-pointer bg-transparent border-0 p-0 text-inherit"
-                on:click={(e) => toggleSectionRead(section.id, e)}
+                onclick={(e) => toggleSectionRead(section.id, e)}
                 title={section.isRead ? "點擊標記為未讀" : "點擊標記為已讀"}
               >
                 {#if isAct}
@@ -355,7 +377,7 @@
               <button
                 type="button"
                 class="text-xs truncate text-left bg-transparent border-0 p-0 text-inherit cursor-pointer flex-1 min-w-0"
-                on:click={() => selectSection(section.id)}
+                onclick={() => selectSection(section.id)}
               >
                 {section.title}
               </button>
@@ -371,7 +393,7 @@
               {#if section.children && section.children.length > 0}
                 <button
                   class="w-5 h-5 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#504945]/40 transition-colors"
-                  on:click={(e) => toggleSectionCollapse(section.id, e)}
+                  onclick={(e) => toggleSectionCollapse(section.id, e)}
                   title={collapsedSections[section.id] ? "展開子章節" : "收合子章節"}
                 >
                   <span class="material-symbols-outlined text-[16px]">
@@ -398,7 +420,7 @@
                     <button
                       type="button"
                       class="hover:scale-125 transition-transform flex items-center shrink-0 cursor-pointer bg-transparent border-0 p-0 text-inherit"
-                      on:click={(e) => toggleSectionRead(sub.id, e)}
+                      onclick={(e) => toggleSectionRead(sub.id, e)}
                       title={sub.isRead ? "點擊標記為未讀" : "點擊標記為已讀"}
                     >
                       {#if isSubAct}
@@ -414,7 +436,7 @@
                     <button
                       type="button"
                       class="truncate text-left bg-transparent border-0 p-0 text-inherit cursor-pointer flex-1 min-w-0"
-                      on:click={() => selectSection(sub.id)}
+                      onclick={() => selectSection(sub.id)}
                     >
                       {sub.title}
                     </button>
@@ -424,7 +446,7 @@
                     {#if sub.children && sub.children.length > 0}
                       <button
                         class="w-4 h-4 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2]"
-                        on:click={(e) => toggleSectionCollapse(sub.id, e)}
+                        onclick={(e) => toggleSectionCollapse(sub.id, e)}
                       >
                         <span class="material-symbols-outlined text-[14px]">
                           {collapsedSections[sub.id] ? 'chevron_right' : 'expand_more'}
@@ -445,7 +467,7 @@
                             ? 'bg-[#32302f] text-[#fe8019] font-semibold'
                             : 'text-[#d5c4a1] hover:text-[#ebdbb2] hover:bg-[#32302f]'
                         }"
-                        on:click={() => selectSection(subsub.id)}
+                        onclick={() => selectSection(subsub.id)}
                       >
                         <span class="material-symbols-outlined text-[11px] {isSubSubAct ? 'text-[#fe8019]' : 'text-[#a89984]'}">arrow_right</span>
                         <span class="truncate">{subsub.title}</span>
@@ -473,7 +495,7 @@
         <button
           type="button"
           class="font-mono text-[10px] text-[#fabd2f] hover:text-[#fe8019] hover:underline cursor-pointer flex items-center gap-0.5 bg-transparent border-0 p-0"
-          on:click={() => dispatch('openFiguresStudio')}
+          onclick={() => onopenFiguresStudio?.()}
           title="切換至全景圖表推導工作室"
         >
           <span>Studio ➜</span>
@@ -487,7 +509,7 @@
             <button
               type="button"
               class="w-14 h-16 bg-[#141617] hover:bg-[#282828] border border-[#3c3836] hover:border-[#fe8019] rounded shrink-0 overflow-hidden relative flex flex-col items-center justify-between p-1 transition-all cursor-pointer group shadow-xs hover:scale-105 active:scale-95"
-              on:click={() => dispatch('selectFigure', { figId: fig.id, imageUrl: fig.imageUrl, name: fig.name })}
+              onclick={() => selectFigure(fig.id, fig.imageUrl, fig.name)}
               title={`${fig.figureNumber || `Figure ${fIndex + 1}`}: ${fig.name}`}
             >
               <div class="w-full flex-1 flex items-center justify-center overflow-hidden">
@@ -510,7 +532,7 @@
         <button
           type="button"
           class="w-full text-left bg-[#282828] border border-[#3c3836] p-2 rounded-lg hover:bg-[#32302f] hover:border-[#504945] transition-colors cursor-pointer flex gap-2 group"
-          on:click={() => selectFigure(firstFigure?.id || 'fig1')}
+          onclick={() => selectFigure(firstFigure?.id || 'fig1')}
         >
           <div class="w-12 h-14 bg-[#1d2021] border border-[#3c3836] rounded shrink-0 overflow-hidden relative flex items-center justify-center p-1">
             {#if firstFigure?.imageUrl}
@@ -553,7 +575,7 @@
                     ? 'bg-[#fe8019]/20 border-[#fe8019] text-[#fe8019] font-bold shadow-xs'
                     : 'bg-[#141617] border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] hover:border-[#504945]'
                 }"
-                on:click={() => {
+                onclick={() => {
                   activeFormulaIndex = fIdx;
                   selectEquation(item.formula.id, item.sectionId, item.formula.number);
                 }}
@@ -583,7 +605,7 @@
                 <button
                   type="button"
                   class="text-[#a89984] hover:text-[#fe8019] p-0.5 rounded hover:bg-[#3c3836] transition-colors"
-                  on:click={prevFormula}
+                  onclick={prevFormula}
                   title="上一條公式"
                 >
                   <span class="material-symbols-outlined text-[12px]">chevron_left</span>
@@ -591,7 +613,7 @@
                 <button
                   type="button"
                   class="text-[#a89984] hover:text-[#fe8019] p-0.5 rounded hover:bg-[#3c3836] transition-colors"
-                  on:click={nextFormula}
+                  onclick={nextFormula}
                   title="下一條公式"
                 >
                   <span class="material-symbols-outlined text-[12px]">chevron_right</span>
@@ -616,7 +638,7 @@
           <button
             type="button"
             class="w-full text-left font-mono text-[#ebdbb2] bg-[#1d2021] hover:bg-[#181a1b] border border-[#3c3836] hover:border-[#fe8019]/60 px-2 py-1.5 rounded tracking-tight text-[10px] truncate cursor-pointer transition-colors shadow-xs"
-            on:click={() => {
+            onclick={() => {
               if (currentDashboardFormula) {
                 selectEquation(currentDashboardFormula.formula.id, currentDashboardFormula.sectionId, currentDashboardFormula.formula.number);
               }
@@ -638,7 +660,7 @@
             <button
               type="button"
               class="font-mono text-[9px] text-[#a89984] hover:text-[#fabd2f] flex items-center gap-0.5 transition-colors cursor-pointer"
-              on:click={() => dispatch('openFiguresStudio')}
+              onclick={() => onopenFiguresStudio?.()}
               title="前往 Formula Lab 深入推導與證明"
             >
               <span class="material-symbols-outlined text-[11px]">schema</span>
@@ -647,7 +669,7 @@
             <button
               type="button"
               class="font-mono text-[9px] text-[#8ec07c] hover:text-[#b8bb26] flex items-center gap-0.5 transition-colors cursor-pointer font-semibold"
-              on:click={() => {
+              onclick={() => {
                 if (currentDashboardFormula) {
                   selectSection(currentDashboardFormula.sectionId);
                   selectEquation(currentDashboardFormula.formula.id, currentDashboardFormula.sectionId, currentDashboardFormula.formula.number);
@@ -665,7 +687,7 @@
         <button
           type="button"
           class="w-full text-left bg-[#282828] border border-[#3c3836] border-l-4 border-l-[#fabd2f] p-2 rounded-lg hover:bg-[#32302f] transition-colors cursor-pointer flex flex-col gap-1"
-          on:click={() => selectEquation('eq_efficiency')}
+          onclick={() => selectEquation('eq_efficiency')}
         >
           <div class="flex items-center justify-between text-[#a89984]">
             <div class="flex items-center gap-1.5">
