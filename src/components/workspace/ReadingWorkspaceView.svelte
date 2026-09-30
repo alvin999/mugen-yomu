@@ -75,24 +75,24 @@
   }
 
   // Internal workspace state
-  let splitRatio: number = 50;
-  let isDraggingSplit: boolean = false;
-  let activeSectionId: string = '';
-  let activeContextText: string = '';
-  let activeParagraphText: string = '';
-  let activeSelectedText: string = '';
-  let activeFocusedParagraphKey: string = '';
+  let splitRatio = $state<number>(50);
+  let isDraggingSplit = $state<boolean>(false);
+  let activeSectionId = $state<string>('');
+  let activeContextText = $state<string>('');
+  let activeParagraphText = $state<string>('');
+  let activeSelectedText = $state<string>('');
+  let activeFocusedParagraphKey = $state<string>('');
   let currentPaperId: string = '';
-  let isSemanticSearchOpen: boolean = false;
+  let isSemanticSearchOpen = $state<boolean>(false);
 
   // AI Cognitive async loading indicators
-  let loadingIntuitionId: string | null = null;
-  let loadingSyntaxId: string | null = null;
-  let loadingTerminologyId: string | null = null;
+  let loadingIntuitionId = $state<string | null>(null);
+  let loadingSyntaxId = $state<string | null>(null);
+  let loadingTerminologyId = $state<string | null>(null);
 
   // Component references for intra-workspace communication
-  let companionRef: any = null;
-  let readerRef: any = null;
+  let companionRef = $state<any>(null);
+  let readerRef = $state<any>(null);
 
   // Sync active section when activePaper changes
   $effect(() => {
@@ -269,8 +269,9 @@
     selectSection(detail);
   }
 
-  function handleSectionChanged(event: CustomEvent<{ sectionId: string }>) {
-    const { sectionId } = event.detail || {};
+  function handleSectionChanged(event: { sectionId: string } | CustomEvent<{ sectionId: string }>) {
+    const detail = 'detail' in event ? event.detail : event;
+    const { sectionId } = detail || {};
     if (sectionId && sectionId !== activeSectionId) {
       activeSectionId = sectionId;
       if (activePaper) {
@@ -281,8 +282,9 @@
     }
   }
 
-  function handleParagraphFocused(e: CustomEvent<{ sectionId: string; paragraphIndex: number; paragraphKey: string; text: string; selectedText: string }>) {
-    const { paragraphKey, text, selectedText } = e.detail;
+  function handleParagraphFocused(e: { sectionId: string; paragraphIndex: number; paragraphKey: string; text: string; selectedText: string } | CustomEvent<{ sectionId: string; paragraphIndex: number; paragraphKey: string; text: string; selectedText: string }>) {
+    const detail = 'detail' in e ? e.detail : e;
+    const { paragraphKey, text, selectedText } = detail;
     activeParagraphText = text;
     activeFocusedParagraphKey = paragraphKey;
     if (selectedText) activeSelectedText = selectedText;
@@ -317,16 +319,18 @@
     activeSelectedText = detail.selectedText || detail.text || '';
   }
 
-  function handleProbeCitation(e: CustomEvent<{ citation: string; sectionId: string; paragraphText: string }>) {
-    const { citation, paragraphText } = e.detail;
+  function handleProbeCitation(e: { citation: string; sectionId: string; paragraphText: string } | CustomEvent<{ citation: string; sectionId: string; paragraphText: string }>) {
+    const detail = 'detail' in e ? e.detail : e;
+    const { citation, paragraphText } = detail;
     if (paragraphText) activeParagraphText = paragraphText;
     if (companionRef && companionRef.askWithCustomPrompt) {
       companionRef.askWithCustomPrompt(`請深入剖析文中引用的文獻 ${citation}：作者引用該論文的論證目的是什麼？其實驗設計或條件（如壓力、流速等）與本文有何關聯與局限性？`);
     }
   }
 
-  function handleLocateSource(e: CustomEvent<{ paragraphKey: string }>) {
-    const { paragraphKey } = e.detail;
+  function handleLocateSource(e: { paragraphKey: string } | CustomEvent<{ paragraphKey: string }>) {
+    const detail = 'detail' in e ? e.detail : e;
+    const { paragraphKey } = detail;
     if (readerRef && readerRef.highlightAndScrollToParagraph) {
       readerRef.highlightAndScrollToParagraph(paragraphKey);
     }
@@ -369,9 +373,10 @@
     }, 150);
   }
 
-  function handleSectionsAligned(event: CustomEvent<{ sections: ChapterSection[] }>) {
-    if (activePaper && event.detail.sections) {
-      const updatedPaper = { ...activePaper, sections: event.detail.sections };
+  function handleSectionsAligned(event: { sections: ChapterSection[] } | CustomEvent<{ sections: ChapterSection[] }>) {
+    const detail = 'detail' in event ? event.detail : event;
+    if (activePaper && detail.sections) {
+      const updatedPaper = { ...activePaper, sections: detail.sections };
       dispatch('updatePaper', { paper: updatedPaper });
     }
   }
@@ -428,8 +433,9 @@
     }
   }
 
-  function handleCompanionTriggerGenerate(e: CustomEvent<{ type: string }>) {
-    const { type } = e.detail;
+  function handleCompanionTriggerGenerate(e: { type: 'intuition' | 'syntax' | 'terminology' } | CustomEvent<{ type: string }>) {
+    const detail = 'detail' in e ? e.detail : e;
+    const { type } = detail;
     if (!activePaper) return;
     const allSecs = flattenSections(activePaper.sections);
     const sec = allSecs.find(s => s.id === activeSectionId) || allSecs[0];
@@ -444,8 +450,9 @@
     }
   }
 
-  function handleReaderAction(event: CustomEvent<{ action: string; payload?: any; section?: ChapterSection; selectedText?: string }>) {
-    const { action, payload, section, selectedText } = event.detail;
+  function handleReaderAction(event: { action: string; payload?: any; section?: ChapterSection; selectedText?: string; [key: string]: any } | CustomEvent<{ action: string; payload?: any; section?: ChapterSection; selectedText?: string }>) {
+    const detail = 'detail' in event ? event.detail : event;
+    const { action, payload, section, selectedText } = detail;
 
     let targetSec = section;
     if (!targetSec && activePaper) {
@@ -534,22 +541,24 @@
     }
   }
 
-  function handleAskQuestion(event: CustomEvent<{ query: string; reply?: string }>) {
-    activeContextText = `探討中: ${event.detail.query.slice(0, 18)}...`;
+  function handleAskQuestion(event: { query: string; reply: string; cached?: boolean } | CustomEvent<{ query: string; reply?: string }>) {
+    const detail = 'detail' in event ? event.detail : event;
+    activeContextText = `探討中: ${detail.query.slice(0, 18)}...`;
     dispatch('refreshCacheStats');
   }
 
-  function handleQuickCompanionAction(event: CustomEvent<{ action: string; payload?: any }>) {
-    if (event.detail.action === 'saveSnippet' && event.detail.payload && activePaper) {
+  function handleQuickCompanionAction(event: { action: string; payload?: any } | CustomEvent<{ action: string; payload?: any }>) {
+    const detail = 'detail' in event ? event.detail : event;
+    if (detail.action === 'saveSnippet' && detail.payload && activePaper) {
       addNoteToPaper({
         title: `伴讀精華 · ${activeContextText}`,
-        text: event.detail.payload,
+        text: detail.payload,
         paperId: activePaper.id,
         paperTitle: activePaper.title,
         sectionId: activeSectionId,
         sectionTitle: activeContextText
       });
-    } else if (event.detail.action === 'exportNotes') {
+    } else if (detail.action === 'exportNotes') {
       dispatch('exportNotes');
     }
   }
@@ -600,7 +609,9 @@
       </div>
 
       <!-- Central Draggable Splitter Handle -->
-      <!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions -->
+      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+      <!-- svelte-ignore a11y_interactive_supports_focus -->
       <div
         class="w-2.5 bg-[#1d2021] hover:bg-[#fe8019] transition-colors cursor-col-resize flex items-center justify-center z-20 group shrink-0"
         onmousedown={handleSplitMouseDown}

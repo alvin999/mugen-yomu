@@ -85,9 +85,9 @@
     activeSectionId = $bindable('3.2.1'),
     readingMode = 'bilingual',
     isAbstractCollapsed = $bindable(false),
-    focusedParagraphKey = '',
-    focusedParagraphText = '',
-    selectedText = '',
+    focusedParagraphKey = $bindable(''),
+    focusedParagraphText = $bindable(''),
+    selectedText = $bindable(''),
     loadingIntuitionId = null,
     loadingSyntaxId = null,
     loadingTerminologyId = null,
@@ -157,12 +157,12 @@
   let scrollContainer: HTMLElement | null = null;
   let vimController = new ReaderVimController(null);
 
-  let selectedAuthorInfo: string | null = null;
+  let selectedAuthorInfo = $state<string | null>(null);
   let currentPaperId: string = '';
   let passedParaKeys = new Set<string>();
 
   // Toast State
-  let copyToastText: string | null = null;
+  let copyToastText = $state<string | null>(null);
   let copyToastTimeout: any = null;
 
   function showToast(text: string) {
@@ -184,8 +184,8 @@
   }
 
   // Lightbox State
-  let activeLightboxImg: string | null = null;
-  let activeLightboxCaption: string = '';
+  let activeLightboxImg = $state<string | null>(null);
+  let activeLightboxCaption = $state<string>('');
 
   function openLightbox(imgUrl: string, caption?: string) {
     if (!imgUrl) return;
@@ -213,11 +213,11 @@
   let translationSourceMap: Record<string, string> = {};
   let translationNoticeMap: Record<string, string> = {};
   let isTypingMap: Record<string, boolean> = {};
-  let isSectionTranslating: boolean = false;
+  let isSectionTranslating = $state<boolean>(false);
 
   // Abstract Generation State
-  let isGeneratingAbstract: boolean = false;
-  let abstractGenError: string = '';
+  let isGeneratingAbstract = $state<boolean>(false);
+  let abstractGenError = $state<string>('');
 
   let allSections = $derived(flattenSections(paper?.sections || []));
   let isCursorModeActive = $derived(Boolean($vimConfigStore.isVimEnabled && $vimCursorState.active));
@@ -1082,7 +1082,9 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions a11y_no_noninteractive_element_interactions -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <main
   bind:this={scrollContainer}
   onscroll={handleContainerScroll}
