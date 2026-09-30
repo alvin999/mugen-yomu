@@ -463,19 +463,33 @@
             </div>
           </div>
 
-          <div class="mt-3 pt-2.5 border-t border-[#3c3836] flex items-center justify-between text-[10px] text-[#a89984]">
-            <span class="text-[#fabd2f]">
-              彈跳強度: {($vimConfigStore.bounceStrength ?? 60) === 0 ? '關閉' : `${$vimConfigStore.bounceStrength ?? 60}%`}
-            </span>
-            <label class="flex items-center gap-1.5 cursor-pointer hover:text-[#ebdbb2]">
-              <input
-                type="checkbox"
-                checked={$vimConfigStore.isBlinkEnabled}
-                onchange={() => updateVimConfig({ isBlinkEnabled: !$vimConfigStore.isBlinkEnabled })}
-                class="accent-[#fe8019]"
-              />
-              <span>閃爍游標</span>
-            </label>
+          <div class="mt-3 pt-2.5 border-t border-[#3c3836] flex flex-col gap-1.5 text-[10px] text-[#a89984]">
+            <div class="flex items-center justify-between">
+              <span class="text-[#fabd2f]">
+                彈跳強度: {($vimConfigStore.bounceStrength ?? 60) === 0 ? '關閉' : `${$vimConfigStore.bounceStrength ?? 60}%`}
+              </span>
+              <label class="flex items-center gap-1.5 cursor-pointer hover:text-[#ebdbb2]">
+                <input
+                  type="checkbox"
+                  checked={$vimConfigStore.isBlinkEnabled}
+                  onchange={() => updateVimConfig({ isBlinkEnabled: !$vimConfigStore.isBlinkEnabled })}
+                  class="accent-[#fe8019]"
+                />
+                <span>閃爍游標</span>
+              </label>
+            </div>
+            <div class="flex items-center justify-between border-t border-[#3c3836]/40 pt-1.5">
+              <span>跨段視線引導</span>
+              <label class="flex items-center gap-1.5 cursor-pointer hover:text-[#ebdbb2]">
+                <input
+                  type="checkbox"
+                  checked={$vimConfigStore.isSmoothScrollEnabled}
+                  onchange={() => updateVimConfig({ isSmoothScrollEnabled: !$vimConfigStore.isSmoothScrollEnabled })}
+                  class="accent-[#fe8019]"
+                />
+                <span class={$vimConfigStore.isSmoothScrollEnabled ? 'text-[#fe8019] font-medium' : ''}>平滑捲動</span>
+              </label>
+            </div>
           </div>
         </div>
       {/if}

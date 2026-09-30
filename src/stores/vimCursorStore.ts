@@ -12,6 +12,7 @@ export interface VimConfig {
   isBlinkEnabled: boolean;
   bounceStrength: number; // 彈跳強度：0 (關閉/無彈跳) ~ 100 (最大彈性)，預設 60
   cursorColor: string;
+  isSmoothScrollEnabled: boolean; // 跨段落平滑捲動：跨段或長距離導航時提供流暢視線引導
 }
 
 const CONFIG_STORAGE_KEY = 'mugen_vim_cursor_config';
@@ -20,7 +21,8 @@ const defaultConfig: VimConfig = {
   isVimEnabled: true,
   isBlinkEnabled: true,
   bounceStrength: 60,
-  cursorColor: '#fe8019' // Gruvbox 經典亮橘
+  cursorColor: '#fe8019', // Gruvbox 經典亮橘
+  isSmoothScrollEnabled: true
 };
 
 function loadStoredConfig(): VimConfig {
@@ -32,7 +34,8 @@ function loadStoredConfig(): VimConfig {
       return {
         ...defaultConfig,
         ...parsed,
-        bounceStrength: typeof parsed.bounceStrength === 'number' ? parsed.bounceStrength : 60
+        bounceStrength: typeof parsed.bounceStrength === 'number' ? parsed.bounceStrength : 60,
+        isSmoothScrollEnabled: typeof parsed.isSmoothScrollEnabled === 'boolean' ? parsed.isSmoothScrollEnabled : true
       };
     }
   } catch (err) {

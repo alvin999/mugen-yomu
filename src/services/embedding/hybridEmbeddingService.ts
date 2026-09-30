@@ -12,6 +12,15 @@ import type {
   SemanticSearchResult,
   EmbeddingEngineStatus
 } from './embeddingTypes';
+
+export type {
+  EmbeddingEnginePreference,
+  ActiveEmbeddingProvider,
+  ParagraphChunk,
+  IndexedEmbeddingRecord,
+  SemanticSearchResult,
+  EmbeddingEngineStatus
+};
 import {
   saveEmbeddingsForPaper,
   getEmbeddingsForPaper,

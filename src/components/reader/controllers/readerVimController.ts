@@ -258,24 +258,112 @@ export function computeCharRect(el: HTMLElement, charIdx: number, scrollContaine
   };
 }
 
-export function ensureCursorInComfortView(rect: CursorRect, scrollContainer: HTMLElement | null) {
+/** 捲軸式平滑滾動動畫器狀態與控制 */
+let activeScrollRafId: number | null = null;
+
+export function animateScrollTo(
+  container: HTMLElement,
+  targetTop: number,
+  duration = 420
+) {
+  if (typeof window === 'undefined') {
+    container.scrollTop = targetTop;
+    return;
+  }
+
+  if (activeScrollRafId !== null) {
+    cancelAnimationFrame(activeScrollRafId);
+    activeScrollRafId = null;
+  }
+
+  const startTop = container.scrollTop;
+  const maxScroll = Math.max(0, container.scrollHeight - container.clientHeight);
+  const clampedTarget = Math.max(0, Math.min(maxScroll, targetTop));
+  const distance = clampedTarget - startTop;
+
+  // 若距離極小 (< 3px)，直接就位
+  if (Math.abs(distance) < 3) {
+    container.scrollTop = clampedTarget;
+    return;
+  }
+
+  const startTime = performance.now();
+
+  function step(currentTime: number) {
+    const elapsed = currentTime - startTime;
+    const progress = Math.min(1, elapsed / duration);
+    // Ease-Out Cubic: 具有物理慣性、減速緩停的古籍卷軸質感
+    const ease = 1 - Math.pow(1 - progress, 3);
+    container.scrollTop = startTop + distance * ease;
+
+    if (progress < 1) {
+      activeScrollRafId = requestAnimationFrame(step);
+    } else {
+      container.scrollTop = clampedTarget;
+      activeScrollRafId = null;
+    }
+  }
+
+  activeScrollRafId = requestAnimationFrame(step);
+}
+
+export function ensureCursorInComfortView(
+  rect: CursorRect,
+  scrollContainer: HTMLElement | null,
+  options?: {
+    isCrossParagraph?: boolean;
+    isSmoothScrollEnabled?: boolean;
+  }
+) {
   if (!scrollContainer) return;
+  const isSmooth = options?.isSmoothScrollEnabled ?? true;
+  const isCross = options?.isCrossParagraph ?? false;
   const viewHeight = scrollContainer.clientHeight;
   const containerRect = scrollContainer.getBoundingClientRect();
 
   const curTopInContainer = rect.top - containerRect.top;
   const curBottomInContainer = rect.top + rect.height - containerRect.top;
 
-  if (curTopInContainer < viewHeight * 0.18) {
-    scrollContainer.scrollTo({
-      top: Math.max(0, scrollContainer.scrollTop + curTopInContainer - viewHeight * 0.28),
-      behavior: 'smooth'
-    });
-  } else if (curBottomInContainer > viewHeight * 0.72) {
-    scrollContainer.scrollTo({
-      top: scrollContainer.scrollTop + curBottomInContainer - viewHeight * 0.65,
-      behavior: 'smooth'
-    });
+  // 跨段落移動（Cross-paragraph）：如紙卷/捲軸展開般連貫平滑向下開展新段落
+  if (isCross) {
+    if (isSmooth) {
+      // 目標閱讀視線設定於視野高度的 26%~28%（黃金閱讀區）
+      const desiredLine = viewHeight * 0.28;
+      const targetScroll = Math.max(0, scrollContainer.scrollTop + curTopInContainer - desiredLine);
+      const diff = Math.abs(targetScroll - scrollContainer.scrollTop);
+
+      // 只要與理想視線有顯著落差，立即以 Ease-Out Cubic 啟動捲軸式平滑滑動
+      if (diff > 25) {
+        animateScrollTo(scrollContainer, targetScroll, 420);
+        return;
+      }
+    } else {
+      // 關閉平滑捲動：採用經典 Vim 即時瞬切到位
+      const targetScroll = Math.max(0, scrollContainer.scrollTop + curTopInContainer - viewHeight * 0.28);
+      scrollContainer.scrollTop = targetScroll;
+      return;
+    }
+  }
+
+  // 同段落內（Intra-paragraph）的微調跟隨
+  if (isSmooth) {
+    // 在同段落向下閱讀越過視窗 58%（中線偏下）時，捲軸平滑跟進一截，保持在視野中上方
+    if (curBottomInContainer > viewHeight * 0.58) {
+      const targetScroll = scrollContainer.scrollTop + curBottomInContainer - viewHeight * 0.45;
+      animateScrollTo(scrollContainer, targetScroll, 360);
+      return;
+    } else if (curTopInContainer < viewHeight * 0.18) {
+      const targetScroll = Math.max(0, scrollContainer.scrollTop + curTopInContainer - viewHeight * 0.28);
+      animateScrollTo(scrollContainer, targetScroll, 360);
+      return;
+    }
+  } else {
+    // 關閉平滑時的邊界即時瞬切
+    if (curTopInContainer < viewHeight * 0.18) {
+      scrollContainer.scrollTop = Math.max(0, scrollContainer.scrollTop + curTopInContainer - viewHeight * 0.28);
+    } else if (curBottomInContainer > viewHeight * 0.72) {
+      scrollContainer.scrollTop = scrollContainer.scrollTop + curBottomInContainer - viewHeight * 0.65;
+    }
   }
 }
 
@@ -398,11 +486,16 @@ export class ReaderVimController {
     pIndex: number,
     charIdx: number,
     triggerAnimation: boolean = true,
-    skipComfortScroll: boolean = false
+    skipComfortScroll: boolean = false,
+    forcedCrossParagraph?: boolean
   ): CursorRect | null {
     const key = `${secId}_${pIndex}`;
     const el = document.getElementById(`para-${key}`);
     if (!el || !this.scrollContainer) return null;
+
+    const isCross = forcedCrossParagraph !== undefined
+      ? forcedCrossParagraph
+      : (this.currentParaKey !== '' && this.currentParaKey !== key);
 
     const rect = computeCharRect(el, charIdx, this.scrollContainer);
     if (rect) {
@@ -411,7 +504,11 @@ export class ReaderVimController {
       updateCursorPosition(rect, secId, pIndex, charIdx, triggerAnimation);
       if (!skipComfortScroll) {
         this.onBeforeComfortScroll?.(); // 通知外部設定 isProgrammaticScrolling
-        ensureCursorInComfortView(rect, this.scrollContainer);
+        const config = get(vimConfigStore);
+        ensureCursorInComfortView(rect, this.scrollContainer, {
+          isCrossParagraph: isCross,
+          isSmoothScrollEnabled: config.isSmoothScrollEnabled ?? true
+        });
       }
     }
     return rect;

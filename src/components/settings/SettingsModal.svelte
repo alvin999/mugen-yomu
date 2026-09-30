@@ -659,6 +659,20 @@
                 on:change={(e) => updateVimConfig({ isBlinkEnabled: e.currentTarget.checked })}
               />
             </label>
+            <!-- 跨段落平滑捲動開關 -->
+            <label class="flex items-center justify-between cursor-pointer select-none border-t border-[#3c3836]/60 pt-2">
+              <div class="flex flex-col pr-3">
+                <span class="text-[11px] font-medium text-[#ebdbb2]">跨段落平滑捲動 (Smooth Scroll)</span>
+                <span class="text-[10px] text-[#a89984]">游標跨越段落或長距離移動時平滑引導視線，防止畫面大範圍突跳；關閉時為即時切換</span>
+              </div>
+              <input
+                type="checkbox"
+                class="accent-[#fe8019] h-4 w-4 rounded cursor-pointer shrink-0"
+                checked={$vimConfigStore.isSmoothScrollEnabled}
+                on:change={(e) => updateVimConfig({ isSmoothScrollEnabled: e.currentTarget.checked })}
+              />
+            </label>
+
             <!-- 游標彈跳強度滑桿 -->
             <div class="flex flex-col gap-1.5 border-t border-[#3c3836]/60 pt-2">
               <div class="flex items-center justify-between text-[10px] font-mono">

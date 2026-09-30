@@ -467,6 +467,7 @@
 
   function handleParagraphClick(secId: string, pIndex: number, text: string, clickCharIdx?: number) {
     const key = `${secId}_${pIndex}`;
+    const isCross = focusedParagraphKey !== '' && focusedParagraphKey !== key;
     focusedParagraphKey = key;
     focusedParagraphText = text;
     activeSectionId = secId;
@@ -495,7 +496,7 @@
       flowStore.recordReadingActivity(Math.min(20, Math.round(pWords * 0.2)), 'skim');
     }
 
-    vimController.syncCursor(secId, pIndex, vimController.currentCharIndex, true);
+    vimController.syncCursor(secId, pIndex, vimController.currentCharIndex, true, false, isCross);
 
     dispatch('paragraphFocused', {
       sectionId: secId,

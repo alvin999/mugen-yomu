@@ -1,6 +1,7 @@
 export interface ProviderModelItem {
   id: string;
   name: string;
+  contextWindow?: number;
 }
 
 export interface ChatMessage {
