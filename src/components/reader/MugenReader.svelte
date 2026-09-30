@@ -280,7 +280,34 @@
     }
   });
 
+  // 監聽 readingMode 切換（沉浸/伴讀/分割等），在版面 CSS transition 完成後重新吸附游標
+  // readingMode 改變時 max-width 與 padding 同步改變，觸發文字重排 → 游標位置失效
+  let prevReadingMode: string | null = null;
+  $effect(() => {
+    const mode = readingMode;
+    if (mode === prevReadingMode) return;
+    prevReadingMode = mode;
+
+    untrack(() => {
+      const config = get(vimConfigStore);
+      const state = get(vimCursorState);
+      if (!config.isVimEnabled || !state.active || !state.sectionId || state.paraIndex === undefined) return;
+
+      // 內部 div 有 `transition-[max-width] duration-300`，需等動畫結束後才量測
+      // 160ms：動畫中期快速預校（視覺流暢）；340ms：動畫結束精確就位
+      const syncOnce = (skipScroll: boolean) => {
+        if (!scrollContainer) return;
+        lastScrollTop = scrollContainer.scrollTop;
+        vimController.syncCursor(state.sectionId, state.paraIndex, vimController.currentCharIndex || 0, false, skipScroll);
+      };
+
+      setTimeout(() => requestAnimationFrame(() => syncOnce(true)), 160);
+      setTimeout(() => requestAnimationFrame(() => syncOnce(false)), 340);
+    });
+  });
+
   // 監聽容器尺寸或排版變動（例如分屏拉伸、視窗 resize）自動重新吸附
+
   $effect(() => {
     if (!scrollContainer || typeof ResizeObserver === 'undefined') return;
     let lastW = scrollContainer.clientWidth;
