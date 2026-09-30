@@ -2,6 +2,7 @@
   import { type PaperDocument, isPaperProtected } from '../../stores/documentStore';
   import type { CacheStats } from '../../services/cacheService';
   import { THEMES, currentTheme, setTheme } from '../../stores/themeStore';
+  import { vimCursorState, vimConfigStore, updateVimConfig, setVimHelpOpen } from '../../stores/vimCursorStore';
 
   interface Props {
     activePaper?: PaperDocument | null;
@@ -53,6 +54,15 @@
     if (isThemeDropdownOpen) {
       isThemeDropdownOpen = false;
     }
+    if ($vimCursorState.isHelpOpen) {
+      setVimHelpOpen(false);
+    }
+  }
+
+  function toggleHelp(e: MouseEvent) {
+    e.stopPropagation();
+    if (isThemeDropdownOpen) isThemeDropdownOpen = false;
+    setVimHelpOpen(!$vimCursorState.isHelpOpen);
   }
 
   function setMode(mode: 'bilingual' | 'split' | 'zen' | 'figures') {
@@ -305,7 +315,11 @@
       <div class="relative" id="theme-switcher-container">
         <button
           class="w-7 h-7 rounded-lg flex items-center justify-center text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2] transition-colors cursor-pointer {isThemeDropdownOpen ? 'bg-[#3c3836] text-[#fe8019]' : ''}"
-          onclick={(e) => { e.stopPropagation(); isThemeDropdownOpen = !isThemeDropdownOpen; }}
+          onclick={(e) => {
+            e.stopPropagation();
+            if ($vimCursorState.isHelpOpen) setVimHelpOpen(false);
+            isThemeDropdownOpen = !isThemeDropdownOpen;
+          }}
           title="切換介面主題 (當前：{$currentTheme})"
           id="btn-theme-switcher"
         >
@@ -376,9 +390,95 @@
       </button>
     </div>
 
-    <!-- User Profile Avatar -->
-    <div class="w-6 h-6 rounded-full bg-[#fe8019] text-[#1d2021] font-bold flex items-center justify-center shrink-0 shadow-sm text-xs cursor-pointer">
-      <span class="material-symbols-outlined text-[14px]">person</span>
+    <!-- Vim 操作說明指南 (取代頭像) -->
+    <div class="relative" id="vim-help-container">
+      <button
+        type="button"
+        class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer {$vimCursorState.isHelpOpen ? 'bg-[#3c3836] text-[#fe8019]' : 'text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2]'}"
+        onclick={toggleHelp}
+        title="按 ? 或點擊查看 Vim 導引與操作說明"
+        id="btn-vim-help"
+      >
+        <span class="material-symbols-outlined text-[18px]">help_outline</span>
+      </button>
+
+      {#if $vimCursorState.isHelpOpen}
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <div
+          role="dialog"
+          aria-modal="true"
+          tabindex="-1"
+          class="absolute right-0 top-9 w-80 bg-[#1d2021]/95 backdrop-blur-md border border-[#504945] rounded-xl shadow-2xl p-3.5 text-[11px] text-[#ebdbb2] z-50 animate-scale-in font-mono"
+          onclick={(e) => e.stopPropagation()}
+        >
+          <div class="flex items-center justify-between border-b border-[#3c3836] pb-2 mb-2.5">
+            <div class="flex items-center gap-1.5 font-bold text-[#fe8019]">
+              <span class="material-symbols-outlined text-[16px]">terminal</span>
+              <span>Vim 游標導引快捷鍵</span>
+            </div>
+            <button
+              type="button"
+              class="text-[#a89984] hover:text-[#ebdbb2] text-[14px] px-1 cursor-pointer"
+              onclick={() => setVimHelpOpen(false)}
+              title="關閉速查卡"
+            >✕</button>
+          </div>
+
+          <div class="space-y-2 text-[#d5c4a1]">
+            <div class="flex justify-between items-center py-0.5">
+              <span class="text-[#fabd2f] font-bold">h / l</span>
+              <span class="text-[#a89984]">左 / 右移動字元（或跨詞）</span>
+            </div>
+            <div class="flex justify-between items-center py-0.5">
+              <span class="text-[#fabd2f] font-bold">j / k</span>
+              <span class="text-[#a89984]">下 / 上換行或跨段落閱讀</span>
+            </div>
+            <div class="flex justify-between items-center py-0.5">
+              <span class="text-[#fabd2f] font-bold">w / b</span>
+              <span class="text-[#a89984]">跳至下一詞 / 上一詞</span>
+            </div>
+            <div class="flex justify-between items-center py-0.5">
+              <span class="text-[#fabd2f] font-bold">0 / $</span>
+              <span class="text-[#a89984]">跳至行首 / 行末</span>
+            </div>
+            <div class="flex justify-between items-center py-0.5">
+              <span class="text-[#fabd2f] font-bold">gg / G</span>
+              <span class="text-[#a89984]">跳至章節首段 / 文末</span>
+            </div>
+            <div class="flex justify-between items-center py-0.5">
+              <span class="text-[#8ec07c] font-bold">t</span>
+              <span class="text-[#a89984]">展開 / 收合當前段落繁中譯文</span>
+            </div>
+            <div class="flex justify-between items-center py-0.5">
+              <span class="text-[#8ec07c] font-bold">a</span>
+              <span class="text-[#a89984]">向 AI 伴讀助理探詢當前焦點段落</span>
+            </div>
+            <div class="flex justify-between items-center py-0.5">
+              <span class="text-[#8ec07c] font-bold">y</span>
+              <span class="text-[#a89984]">複製當前段落原文或 LaTeX 公式</span>
+            </div>
+            <div class="flex justify-between items-center py-0.5">
+              <span class="text-[#fe8019] font-bold">?</span>
+              <span class="text-[#a89984]">切換顯示此快速指南</span>
+            </div>
+          </div>
+
+          <div class="mt-3 pt-2.5 border-t border-[#3c3836] flex items-center justify-between text-[10px] text-[#a89984]">
+            <span class="text-[#fabd2f]">
+              彈跳強度: {($vimConfigStore.bounceStrength ?? 60) === 0 ? '關閉' : `${$vimConfigStore.bounceStrength ?? 60}%`}
+            </span>
+            <label class="flex items-center gap-1.5 cursor-pointer hover:text-[#ebdbb2]">
+              <input
+                type="checkbox"
+                checked={$vimConfigStore.isBlinkEnabled}
+                onchange={() => updateVimConfig({ isBlinkEnabled: !$vimConfigStore.isBlinkEnabled })}
+                class="accent-[#fe8019]"
+              />
+              <span>閃爍游標</span>
+            </label>
+          </div>
+        </div>
+      {/if}
     </div>
   </div>
 </header>

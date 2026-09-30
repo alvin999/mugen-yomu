@@ -28,7 +28,6 @@
   import SectionCard from './sections/SectionCard.svelte';
   import ImageLightboxModal from '../common/ImageLightboxModal.svelte';
   import VimCursorOverlay from './VimCursorOverlay.svelte';
-  import VimStatusBar from './VimStatusBar.svelte';
 
   // Controllers & Utilities
   import {
@@ -1222,9 +1221,6 @@
   caption={activeLightboxCaption}
   onclose={closeLightbox}
 />
-
-<!-- Neovim 閱讀狀態列與快捷鍵浮動指示器 -->
-<VimStatusBar {readingMode} />
 
 <style>
   /* 核心目標函數、章節跳轉與公式高亮脈衝動畫 */
