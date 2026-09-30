@@ -2,6 +2,8 @@
   import { onMount, onDestroy } from 'svelte';
   import { vimCursorState, vimConfigStore } from '../../stores/vimCursorStore';
 
+  export let zoomLevel: number = 100;
+
   // ── DOM 元素 ──────────────────────────────────────────────────
   let cursorDiv: HTMLDivElement | null = null;
 
@@ -19,35 +21,44 @@
   let targetW = 9, targetH = 18;
   let springActive = false;
   let initialized  = false;
+  let lastZoom = 100;
 
   // ── Store 監聽：決定要 spring 還是瞬移 ───────────────────────
   $: {
     const r    = $vimCursorState.rect;
     const prev = $vimCursorState.prevRect;
     const strength = Math.max(0, Math.min(100, $vimConfigStore.bounceStrength ?? 60)) / 100;
+    const z = Math.max(0.1, (zoomLevel || 100) / 100);
+    const isZoomChanged = zoomLevel !== lastZoom;
+    lastZoom = zoomLevel;
 
     if (r) {
-      const nW = Math.max(9, r.width);
-      const nH = Math.max(18, r.height);
+      // 將螢幕視口座標除以容器的 zoom 比例，徹底消除 position:fixed 在 zoom 容器內的二次縮放偏誤
+      const targetLeft = r.left / z;
+      const targetTop  = r.top / z;
+      const nW = (r.width > 0 ? r.width : 9) / z;
+      const nH = (r.height > 0 ? r.height : 18) / z;
 
-      if (!initialized) {
-        // 首次初始化：不做動畫，直接就位
-        dispX = r.left; dispY = r.top;
-        targetX = r.left; targetY = r.top;
+      if (!initialized || isZoomChanged) {
+        // 首次初始化或縮放變更：不做動畫，直接就位，重置物理速度
+        dispX = targetLeft; dispY = targetTop;
+        targetX = targetLeft; targetY = targetTop;
         targetW = nW;    targetH = nH;
+        velX = 0;        velY = 0;
+        springActive = false;
         initialized = true;
         applyDivStyle(1, 1, 0, 0);
       } else if (prev === null || strength === 0) {
         // 捲動同步或彈跳強度設為 0 → 瞬移，重置速度，無彈跳
-        targetX = r.left; targetY = r.top;
+        targetX = targetLeft; targetY = targetTop;
         targetW = nW;     targetH = nH;
-        dispX = r.left;   dispY = r.top;
+        dispX = targetLeft;   dispY = targetTop;
         velX  = 0;        velY  = 0;
         springActive = false;
         applyDivStyle(1, 1, 0, 0);
       } else {
         // 鍵盤移動（hjkl / 點擊）且彈跳強度 > 0 → 啟動 spring
-        targetX = r.left; targetY = r.top;
+        targetX = targetLeft; targetY = targetTop;
         targetW = nW;     targetH = nH;
         springActive = true;
       }
@@ -150,12 +161,12 @@
   function applyDivStyle(sx: number, sy: number, rotX: number = 0, rotY: number = 0) {
     if (!cursorDiv) return;
 
-    const baseW = Math.max(10, targetW);
-    const baseH = Math.max(20, targetH);
+    const baseW = Math.max(4, targetW);
+    const baseH = Math.max(8, targetH);
 
     // 計算形變後尺寸
-    const w = Math.max(4, Math.round(baseW * sx));
-    const h = Math.max(8, Math.round(baseH * sy));
+    const w = Math.max(3, Math.round(baseW * sx));
+    const h = Math.max(6, Math.round(baseH * sy));
 
     // 補償偏移：讓游標以 dispX/dispY 為中心點縮放
     const ox = Math.round((baseW - w) / 2);

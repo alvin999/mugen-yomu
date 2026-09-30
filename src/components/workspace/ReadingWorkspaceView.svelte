@@ -638,6 +638,7 @@
           paper={activePaper}
           {activeSectionId}
           {readingMode}
+          {zoomLevel}
           onselectSection={handleSelectSection}
           onsectionChanged={handleSectionChanged}
           onreaderAction={handleReaderAction}
@@ -697,6 +698,7 @@
           paper={activePaper}
           {activeSectionId}
           {readingMode}
+          {zoomLevel}
           {loadingIntuitionId}
           {loadingSyntaxId}
           {loadingTerminologyId}

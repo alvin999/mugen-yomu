@@ -83,24 +83,40 @@ export function getParagraphVisualLines(
 
   if (allChars.length === 0) {
     const pRect = textRoot.getBoundingClientRect();
+    let fallbackH = 22;
+    let fallbackW = 10;
+    if (typeof window !== 'undefined') {
+      try {
+        const cs = window.getComputedStyle(textRoot);
+        const fs = parseFloat(cs.fontSize) || 17;
+        const lh = parseFloat(cs.lineHeight) || (fs * 1.5);
+        fallbackH = lh;
+        fallbackW = Math.round(fs * 0.55);
+      } catch (e) {}
+    }
     const fallback: CharMetric = {
       index: 0,
       left: pRect.left,
       top: pRect.top,
-      width: 10,
-      height: 22,
-      centerX: pRect.left + 5
+      width: fallbackW,
+      height: fallbackH,
+      centerX: pRect.left + fallbackW / 2
     };
     return [[fallback]];
   }
 
-  // 依據字元 top 座標分群為視覺行 (閾值 8px)
+  // 依據字元高度動態計算視覺行分群閾值（避免字體調大或有數學符號時同行被誤切分）
+  let totalH = 0;
+  for (const c of allChars) totalH += c.height;
+  const avgHeight = allChars.length > 0 ? totalH / allChars.length : 20;
+  const lineThreshold = Math.max(8, avgHeight * 0.45);
+
   const lines: CharMetric[][] = [];
   let currentLine: CharMetric[] = [];
   let curLineTop = allChars[0].top;
 
   for (const c of allChars) {
-    if (currentLine.length === 0 || Math.abs(c.top - curLineTop) < 8) {
+    if (currentLine.length === 0 || Math.abs(c.top - curLineTop) < lineThreshold) {
       currentLine.push(c);
       curLineTop = (curLineTop * (currentLine.length - 1) + c.top) / currentLine.length;
     } else {
@@ -212,7 +228,7 @@ export function computeCharRect(el: HTMLElement, charIdx: number, scrollContaine
       return {
         left: rects[0].left,
         top: rects[0].top,
-        width: Math.max(9, rects[0].width),
+        width: rects[0].width > 0 ? rects[0].width : Math.max(8, rects[0].height * 0.45),
         height: rects[0].height
       };
     }
@@ -236,7 +252,7 @@ export function computeCharRect(el: HTMLElement, charIdx: number, scrollContaine
                 return {
                   left: prevR.left + prevR.width,
                   top: prevR.top,
-                  width: 9,
+                  width: Math.max(8, prevR.height * 0.45),
                   height: prevR.height
                 };
               }
@@ -250,11 +266,22 @@ export function computeCharRect(el: HTMLElement, charIdx: number, scrollContaine
   }
 
   const pRect = textRoot.getBoundingClientRect();
+  let fallbackH = 22;
+  let fallbackW = 10;
+  if (typeof window !== 'undefined') {
+    try {
+      const cs = window.getComputedStyle(textRoot);
+      const fs = parseFloat(cs.fontSize) || 17;
+      const lh = parseFloat(cs.lineHeight) || (fs * 1.5);
+      fallbackH = lh;
+      fallbackW = Math.round(fs * 0.55);
+    } catch (e) {}
+  }
   return {
     left: pRect.left,
     top: pRect.top,
-    width: 10,
-    height: 22
+    width: fallbackW,
+    height: fallbackH
   };
 }
 
@@ -313,6 +340,7 @@ export function ensureCursorInComfortView(
   options?: {
     isCrossParagraph?: boolean;
     isSmoothScrollEnabled?: boolean;
+    zoomLevel?: number;
   }
 ) {
   if (!scrollContainer) return;
@@ -321,15 +349,23 @@ export function ensureCursorInComfortView(
   const viewHeight = scrollContainer.clientHeight;
   const containerRect = scrollContainer.getBoundingClientRect();
 
-  const curTopInContainer = rect.top - containerRect.top;
-  const curBottomInContainer = rect.top + rect.height - containerRect.top;
+  // 自適應計算容器當前的有效 zoom 縮放係數
+  const z = options?.zoomLevel
+    ? Math.max(0.1, options.zoomLevel / 100)
+    : (containerRect.width > 0 && scrollContainer.clientWidth > 0
+        ? containerRect.width / scrollContainer.clientWidth
+        : 1);
+
+  // 將視口物理像素換算為容器內部的真實 CSS 滾動像素
+  const curTopInContainerCss = (rect.top - containerRect.top) / z;
+  const curBottomInContainerCss = (rect.top + rect.height - containerRect.top) / z;
 
   // 跨段落移動（Cross-paragraph）：如紙卷/捲軸展開般連貫平滑向下開展新段落
   if (isCross) {
     if (isSmooth) {
       // 目標閱讀視線設定於視野高度的 26%~28%（黃金閱讀區）
       const desiredLine = viewHeight * 0.28;
-      const targetScroll = Math.max(0, scrollContainer.scrollTop + curTopInContainer - desiredLine);
+      const targetScroll = Math.max(0, scrollContainer.scrollTop + curTopInContainerCss - desiredLine);
       const diff = Math.abs(targetScroll - scrollContainer.scrollTop);
 
       // 只要與理想視線有顯著落差，立即以 Ease-Out Cubic 啟動捲軸式平滑滑動
@@ -339,7 +375,7 @@ export function ensureCursorInComfortView(
       }
     } else {
       // 關閉平滑捲動：採用經典 Vim 即時瞬切到位
-      const targetScroll = Math.max(0, scrollContainer.scrollTop + curTopInContainer - viewHeight * 0.28);
+      const targetScroll = Math.max(0, scrollContainer.scrollTop + curTopInContainerCss - viewHeight * 0.28);
       scrollContainer.scrollTop = targetScroll;
       return;
     }
@@ -348,21 +384,21 @@ export function ensureCursorInComfortView(
   // 同段落內（Intra-paragraph）的微調跟隨
   if (isSmooth) {
     // 在同段落向下閱讀越過視窗 58%（中線偏下）時，捲軸平滑跟進一截，保持在視野中上方
-    if (curBottomInContainer > viewHeight * 0.58) {
-      const targetScroll = scrollContainer.scrollTop + curBottomInContainer - viewHeight * 0.45;
+    if (curBottomInContainerCss > viewHeight * 0.58) {
+      const targetScroll = scrollContainer.scrollTop + curBottomInContainerCss - viewHeight * 0.45;
       animateScrollTo(scrollContainer, targetScroll, 360);
       return;
-    } else if (curTopInContainer < viewHeight * 0.18) {
-      const targetScroll = Math.max(0, scrollContainer.scrollTop + curTopInContainer - viewHeight * 0.28);
+    } else if (curTopInContainerCss < viewHeight * 0.18) {
+      const targetScroll = Math.max(0, scrollContainer.scrollTop + curTopInContainerCss - viewHeight * 0.28);
       animateScrollTo(scrollContainer, targetScroll, 360);
       return;
     }
   } else {
     // 關閉平滑時的邊界即時瞬切
-    if (curTopInContainer < viewHeight * 0.18) {
-      scrollContainer.scrollTop = Math.max(0, scrollContainer.scrollTop + curTopInContainer - viewHeight * 0.28);
-    } else if (curBottomInContainer > viewHeight * 0.72) {
-      scrollContainer.scrollTop = scrollContainer.scrollTop + curBottomInContainer - viewHeight * 0.65;
+    if (curTopInContainerCss < viewHeight * 0.18) {
+      scrollContainer.scrollTop = Math.max(0, scrollContainer.scrollTop + curTopInContainerCss - viewHeight * 0.28);
+    } else if (curBottomInContainerCss > viewHeight * 0.72) {
+      scrollContainer.scrollTop = scrollContainer.scrollTop + curBottomInContainerCss - viewHeight * 0.65;
     }
   }
 }
@@ -372,6 +408,7 @@ export function ensureCursorInComfortView(
  */
 export class ReaderVimController {
   private scrollContainer: HTMLElement | null = null;
+  private zoomLevel: number = 100;
   public currentCharIndex: number = 0;
   public preferredColLeft: number | null = null;
   /** 追蹤目前游標所在段落的 key（`${secId}_${pIndex}`），避免依賴 Svelte reactivity 時序 */
@@ -388,6 +425,11 @@ export class ReaderVimController {
 
   public setScrollContainer(container: HTMLElement | null) {
     this.scrollContainer = container;
+  }
+
+  /** 同步外部縮放比例（來自父容器的 CSS zoom），確保 comfort scroll 使用精確 zoom 換算 */
+  public setZoomLevel(level: number) {
+    this.zoomLevel = Math.max(10, level);
   }
 
   /** 設定在投入换行捲動前的鐘彾（一次設定即永久生效） */
@@ -507,7 +549,8 @@ export class ReaderVimController {
         const config = get(vimConfigStore);
         ensureCursorInComfortView(rect, this.scrollContainer, {
           isCrossParagraph: isCross,
-          isSmoothScrollEnabled: config.isSmoothScrollEnabled ?? true
+          isSmoothScrollEnabled: config.isSmoothScrollEnabled ?? true,
+          zoomLevel: this.zoomLevel
         });
       }
     }

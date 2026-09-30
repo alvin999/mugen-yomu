@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
+  import { get } from 'svelte/store';
   import type { PaperDocument, ChapterSection, FormulaItem } from '../../types/document';
   import {
     flattenSections,
@@ -48,6 +49,7 @@
     activeSectionId?: string;
     readingMode?: 'bilingual' | 'split' | 'zen' | 'figures';
     isAbstractCollapsed?: boolean;
+    zoomLevel?: number;
 
     focusedParagraphKey?: string;
     focusedParagraphText?: string;
@@ -84,6 +86,7 @@
     activeSectionId = $bindable('3.2.1'),
     readingMode = 'bilingual',
     isAbstractCollapsed = $bindable(false),
+    zoomLevel = 100,
     focusedParagraphKey = $bindable(''),
     focusedParagraphText = $bindable(''),
     selectedText = $bindable(''),
@@ -243,6 +246,72 @@
       }
     }
     prevVimActive = curVimActive;
+  });
+
+  let prevEffectZoom: number | null = null;
+  // 當 zoomLevel 改變時，先同步 controller 的 zoomLevel，再重新吸附游標
+  $effect(() => {
+    const curZoom = zoomLevel;
+    // 無論游標是否活躍，都先更新 controller 的縮放比例，
+    // 確保後續所有 comfort scroll 使用正確 zoom 換算（避免水平溢出時偵測失準）
+    vimController.setZoomLevel(curZoom);
+
+    if (curZoom !== prevEffectZoom) {
+      prevEffectZoom = curZoom;
+      untrack(() => {
+        const config = get(vimConfigStore);
+        const state = get(vimCursorState);
+        if (config.isVimEnabled && state.active && state.sectionId && state.paraIndex !== undefined) {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              if (scrollContainer) lastScrollTop = scrollContainer.scrollTop;
+              // skipComfortScroll = false：讓 comfort scroll 依正確 zoom 把游標捲回可視範圍
+              vimController.syncCursor(
+                state.sectionId,
+                state.paraIndex,
+                vimController.currentCharIndex || 0,
+                false,
+                false
+              );
+            });
+          });
+        }
+      });
+    }
+  });
+
+  // 監聽容器尺寸或排版變動（例如分屏拉伸、視窗 resize）自動重新吸附
+  $effect(() => {
+    if (!scrollContainer || typeof ResizeObserver === 'undefined') return;
+    let lastW = scrollContainer.clientWidth;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const newW = entry.contentRect.width;
+        if (Math.abs(newW - lastW) > 8) {
+          lastW = newW;
+          untrack(() => {
+            const config = get(vimConfigStore);
+            const state = get(vimCursorState);
+            if (config.isVimEnabled && state.active && state.sectionId && state.paraIndex !== undefined) {
+              requestAnimationFrame(() => {
+                if (scrollContainer) lastScrollTop = scrollContainer.scrollTop;
+                vimController.syncCursor(
+                  state.sectionId,
+                  state.paraIndex,
+                  vimController.currentCharIndex || 0,
+                  false,
+                  true
+                );
+              });
+            }
+          });
+        }
+      }
+    });
+    observer.observe(scrollContainer);
+    return () => {
+      observer.disconnect();
+    };
   });
 
   // --- 閱讀進度保留 (有游標以游標為主，無游標以段落為主) ---
@@ -420,6 +489,7 @@
 
   onMount(() => {
     vimController.setScrollContainer(scrollContainer);
+    vimController.setZoomLevel(zoomLevel); // 初始化縮放比例，避免 comfort scroll 在首次計算時使用預設值
     if (scrollContainer) lastScrollTop = scrollContainer.scrollTop;
 
     // 設定 hook：游標移動觸發自動捲動前，標記為 programmatic scroll
@@ -928,7 +998,8 @@
         const newScrollTop = scrollContainer.scrollTop;
         const delta = newScrollTop - lastScrollTop;
         if (delta !== 0) {
-          adjustCursorForScroll(delta);
+          const z = Math.max(0.1, zoomLevel / 100);
+          adjustCursorForScroll(delta * z);
           lastScrollTop = newScrollTop;
         }
         scrollSyncRafId = null;
@@ -1212,7 +1283,7 @@
   </div>
 
   <!-- Vim 物理動態與閃爍方塊游標層 -->
-  <VimCursorOverlay />
+  <VimCursorOverlay {zoomLevel} />
 </main>
 
 <!-- High-Resolution Image Lightbox Modal -->
