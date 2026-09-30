@@ -32,6 +32,8 @@
   import { formatModelDisplayName } from '../services/aiService';
   import { deactivateCursor, activateCursor } from '../stores/vimCursorStore';
 
+  import { isRailCollapsedStore, setRailCollapsed } from '../stores/layoutStore';
+
   // --- App View & Studio Modes ---
   let currentMainView: 'workspace' | 'repository' | 'citation-graph' | 'notes' = 'workspace';
   let readingMode: 'bilingual' | 'split' | 'zen' | 'figures' = 'bilingual';
@@ -41,7 +43,7 @@
   let isImportOpen: boolean = false;
   let isDeleteDirectModalOpen: boolean = false;
   let paperToDeleteDirect: PaperDocument | null = null;
-  let isRailCollapsed: boolean = false;
+  $: isRailCollapsed = $isRailCollapsedStore;
 
   // --- Model, Memory & Cache Telemetry ---
   let modelName: string = 'Groq (Llama 3.3 70B)';
@@ -327,11 +329,11 @@
       (readingMode === 'figures' ? 'prompt-formula-lab' : 'reading-workspace')
     }
     paperCount={paperLibrary.length}
-    bind:isCollapsed={isRailCollapsed}
+    isCollapsed={isRailCollapsed}
     memoryUsageMb={localMemoryMb}
     memoryPercent={localMemoryPercent}
     memoryTooltip={localMemoryTooltip}
-    ontoggleCollapse={(data) => isRailCollapsed = data.isCollapsed}
+    ontoggleCollapse={(data) => setRailCollapsed(data.isCollapsed)}
     onnavigate={(data) => {
       if (data.path === 'paper-repository') {
         currentMainView = 'repository';
