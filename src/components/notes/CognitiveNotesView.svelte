@@ -20,12 +20,13 @@
   }: Props = $props();
 
   // 狀態管理
-  let activePaperFilterId = $state(activePaper?.id || 'all');
+  let activePaperFilterId = $state('all');
   let isStarredFilter = $state(false);
   let selectedNoteIndex = $state(0);
   let editorViewMode = $state<'split' | 'edit' | 'preview'>('split');
   let toastMessage = $state('');
   let toastTimer: any = null;
+  let hasSetInitialFilter = false;
 
   // 所有收錄的筆記平坦陣列
   let allNotes = $state<NoteEntry[]>([]);
@@ -37,6 +38,10 @@
 
   $effect(() => {
     if (activePaper) {
+      if (!hasSetInitialFilter && activePaper.id) {
+        activePaperFilterId = activePaper.id;
+        hasSetInitialFilter = true;
+      }
       // 若外部更新了 activePaper，若目前正在查看該篇，同步筆記
       loadAllNotes();
     }

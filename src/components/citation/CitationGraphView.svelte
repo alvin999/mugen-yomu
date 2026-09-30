@@ -38,39 +38,39 @@
   }: Props = $props();
 
   // Layout & View States
-  let layoutMode: 'galaxy' | 'timeline' = 'galaxy';
-  let filterCategory: 'all' | CitationCategory = 'all';
-  let searchQuery: string = '';
-  let selectedNodeId: string | null = null;
-  let hoveredNodeId: string | null = null;
+  let layoutMode = $state<'galaxy' | 'timeline'>('galaxy');
+  let filterCategory = $state<'all' | CitationCategory>('all');
+  let searchQuery = $state('');
+  let selectedNodeId = $state<string | null>(null);
+  let hoveredNodeId = $state<string | null>(null);
 
   // Viewport Transform States (Zoom & Pan)
-  let zoom: number = 1.0;
-  let panX: number = 0;
-  let panY: number = 0;
-  let isPanning: boolean = false;
-  let panStartX: number = 0;
-  let panStartY: number = 0;
+  let zoom = $state(1.0);
+  let panX = $state(0);
+  let panY = $state(0);
+  let isPanning = $state(false);
+  let panStartX = $state(0);
+  let panStartY = $state(0);
 
   // Dragging Node State
-  let draggingNodeId: string | null = null;
-  let dragOffset = { x: 0, y: 0 };
+  let draggingNodeId = $state<string | null>(null);
+  let dragOffset = $state({ x: 0, y: 0 });
 
   // Container & Simulation Dimensions
-  let containerWidth: number = 900;
-  let containerHeight: number = 650;
-  let containerElement: HTMLDivElement | null = null;
+  let containerWidth = $state(900);
+  let containerHeight = $state(650);
+  let containerElement = $state<HTMLDivElement | null>(null);
 
-  let simNodes: SimNode[] = [];
-  let simEdges: SimEdge[] = [];
+  let simNodes = $state<SimNode[]>([]);
+  let simEdges = $state<SimEdge[]>([]);
   let animationFrameId: number | null = null;
-  let simAlpha: number = 1.0;
+  let simAlpha = $state(1.0);
 
   // 動態引文分析狀態
-  let isAnalyzing: boolean = false;
-  let analysisStatus: CitationAnalysisStatus | null = null;
-  let analysisError: string | null = null;
-  let dismissedBanner: boolean = false;
+  let isAnalyzing = $state(false);
+  let analysisStatus = $state<CitationAnalysisStatus | null>(null);
+  let analysisError = $state<string | null>(null);
+  let dismissedBanner = $state(false);
 
   let isPreset = $derived(isPresetCitationPaper(paper || {}));
   let isAnalyzed = $derived(hasCustomCitationGraph(paper || {}));
@@ -327,6 +327,7 @@
     if (containerElement) {
       containerWidth = containerElement.clientWidth || 900;
       containerHeight = containerElement.clientHeight || 650;
+      const rawGraph = getCitationGraphForPaper(paper || {});
       initGraphData(rawGraph);
     }
   });
@@ -562,15 +563,18 @@
             {@const meta = categoryMeta[node.category]}
             {@const isCore = node.category === 'core'}
 
-            <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
             <g
+              role="button"
+              tabindex="0"
               transform="translate({node.x}, {node.y})"
-              class="cursor-pointer transition-opacity duration-200"
+              class="cursor-pointer transition-opacity duration-200 outline-none"
               opacity={isConnected ? 1 : 0.2}
               onmousedown={(e) => startDragNode(node, e)}
               onmouseenter={() => hoveredNodeId = node.id}
               onmouseleave={() => hoveredNodeId = null}
               onclick={() => selectedNodeId = node.id}
+              onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && (selectedNodeId = node.id)}
             >
               <!-- Selected Aura Pulse -->
               {#if isSelected}

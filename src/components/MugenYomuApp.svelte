@@ -152,16 +152,17 @@
     }
   }
 
-  function handleModeChange(event: CustomEvent<{ mode: 'bilingual' | 'split' | 'zen' | 'figures' }>) {
-    readingMode = event.detail.mode;
+  function handleModeChange(event: { mode: 'bilingual' | 'split' | 'zen' | 'figures' } | CustomEvent<{ mode: 'bilingual' | 'split' | 'zen' | 'figures' }>) {
+    const mode = 'detail' in event ? event.detail.mode : event.mode;
+    readingMode = mode;
     currentMainView = 'workspace';
     if (readingMode === 'split') {
       isPdfDrawerOpen = false;
     }
   }
 
-  function handleZoomChange(event: CustomEvent<{ zoomLevel: number }>) {
-    zoomLevel = event.detail.zoomLevel;
+  function handleZoomChange(event: { zoomLevel: number } | CustomEvent<{ zoomLevel: number }>) {
+    zoomLevel = 'detail' in event ? event.detail.zoomLevel : event.zoomLevel;
   }
 
   function handleConvertToTraditional(paperToConvert?: PaperDocument) {
@@ -227,9 +228,10 @@
     setPaper(paper);
   }
 
-  function handlePaperLoaded(event: CustomEvent<{ paper: PaperDocument; library: PaperDocument[] }>) {
-    paperLibrary = (event.detail.library || []).map(normalizePaper);
-    setPaper(normalizePaper(event.detail.paper));
+  function handlePaperLoaded(event: { paper: PaperDocument; library: PaperDocument[] } | CustomEvent<{ paper: PaperDocument; library: PaperDocument[] }>) {
+    const detail = 'detail' in event ? event.detail : event;
+    paperLibrary = (detail.library || []).map(normalizePaper);
+    setPaper(normalizePaper(detail.paper));
   }
 
   function handleDeletePaperDirect(paperId: string) {
@@ -261,8 +263,8 @@
     }
   }
 
-  function handleLoadPaperFromCitation(e: CustomEvent<{ paperId: string }>) {
-    const targetId = e.detail.paperId;
+  function handleLoadPaperFromCitation(e: { paperId: string } | CustomEvent<{ paperId: string }>) {
+    const targetId = 'detail' in e ? e.detail.paperId : e.paperId;
     const found = paperLibrary.find(p => p.id === targetId || p.id.includes(targetId));
     if (found) {
       setPaper(found);
@@ -270,8 +272,8 @@
     }
   }
 
-  function handleUpdateCitationGraph(e: CustomEvent<{ paperId: string; citationGraph: any }>) {
-    const { paperId, citationGraph } = e.detail;
+  function handleUpdateCitationGraph(e: { paperId: string; citationGraph: any } | CustomEvent<{ paperId: string; citationGraph: any }>) {
+    const { paperId, citationGraph } = 'detail' in e ? e.detail : e;
     if (!paperId || !citationGraph) return;
 
     if (activePaper && (activePaper.id === paperId || activePaper.id.includes(paperId))) {
@@ -304,9 +306,10 @@
     }
   }
 
-  function handleByokSave(event: CustomEvent<{ provider: string; model: string; apiKey: string }>) {
-    const p = event.detail.provider;
-    const m = event.detail.model;
+  function handleByokSave(event: { provider: string; model: string; apiKey: string; ollamaUrl?: string } | CustomEvent<{ provider: string; model: string; apiKey: string }>) {
+    const detail = 'detail' in event ? event.detail : event;
+    const p = detail.provider;
+    const m = detail.model;
     modelName = formatModelDisplayName(p, m);
     workspaceRef?.refreshCompanionKey();
     refreshCacheStats();

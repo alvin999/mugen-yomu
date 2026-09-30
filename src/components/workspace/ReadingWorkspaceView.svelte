@@ -271,8 +271,9 @@
     }
   }
 
-  function handleTextSelected(e: CustomEvent<{ selectedText: string }>) {
-    activeSelectedText = e.detail.selectedText;
+  function handleTextSelected(e: CustomEvent<{ selectedText?: string; text?: string }> | { selectedText?: string; text?: string }) {
+    const detail = 'detail' in e ? e.detail : e;
+    activeSelectedText = detail.selectedText || detail.text || '';
   }
 
   function handleProbeCitation(e: CustomEvent<{ citation: string; sectionId: string; paragraphText: string }>) {

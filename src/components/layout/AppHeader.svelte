@@ -28,7 +28,7 @@
   let {
     activePaper = null,
     readingMode = $bindable('bilingual'),
-    isPdfDrawerOpen = false,
+    isPdfDrawerOpen = $bindable(false),
     zoomLevel = $bindable(100),
     modelName = 'Groq (Llama 3.3 70B)',
     cachedInfo = '$0.14 / 2.4k cached (省 82%)',
