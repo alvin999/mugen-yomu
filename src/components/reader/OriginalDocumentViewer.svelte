@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount, onDestroy, tick } from 'svelte';
+  import { tick } from 'svelte';
   import type { PaperDocument, ChapterSection } from '../../types/document';
   import { flattenSections } from '../../stores/readingStore';
   import {
@@ -7,7 +7,6 @@
     renderPageToCanvas,
     buildPdfTextIndex,
     alignAllSectionsWithPdf,
-    type PageTextEntry,
     type MatchResult
   } from '../../services/pdfService';
   import type * as pdfjsLib from 'pdfjs-dist';
@@ -18,41 +17,58 @@
   import PdfCanvasRenderer from './original/PdfCanvasRenderer.svelte';
   import ImageLightboxModal from '../common/ImageLightboxModal.svelte';
 
-  export let paper: PaperDocument | null = null;
-  export let mode: 'split' | 'drawer' = 'split';
-  export let activeSectionId: string = '';
-  export let sections: ChapterSection[] = [];
+  interface Props {
+    paper?: PaperDocument | null;
+    mode?: 'split' | 'drawer';
+    activeSectionId?: string;
+    sections?: ChapterSection[];
+    onsectionsAligned?: (detail: { sections: ChapterSection[] }) => void;
+    onselectSection?: (detail: { id: string; sectionId: string; source?: string }) => void;
+    onimportPaper?: (detail: { paper: PaperDocument }) => void;
+    onswitchToSplit?: () => void;
+    onclose?: () => void;
+  }
 
-  const dispatch = createEventDispatcher();
+  let {
+    paper = null,
+    mode = 'split',
+    activeSectionId = '',
+    sections = [],
+    onsectionsAligned,
+    onselectSection,
+    onimportPaper,
+    onswitchToSplit,
+    onclose
+  }: Props = $props();
 
   // PDF Document & Canvas State
-  let pdfDoc: pdfjsLib.PDFDocumentProxy | null = null;
-  let canvasElement: HTMLCanvasElement | null = null;
-  let isLoadingPdf: boolean = false;
-  let isRenderingPage: boolean = false;
-  let renderError: string | null = null;
-  let currentLoadedPaperId: string | null = null;
-  let renderedPage: number = 0;
+  let pdfDoc = $state<pdfjsLib.PDFDocumentProxy | null>(null);
+  let canvasElement = $state<HTMLCanvasElement | null>(null);
+  let isLoadingPdf = $state<boolean>(false);
+  let isRenderingPage = $state<boolean>(false);
+  let renderError = $state<string | null>(null);
+  let currentLoadedPaperId = $state<string | null>(null);
+  let renderedPage = $state<number>(0);
 
   // 訂閱全域集中 PDF 閱讀狀態與本機 PDF 資源
-  $: localPdfFile = $pdfViewerStore.localPdfFile;
-  $: localPdfBlobUrl = $pdfViewerStore.localPdfBlobUrl;
-  $: localPdfArrayBuffer = $pdfViewerStore.localPdfArrayBuffer;
-  $: currentPage = $pdfViewerStore.currentPage;
-  $: totalPages = $pdfViewerStore.totalPages;
-  $: zoomLevel = $pdfViewerStore.zoomLevel;
-  $: viewerMode = $pdfViewerStore.viewerMode;
-  $: paperTheme = $pdfViewerStore.paperTheme;
-  $: isSyncEnabled = $pdfViewerStore.isSyncEnabled;
-  $: matchResults = $pdfViewerStore.matchResults;
-  $: pageTextIndex = $pdfViewerStore.pageTextIndex;
-  $: isStringMatchActive = $pdfViewerStore.isStringMatchActive;
-  $: isStringIndexing = $pdfViewerStore.isStringIndexing;
-  $: stringIndexProgress = $pdfViewerStore.stringIndexProgress;
+  let localPdfFile = $derived($pdfViewerStore.localPdfFile);
+  let localPdfBlobUrl = $derived($pdfViewerStore.localPdfBlobUrl);
+  let localPdfArrayBuffer = $derived($pdfViewerStore.localPdfArrayBuffer);
+  let currentPage = $derived($pdfViewerStore.currentPage);
+  let totalPages = $derived($pdfViewerStore.totalPages);
+  let zoomLevel = $derived($pdfViewerStore.zoomLevel);
+  let viewerMode = $derived($pdfViewerStore.viewerMode);
+  let paperTheme = $derived($pdfViewerStore.paperTheme);
+  let isSyncEnabled = $derived($pdfViewerStore.isSyncEnabled);
+  let matchResults = $derived($pdfViewerStore.matchResults);
+  let pageTextIndex = $derived($pdfViewerStore.pageTextIndex);
+  let isStringMatchActive = $derived($pdfViewerStore.isStringMatchActive);
+  let isStringIndexing = $derived($pdfViewerStore.isStringIndexing);
+  let stringIndexProgress = $derived($pdfViewerStore.stringIndexProgress);
 
   // Lightbox State for Academic Figures
-  let activeLightboxImg: string | null = null;
-  let activeLightboxCaption: string = '';
+  let activeLightboxImg = $state<string | null>(null);
+  let activeLightboxCaption = $state<string>('');
 
   function openLightbox(imgUrl: string, caption?: string) {
     if (!imgUrl) return;
@@ -65,45 +81,49 @@
   }
 
   // Local Drag-and-Drop & Convert State
-  let isDraggingOver: boolean = false;
-  let isConvertingToPaper: boolean = false;
-  let convertProgress: number = 0;
+  let isDraggingOver = $state<boolean>(false);
+  let isConvertingToPaper = $state<boolean>(false);
+  let convertProgress = $state<number>(0);
 
-  let lastSyncedSectionId: string = '';
+  let lastSyncedSectionId = $state<string>('');
 
-  $: allSections = sections && sections.length > 0 ? flattenSections(sections) : flattenSections(paper?.sections || []);
-  $: activeSection = allSections.find(s => s.id === activeSectionId) || null;
+  let allSections = $derived(sections && sections.length > 0 ? flattenSections(sections) : flattenSections(paper?.sections || []));
+  let activeSection = $derived(allSections.find(s => s.id === activeSectionId) || null);
 
-  $: isPdf = Boolean(
+  let isPdf = $derived(Boolean(
     localPdfArrayBuffer ||
     (paper?.type !== 'web' && (
       (paper?.pdfUrl && paper.pdfUrl.trim().length > 0) ||
       (paper?.arxivId && paper.arxivId.trim().length > 0) ||
       (paper?.id && paper.id.startsWith('local_pdf_'))
     ))
-  );
+  ));
 
-  $: activeBaseUrl = (() => {
+  let activeBaseUrl = $derived((() => {
     if (localPdfBlobUrl) return localPdfBlobUrl;
     if (paper?.id && paper.id.startsWith('local_pdf_')) return `indexeddb://${paper.id}`;
     if (paper?.type !== 'web' && paper?.pdfUrl) return paper.pdfUrl;
     if (paper?.type !== 'web' && paper?.arxivId) return `https://arxiv.org/pdf/${paper.arxivId}.pdf`;
     if (paper?.sourceUrl) return paper.sourceUrl;
     return '';
-  })();
+  })());
 
-  $: isWeb = !isPdf && Boolean(paper?.type === 'web' || paper?.sourceUrl || (activeBaseUrl && !activeBaseUrl.startsWith('indexeddb:')));
-  $: webUrl = paper?.sourceUrl || (paper?.type === 'web' ? activeBaseUrl : '');
+  let isWeb = $derived(!isPdf && Boolean(paper?.type === 'web' || paper?.sourceUrl || (activeBaseUrl && !activeBaseUrl.startsWith('indexeddb:'))));
+  let webUrl = $derived(paper?.sourceUrl || (paper?.type === 'web' ? activeBaseUrl : ''));
 
   // 監聽 Paper 變動，更新 Store 當前 Paper ID
-  $: if (paper && paper.id) {
-    pdfViewerStore.setActivePaperId(paper.id);
-  }
+  $effect(() => {
+    if (paper && paper.id) {
+      pdfViewerStore.setActivePaperId(paper.id);
+    }
+  });
 
   // 監聽外部傳入的焦點章節變更，自動對齊 PDF 頁面
-  $: if (isSyncEnabled && activeSectionId && activeSectionId !== lastSyncedSectionId) {
-    syncWithActiveSection(activeSectionId);
-  }
+  $effect(() => {
+    if (isSyncEnabled && activeSectionId && activeSectionId !== lastSyncedSectionId) {
+      syncWithActiveSection(activeSectionId);
+    }
+  });
 
   function syncWithActiveSection(secId: string) {
     lastSyncedSectionId = secId;
@@ -123,18 +143,18 @@
     }
   }
 
-  $: if (isPdf && paper && paper.id && paper.id !== currentLoadedPaperId) {
-    currentLoadedPaperId = paper.id;
-    initAndLoadPdf();
-  }
+  $effect(() => {
+    if (isPdf && paper && paper.id && paper.id !== currentLoadedPaperId) {
+      currentLoadedPaperId = paper.id;
+      initAndLoadPdf();
+    }
+  });
 
   // 當 Store 中的頁碼在其他地方改變或 canvas 掛載就緒，自動觸發畫布渲染
-  $: if (isPdf && pdfDoc && canvasElement && viewerMode === 'canvas' && currentPage !== renderedPage && !isRenderingPage) {
-    triggerPageRender(currentPage);
-  }
-
-  onDestroy(() => {
-    // 資源由全域 store 管理，組件卸載時無需 revoke Blob URL
+  $effect(() => {
+    if (isPdf && pdfDoc && canvasElement && viewerMode === 'canvas' && currentPage !== renderedPage && !isRenderingPage) {
+      triggerPageRender(currentPage);
+    }
   });
 
   async function initAndLoadPdf() {
@@ -219,7 +239,7 @@
         }
 
         pdfViewerStore.setMatchResults(resultMap, textIndex);
-        dispatch('sectionsAligned', { sections: updatedSections });
+        onsectionsAligned?.({ sections: updatedSections });
 
         if (activeSectionId) {
           const matched = updatedSections.find(s => s.id === activeSectionId);
@@ -300,7 +320,7 @@
         activeSectionId = matchingSec.id;
         // 使用者主動翻頁時，向外廣播章節選定事件，讓 MugenReader 滾動對齊
         if (isSyncEnabled) {
-          dispatch('selectSection', { id: matchingSec.id, sectionId: matchingSec.id, source: 'pdf' });
+          onselectSection?.({ id: matchingSec.id, sectionId: matchingSec.id, source: 'pdf' });
         }
       }
     }
@@ -335,7 +355,7 @@
   function handleSectionSelect(secId: string) {
     lastSyncedSectionId = secId;
     activeSectionId = secId;
-    dispatch('selectSection', { id: secId, sectionId: secId });
+    onselectSection?.({ id: secId, sectionId: secId });
     const found = allSections.find(s => s.id === secId);
     if (found && found.page && viewerMode === 'canvas') {
       jumpToPage(found.page);
@@ -397,7 +417,7 @@
         doc.pdfUrl = localPdfBlobUrl;
       }
 
-      dispatch('importPaper', { paper: doc });
+      onimportPaper?.({ paper: doc });
     } catch (err: any) {
       alert(`解析本機 PDF 失敗：${err?.message || err}`);
     } finally {
@@ -410,26 +430,13 @@
       window.open(activeBaseUrl, '_blank');
     }
   }
-  function handleWebSectionScroll(secId: string) {
-    if (!secId || secId === activeSectionId) return;
-    lastSyncedSectionId = secId;
-    activeSectionId = secId;
-    if (isSyncEnabled) {
-      dispatch('selectSection', { id: secId, sectionId: secId, source: 'web' });
-    }
-  }
-
-  $: nativeIframeSrc = (() => {
-    if (!activeBaseUrl) return '';
-    return activeBaseUrl;
-  })();
 </script>
 
 <aside
   class="h-full w-full flex flex-col bg-[#141617] border-r border-[#3c3836] relative select-none overflow-hidden"
-  on:dragover|preventDefault={() => isDraggingOver = true}
-  on:dragleave|preventDefault={() => isDraggingOver = false}
-  on:drop={handleDrop}
+  ondragover={(e) => { e.preventDefault(); isDraggingOver = true; }}
+  ondragleave={(e) => { e.preventDefault(); isDraggingOver = false; }}
+  ondrop={handleDrop}
 >
   <!-- Top Primary & Secondary Toolbar -->
   <OriginalViewerToolbar
@@ -462,8 +469,8 @@
     }}
     onretry={handleRetry}
     onopenExternal={handleOpenExternal}
-    onswitchToSplit={() => dispatch('switchToSplit')}
-    onclose={() => dispatch('close')}
+    onswitchToSplit={() => onswitchToSplit?.()}
+    onclose={() => onclose?.()}
     ontoggleSync={toggleSync}
     onselectSection={(data) => handleSectionSelect(data.sectionId)}
     onprevPage={handlePrevPage}
@@ -507,7 +514,7 @@
           </div>
           <button
             class="px-2 py-0.5 bg-[#32302f] hover:bg-[#3c3836] text-[#8ec07c] hover:text-[#b8bb26] border border-[#3c3836] rounded text-[11px] flex items-center gap-1 cursor-pointer transition-colors shrink-0 ml-2"
-            on:click={handleOpenExternal}
+            onclick={handleOpenExternal}
             title="在獨立分頁中開啟原始網頁"
           >
             <span class="material-symbols-outlined text-[13px]">open_in_new</span>

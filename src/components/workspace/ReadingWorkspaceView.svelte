@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onDestroy } from 'svelte';
+  import { onDestroy } from 'svelte';
   import DensityRibbon from '../layout/DensityRibbon.svelte';
   import ReadingMap from '../reading-map/ReadingMap.svelte';
   import MugenReader from '../reader/MugenReader.svelte';
@@ -30,18 +30,49 @@
   } from '../../services/cognitiveDispatcher';
 
   // Props
-  export let activePaper: PaperDocument | null = null;
-  export let readingMode: 'bilingual' | 'split' | 'zen' | 'figures' = 'bilingual';
-  export let zoomLevel: number = 100;
-  export let isPdfDrawerOpen: boolean = false;
+  interface Props {
+    activePaper?: PaperDocument | null;
+    readingMode?: 'bilingual' | 'split' | 'zen' | 'figures';
+    zoomLevel?: number;
+    isPdfDrawerOpen?: boolean;
+    onupdatePaper?: (detail: { paper: PaperDocument }) => void;
+    onimportPaper?: (detail: { paper: PaperDocument }) => void;
+    onopenSettings?: () => void;
+    onexportNotes?: () => void;
+    onrefreshCacheStats?: () => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    updatePaper: { paper: PaperDocument };
-    importPaper: { paper: PaperDocument };
-    openSettings: void;
-    exportNotes: void;
-    refreshCacheStats: void;
-  }>();
+  let {
+    activePaper = null,
+    readingMode = $bindable('bilingual'),
+    zoomLevel = $bindable(100),
+    isPdfDrawerOpen = $bindable(false),
+    onupdatePaper,
+    onimportPaper,
+    onopenSettings,
+    onexportNotes,
+    onrefreshCacheStats
+  }: Props = $props();
+
+  function dispatch(event: string, detail?: any) {
+    switch (event) {
+      case 'updatePaper':
+        onupdatePaper?.(detail);
+        break;
+      case 'importPaper':
+        onimportPaper?.(detail);
+        break;
+      case 'openSettings':
+        onopenSettings?.();
+        break;
+      case 'exportNotes':
+        onexportNotes?.();
+        break;
+      case 'refreshCacheStats':
+        onrefreshCacheStats?.();
+        break;
+    }
+  }
 
   // Internal workspace state
   let splitRatio: number = 50;
@@ -64,22 +95,24 @@
   let readerRef: any = null;
 
   // Sync active section when activePaper changes
-  $: if (activePaper && activePaper.id !== currentPaperId) {
-    currentPaperId = activePaper.id;
-    const allSecs = flattenSections(activePaper.sections || []);
-    const lastPos = loadLastReadingPosition(activePaper.id);
-    let targetSec = lastPos?.sectionId ? allSecs.find(s => s.id === lastPos.sectionId) : null;
-    if (!targetSec) {
-      targetSec = allSecs[0];
+  $effect(() => {
+    if (activePaper && activePaper.id !== currentPaperId) {
+      currentPaperId = activePaper.id;
+      const allSecs = flattenSections(activePaper.sections || []);
+      const lastPos = loadLastReadingPosition(activePaper.id);
+      let targetSec = lastPos?.sectionId ? allSecs.find(s => s.id === lastPos.sectionId) : null;
+      if (!targetSec) {
+        targetSec = allSecs[0];
+      }
+      if (targetSec) {
+        activeSectionId = targetSec.id;
+        activeContextText = `§ ${targetSec.title}`;
+      } else {
+        activeSectionId = '';
+        activeContextText = '';
+      }
     }
-    if (targetSec) {
-      activeSectionId = targetSec.id;
-      activeContextText = `§ ${targetSec.title}`;
-    } else {
-      activeSectionId = '';
-      activeContextText = '';
-    }
-  }
+  });
 
   // Exported methods for App shell orchestration
   export function jumpToSection(sectionId: string, source: string = 'nav') {
@@ -88,16 +121,18 @@
 
   // 跨模式（例如雙語伴讀 ↔ 雙軌對照）切換時，確保視野自動捲動對齊當前 activeSectionId
   let lastReadingMode = readingMode;
-  $: if (readingMode !== lastReadingMode) {
-    lastReadingMode = readingMode;
-    if (activeSectionId) {
-      setTimeout(() => {
-        if (readerRef && readerRef.scrollToTarget) {
-          readerRef.scrollToTarget('sec-' + activeSectionId);
-        }
-      }, 120);
+  $effect(() => {
+    if (readingMode !== lastReadingMode) {
+      lastReadingMode = readingMode;
+      if (activeSectionId) {
+        setTimeout(() => {
+          if (readerRef && readerRef.scrollToTarget) {
+            readerRef.scrollToTarget('sec-' + activeSectionId);
+          }
+        }, 120);
+      }
     }
-  }
+  });
 
   export function refreshCompanionKey() {
     if (companionRef && companionRef.refreshKeyFromStorage) {
@@ -106,25 +141,28 @@
   }
 
   // --- Reading Progress Event Handlers ---
-  function handleSectionDwell(e: CustomEvent<{ id: string; dwellSeconds: number }>) {
+  function handleSectionDwell(e: { id: string; dwellSeconds: number } | CustomEvent<{ id: string; dwellSeconds: number }>) {
     if (!activePaper) return;
-    const { updatedPaper, hasChange } = applySectionDwell(activePaper, e.detail.id, e.detail.dwellSeconds);
+    const detail = 'detail' in e ? e.detail : e;
+    const { updatedPaper, hasChange } = applySectionDwell(activePaper, detail.id, detail.dwellSeconds);
     if (hasChange) {
       dispatch('updatePaper', { paper: updatedPaper });
     }
   }
 
-  function handleSectionSkimmed(e: CustomEvent<{ id: string }>) {
+  function handleSectionSkimmed(e: { id: string } | CustomEvent<{ id: string }>) {
     if (!activePaper) return;
-    const { updatedPaper, hasChange } = applySectionSkimmed(activePaper, e.detail.id);
+    const detail = 'detail' in e ? e.detail : e;
+    const { updatedPaper, hasChange } = applySectionSkimmed(activePaper, detail.id);
     if (hasChange) {
       dispatch('updatePaper', { paper: updatedPaper });
     }
   }
 
-  function handleSectionInteracted(e: CustomEvent<{ id: string; action: string }>) {
+  function handleSectionInteracted(e: { id: string; action: string } | CustomEvent<{ id: string; action: string }>) {
     if (!activePaper) return;
-    const { updatedPaper, hasChange } = applySectionInteracted(activePaper, e.detail.id);
+    const detail = 'detail' in e ? e.detail : e;
+    const { updatedPaper, hasChange } = applySectionInteracted(activePaper, detail.id);
     if (hasChange) {
       dispatch('updatePaper', { paper: updatedPaper });
     }
@@ -149,17 +187,19 @@
     }
   }
 
-  function handleParagraphsRead(e: CustomEvent<{ paragraphs: Array<{ sectionId: string; paraIndex: number; words: number }> }>) {
+  function handleParagraphsRead(e: { paragraphs: Array<{ sectionId: string; paraIndex: number; words: number }> } | CustomEvent<{ paragraphs: Array<{ sectionId: string; paraIndex: number; words: number }> }>) {
     if (!activePaper) return;
-    const { updatedPaper, hasChange } = applyParagraphsRead(activePaper, e.detail?.paragraphs || []);
+    const detail = 'detail' in e ? e.detail : e;
+    const { updatedPaper, hasChange } = applyParagraphsRead(activePaper, detail?.paragraphs || []);
     if (hasChange) {
       dispatch('updatePaper', { paper: updatedPaper });
     }
   }
 
-  function handleSectionsPassed(e: CustomEvent<{ readSectionIds: string[]; currentSectionId: string }>) {
+  function handleSectionsPassed(e: { readSectionIds: string[]; currentSectionId: string } | CustomEvent<{ readSectionIds: string[]; currentSectionId: string }>) {
     if (!activePaper) return;
-    const { updatedPaper, hasChange } = applySectionsPassed(activePaper, e.detail?.readSectionIds || []);
+    const detail = 'detail' in e ? e.detail : e;
+    const { updatedPaper, hasChange } = applySectionsPassed(activePaper, detail?.readSectionIds || []);
     if (hasChange) {
       dispatch('updatePaper', { paper: updatedPaper });
     }
@@ -552,10 +592,10 @@
           mode="split"
           {activeSectionId}
           sections={activePaper?.sections || []}
-          on:selectSection={handleSelectSection}
-          on:sectionsAligned={handleSectionsAligned}
-          on:importPaper={(e) => dispatch('importPaper', { paper: e.detail.paper })}
-          on:switchToSplit={() => {}}
+          onselectSection={handleSelectSection}
+          onsectionsAligned={handleSectionsAligned}
+          onimportPaper={(data) => dispatch('importPaper', { paper: data.paper })}
+          onswitchToSplit={() => {}}
         />
       </div>
 
@@ -563,7 +603,7 @@
       <!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions -->
       <div
         class="w-2.5 bg-[#1d2021] hover:bg-[#fe8019] transition-colors cursor-col-resize flex items-center justify-center z-20 group shrink-0"
-        on:mousedown={handleSplitMouseDown}
+        onmousedown={handleSplitMouseDown}
         title="拖曳以自訂左右分屏比例（可使用鍵盤左右鍵微調）"
         role="separator"
         tabindex="0"
@@ -572,7 +612,7 @@
         aria-valuemin="20"
         aria-valuemax="80"
         aria-label="左右分屏調整桿"
-        on:keydown={(e) => {
+        onkeydown={(e) => {
           if (e.key === 'ArrowLeft') splitRatio = adjustSplitRatioByStep(splitRatio, 'decrease', { minRatio: 20, maxRatio: 80, step: 5 });
           if (e.key === 'ArrowRight') splitRatio = adjustSplitRatioByStep(splitRatio, 'increase', { minRatio: 20, maxRatio: 80, step: 5 });
         }}
@@ -587,16 +627,16 @@
           paper={activePaper}
           {activeSectionId}
           {readingMode}
-          on:selectSection={handleSelectSection}
-          on:sectionChanged={handleSectionChanged}
-          on:readerAction={handleReaderAction}
-          on:sectionDwell={handleSectionDwell}
-          on:sectionSkimmed={handleSectionSkimmed}
-          on:sectionInteracted={handleSectionInteracted}
-          on:sectionsPassed={handleSectionsPassed}
-          on:paragraphsRead={handleParagraphsRead}
-          on:reachedBottom={handleReachedBottom}
-          on:updatePaper={(e) => dispatch('updatePaper', { paper: e.detail.paper })}
+          onselectSection={handleSelectSection}
+          onsectionChanged={handleSectionChanged}
+          onreaderAction={handleReaderAction}
+          onsectionDwell={handleSectionDwell}
+          onsectionSkimmed={handleSectionSkimmed}
+          onsectionInteracted={handleSectionInteracted}
+          onsectionsPassed={handleSectionsPassed}
+          onparagraphsRead={handleParagraphsRead}
+          onreachedBottom={handleReachedBottom}
+          onupdatePaper={(data) => dispatch('updatePaper', { paper: data.paper })}
         />
       </div>
     </div>
@@ -652,19 +692,19 @@
           bind:focusedParagraphKey={activeFocusedParagraphKey}
           bind:focusedParagraphText={activeParagraphText}
           bind:selectedText={activeSelectedText}
-          on:selectSection={handleSelectSection}
-          on:sectionChanged={handleSectionChanged}
-          on:paragraphFocused={handleParagraphFocused}
-          on:textSelected={handleTextSelected}
-          on:probeCitation={handleProbeCitation}
-          on:readerAction={handleReaderAction}
-          on:sectionDwell={handleSectionDwell}
-          on:sectionSkimmed={handleSectionSkimmed}
-          on:sectionInteracted={handleSectionInteracted}
-          on:sectionsPassed={handleSectionsPassed}
-          on:paragraphsRead={handleParagraphsRead}
-          on:reachedBottom={handleReachedBottom}
-          on:updatePaper={(e) => dispatch('updatePaper', { paper: e.detail.paper })}
+          onselectSection={handleSelectSection}
+          onsectionChanged={handleSectionChanged}
+          onparagraphFocused={handleParagraphFocused}
+          ontextSelected={handleTextSelected}
+          onprobeCitation={handleProbeCitation}
+          onreaderAction={handleReaderAction}
+          onsectionDwell={handleSectionDwell}
+          onsectionSkimmed={handleSectionSkimmed}
+          onsectionInteracted={handleSectionInteracted}
+          onsectionsPassed={handleSectionsPassed}
+          onparagraphsRead={handleParagraphsRead}
+          onreachedBottom={handleReachedBottom}
+          onupdatePaper={(data) => dispatch('updatePaper', { paper: data.paper })}
         />
       </div>
 
@@ -682,11 +722,11 @@
           isGeneratingIntuition={loadingIntuitionId === activeSectionId}
           isGeneratingSyntax={loadingSyntaxId === activeSectionId}
           isGeneratingTerminology={loadingTerminologyId === activeSectionId}
-          on:triggerGenerate={handleCompanionTriggerGenerate}
-          on:askQuestion={handleAskQuestion}
-          on:quickAction={handleQuickCompanionAction}
-          on:locateSource={handleLocateSource}
-          on:openSettings={() => dispatch('openSettings')}
+          ontriggerGenerate={handleCompanionTriggerGenerate}
+          onaskQuestion={handleAskQuestion}
+          onquickAction={handleQuickCompanionAction}
+          onlocateSource={handleLocateSource}
+          onopenSettings={() => dispatch('openSettings')}
         />
       {/if}
 
@@ -699,8 +739,8 @@
     <!-- svelte-ignore a11y_interactive_supports_focus -->
     <div
       class="fixed inset-0 top-16 bg-black/45 z-30 transition-opacity animate-fade-in cursor-pointer"
-      on:click={() => isPdfDrawerOpen = false}
-      on:keydown={(e) => e.key === 'Escape' && (isPdfDrawerOpen = false)}
+      onclick={() => isPdfDrawerOpen = false}
+      onkeydown={(e) => e.key === 'Escape' && (isPdfDrawerOpen = false)}
       role="button"
       tabindex="0"
       aria-label="點擊關閉原檔抽屜"
@@ -715,15 +755,15 @@
         mode="drawer"
         {activeSectionId}
         sections={activePaper?.sections || []}
-        on:selectSection={handleSelectSection}
-        on:sectionsAligned={handleSectionsAligned}
-        on:importPaper={(e) => {
-          dispatch('importPaper', { paper: e.detail.paper });
+        onselectSection={handleSelectSection}
+        onsectionsAligned={handleSectionsAligned}
+        onimportPaper={(data) => {
+          dispatch('importPaper', { paper: data.paper });
           isPdfDrawerOpen = false;
           readingMode = 'split';
         }}
-        on:close={() => isPdfDrawerOpen = false}
-        on:switchToSplit={() => { isPdfDrawerOpen = false; readingMode = 'split'; }}
+        onclose={() => isPdfDrawerOpen = false}
+        onswitchToSplit={() => { isPdfDrawerOpen = false; readingMode = 'split'; }}
       />
     </div>
   {/if}

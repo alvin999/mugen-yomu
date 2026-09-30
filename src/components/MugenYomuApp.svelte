@@ -209,16 +209,17 @@
     }
   }
 
-  function handleUpdatePaper(e: CustomEvent<{ paper: PaperDocument }>) {
-    const updated = e.detail.paper;
+  function handleUpdatePaper(e: { paper: PaperDocument } | CustomEvent<{ paper: PaperDocument }>) {
+    const updated = 'detail' in e ? e.detail.paper : e.paper;
     activePaper = updated;
     paperLibrary = paperLibrary.map(p => p.id === updated.id ? updated : p);
     saveLibraryToStorage(paperLibrary);
     refreshCacheStats();
   }
 
-  function handleDirectImportPaper(e: CustomEvent<{ paper: PaperDocument }>) {
-    const paper = normalizePaper(e.detail.paper);
+  function handleDirectImportPaper(e: { paper: PaperDocument } | CustomEvent<{ paper: PaperDocument }>) {
+    const detail = 'detail' in e ? e.detail : e;
+    const paper = normalizePaper(detail.paper);
     const exists = paperLibrary.some(p => p.id === paper.id);
     const updatedLibrary = exists
       ? paperLibrary.map(p => p.id === paper.id ? paper : p)
@@ -421,11 +422,11 @@
           bind:readingMode
           bind:zoomLevel
           bind:isPdfDrawerOpen
-          on:updatePaper={handleUpdatePaper}
-          on:importPaper={handleDirectImportPaper}
-          on:openSettings={() => isByokOpen = true}
-          on:exportNotes={() => currentMainView = 'notes'}
-          on:refreshCacheStats={refreshCacheStats}
+          onupdatePaper={handleUpdatePaper}
+          onimportPaper={handleDirectImportPaper}
+          onopenSettings={() => isByokOpen = true}
+          onexportNotes={() => currentMainView = 'notes'}
+          onrefreshCacheStats={refreshCacheStats}
         />
       {/if}
     </main>

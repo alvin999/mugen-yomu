@@ -1,34 +1,58 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount } from 'svelte';
+  import { onMount } from 'svelte';
   import type { SectionCompanionData } from '../../stores/documentStore';
   import { callProviderChatWithResilience, type ChatMessage } from '../../services/aiService';
   import { retrieveRelevantContextForAI } from '../../services/embedding/hybridEmbeddingService';
+  import { getApiKey, getStoredApiKeySync } from '../../services/crypto/keyVaultService';
 
-  export let activeContextText: string = '§ 3.2.1 Scaled Dot-Product';
-  export let companionData: SectionCompanionData | undefined = undefined;
-  export let paperId: string = '';
-  export let paperTitle: string = '';
-  export let activeParagraphText: string = '';
-  export let selectedText: string = '';
-  export let focusedParagraphKey: string = '';
-  export let isGeneratingIntuition: boolean = false;
-  export let isGeneratingSyntax: boolean = false;
-  export let isGeneratingTerminology: boolean = false;
+  interface Props {
+    activeContextText?: string;
+    companionData?: SectionCompanionData | undefined;
+    paperId?: string;
+    paperTitle?: string;
+    activeParagraphText?: string;
+    selectedText?: string;
+    focusedParagraphKey?: string;
+    isGeneratingIntuition?: boolean;
+    isGeneratingSyntax?: boolean;
+    isGeneratingTerminology?: boolean;
+    ontriggerGenerate?: (detail: { type: 'intuition' | 'syntax' | 'terminology' }) => void;
+    onaskQuestion?: (detail: { query: string; reply: string; cached?: boolean }) => void;
+    onquickAction?: (detail: { action: string; payload?: any }) => void;
+    onlocateSource?: (detail: { paragraphKey: string }) => void;
+    onopenSettings?: () => void;
+  }
 
-  const dispatch = createEventDispatcher();
+  let {
+    activeContextText = '§ 3.2.1 Scaled Dot-Product',
+    companionData = undefined,
+    paperId = '',
+    paperTitle = '',
+    activeParagraphText = '',
+    selectedText = '',
+    focusedParagraphKey = '',
+    isGeneratingIntuition = false,
+    isGeneratingSyntax = false,
+    isGeneratingTerminology = false,
+    ontriggerGenerate,
+    onaskQuestion,
+    onquickAction,
+    onlocateSource,
+    onopenSettings
+  }: Props = $props();
 
-  let promptInput: string = '';
-  let isThinking: boolean = false;
-  let apiKey: string = '';
-  let ollamaUrl: string = 'http://localhost:11434';
-  let activeModel: string = 'llama-3.3-70b-versatile';
-  let activeProvider: string = 'groq';
+  let promptInput = $state('');
+  let isThinking = $state(false);
+  let apiKey = $state('');
+  let ollamaUrl = $state('http://localhost:11434');
+  let activeModel = $state('llama-3.3-70b-versatile');
+  let activeProvider = $state('groq');
 
   // 卡片滾動與高亮聚焦狀態
-  let intuitionCardEl: HTMLElement | null = null;
-  let syntaxCardEl: HTMLElement | null = null;
-  let terminologyCardEl: HTMLElement | null = null;
-  let highlightedCard: 'intuition' | 'syntax' | 'terminology' | null = null;
+  let intuitionCardEl = $state<HTMLElement | null>(null);
+  let syntaxCardEl = $state<HTMLElement | null>(null);
+  let terminologyCardEl = $state<HTMLElement | null>(null);
+  let highlightedCard = $state<'intuition' | 'syntax' | 'terminology' | null>(null);
   let highlightTimer: any = null;
 
   export function focusCard(cardType: 'intuition' | 'syntax' | 'terminology') {
@@ -64,7 +88,7 @@
     tag?: string;
   }
 
-  let messages: MessageItem[] = [
+  let messages = $state<MessageItem[]>([
     {
       id: 'init_1',
       sender: 'ai',
@@ -73,9 +97,7 @@
       cached: true,
       tag: '本機認知核心'
     }
-  ];
-
-  import { getApiKey, getStoredApiKeySync } from '../../services/crypto/keyVaultService';
+  ]);
 
   onMount(() => {
     refreshKeyFromStorage();
@@ -94,7 +116,7 @@
   }
 
   // Default fallback questions if not present in section
-  $: activeQuestions = companionData?.socraticQuestions || [
+  let activeQuestions = $derived(companionData?.socraticQuestions || [
     {
       id: 'default_1',
       icon: 'help_outline',
@@ -109,24 +131,26 @@
       text: '文中所列之數學變數與超參數設定有何理論直覺？',
       answerSummary: '超參數通常基於方差歸一化考量，旨在確保正向傳播時數值穩定，避免推入非線性函數的飽和區。'
     }
-  ];
+  ]);
 
   // 判斷是否為尚未經 AI 解析之初始預設範本
-  $: isPlaceholderIntuition =
+  let isPlaceholderIntuition = $derived(
     !companionData?.intuition ||
     companionData.intuition.title.includes('的核心探討') ||
     companionData.intuition.tag === '待 AI 解析' ||
     (companionData.intuition.content &&
       companionData.intuition.content.length > 0 &&
       (companionData.intuition.content[0].includes('重點闡述了') ||
-        companionData.intuition.content[0].includes('尚未進行')));
+        companionData.intuition.content[0].includes('尚未進行')))
+  );
 
-  $: isPlaceholderTerminology =
+  let isPlaceholderTerminology = $derived(
     !companionData?.terminology ||
     companionData.terminology.length === 0 ||
     (companionData.terminology.length === 1 &&
       (companionData.terminology[0].explanation.includes('關鍵學術概念與定義') ||
-        companionData.terminology[0].explanation.includes('自動萃取本節專有名詞')));
+        companionData.terminology[0].explanation.includes('自動萃取本節專有名詞')))
+  );
 
   // 萃取中文對照名稱（若資料無獨立 zh 欄位則由釋義標點解析）
   function extractZhTerm(term: { term: string; zh?: string; explanation: string }): string | null {
@@ -199,34 +223,40 @@
         let hasRagEvidence = false;
         if (paperId) {
           try {
-            const ragEvidence = await retrieveRelevantContextForAI(paperId, qText, 2);
-            if (ragEvidence) {
-              contextualPrompt += `\n${ragEvidence}\n`;
+            const ragMatches = await retrieveRelevantContextForAI(paperId, qText, 2);
+            if (ragMatches && ragMatches.length > 0) {
+              contextualPrompt += `\n【本機向量檢索檢出之論文跨段證據 (Local Semantic RAG)】：\n`;
+              ragMatches.forEach((match, idx) => {
+                const snippet = match.text.length > 280 ? match.text.slice(0, 280) + '...' : match.text;
+                contextualPrompt += `證據 ${idx + 1} (${match.sectionTitle || '論文內文'}): "${snippet}"\n`;
+              });
               hasRagEvidence = true;
             }
           } catch (ragErr) {
-            console.warn('[Companion RAG] 向量檢索跳過:', ragErr);
+            console.warn('[CognitiveCompanion] RAG retrieval skipped:', ragErr);
           }
         }
 
-        contextualPrompt += `\n【讀者提問】：\n${qText}`;
+        contextualPrompt += `\n【讀者提問】：${qText}\n` +
+          `【回答指示】：\n` +
+          `1. 請以「繁體中文（台灣習慣）」深入專業地剖析回答，語氣嚴謹且深具學術直覺。\n` +
+          `2. 必須嚴格依據上方讀者研讀的原文段落與文獻脈絡進行論證。\n` +
+          `3. 數學推導請使用精確之 LaTeX 格式包覆（例如 $W_Q, W_K$ 或 $$...$$）。\n` +
+          `4. 若有跨概念銜接，請一併點出此設計在科研工程實務上的核心優勢。`;
 
-        history.push({ role: 'user', content: contextualPrompt });
+        const result = await callProviderChatWithResilience(
+          activeProvider,
+          contextualPrompt,
+          history,
+          apiKey,
+          activeModel,
+          ollamaUrl
+        );
 
-        // 3. 呼叫具備輸入長度修剪、自動同源降級 (70B -> 8B Instant) 的韌性服務
-        if (!apiKey && activeProvider !== 'ollama') {
-          apiKey = await getApiKey(activeProvider);
-        }
-        const result = await callProviderChatWithResilience(activeProvider, history, apiKey, activeModel, ollamaUrl);
-
-        let displayTag = result.cached
-          ? `本機快取 · ${result.model} · ${result.latencyMs}ms`
-          : `${result.provider.toUpperCase()} (${result.model}) · ${result.latencyMs}ms`;
-
+        let displayTag = `${result.modelUsed} · ${result.latencyMs}ms`;
         if (hasRagEvidence) {
-          displayTag = `⚡ 向量 RAG · ${displayTag}`;
+          displayTag = `RAG 語意增強 · ${displayTag}`;
         }
-
         if (result.fallbackNotice) {
           displayTag = `${displayTag} · ${result.fallbackNotice}`;
         }
@@ -241,7 +271,7 @@
         };
 
         messages = [...messages, aiMsg];
-        dispatch('askQuestion', { query: qText, reply: result.reply, cached: result.cached });
+        onaskQuestion?.({ query: qText, reply: result.reply, cached: result.cached });
       } catch (err: any) {
         console.warn(`${activeProvider} API call failed, fallback to local scholar engine:`, err);
         fallbackLocalResponse(qText, presetAnswer, `${activeProvider.toUpperCase()} 連線異常: ${err.message || '已切換至本機備用'}`);
@@ -282,7 +312,7 @@
       tag: customTag || '本機專家智庫 · 16ms'
     };
     messages = [...messages, aiMsg];
-    dispatch('askQuestion', { query: qText, reply: responseText });
+    onaskQuestion?.({ query: qText, reply: responseText });
   }
 
   function handleSubmit() {
@@ -293,12 +323,12 @@
   }
 
   function handleSaveMessageToNotes(text: string) {
-    dispatch('quickAction', { action: 'saveSnippet', payload: text });
+    onquickAction?.({ action: 'saveSnippet', payload: text });
     alert('已將伴讀解答收錄至本機精讀筆記！');
   }
 
   function handleOpenSettings() {
-    dispatch('openSettings');
+    onopenSettings?.();
   }
 </script>
 
@@ -350,7 +380,7 @@
                 <button
                   type="button"
                   class="text-[9px] text-[#8ec07c] hover:underline cursor-pointer flex items-center gap-0.5 ml-1"
-                  on:click={() => dispatch('locateSource', { paragraphKey: focusedParagraphKey })}
+                  onclick={() => onlocateSource?.({ paragraphKey: focusedParagraphKey })}
                   title="在閱讀畫布高亮定位此段落"
                 >
                   <span>定位原段</span>
@@ -391,7 +421,7 @@
           <button
             class="text-[#a89984] hover:text-[#fabd2f] text-[11px] flex items-center gap-0.5 cursor-pointer disabled:opacity-50 transition-colors"
             disabled={isGeneratingIntuition}
-            on:click={() => dispatch('triggerGenerate', { type: 'intuition' })}
+            onclick={() => ontriggerGenerate?.({ type: 'intuition' })}
             title="以 AI 深度推導本節物理/工程科研直覺"
           >
             <span class="material-symbols-outlined text-[13px] {isGeneratingIntuition ? 'animate-spin text-[#fabd2f]' : ''}">refresh</span>
@@ -419,7 +449,7 @@
           <button
             class="w-full flex items-center justify-center gap-1.5 bg-[#32302f] hover:bg-[#3c3836] text-[#fabd2f] hover:text-[#fabd2f] border border-[#fabd2f]/40 hover:border-[#fabd2f]/70 px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer shadow-sm"
             disabled={isGeneratingIntuition}
-            on:click={() => dispatch('triggerGenerate', { type: 'intuition' })}
+            onclick={() => ontriggerGenerate?.({ type: 'intuition' })}
           >
             <span class="material-symbols-outlined text-[14px]">psychology</span>
             <span>✨ 點擊由 AI 生成白話科研直覺</span>
@@ -441,7 +471,7 @@
           <button
             class="flex items-center justify-center gap-1.5 bg-[#fabd2f] hover:bg-[#fe8019] text-[#1d2021] font-semibold px-3 py-1.5 rounded-lg text-xs transition-colors shadow-sm cursor-pointer"
             disabled={isGeneratingIntuition}
-            on:click={() => dispatch('triggerGenerate', { type: 'intuition' })}
+            onclick={() => ontriggerGenerate?.({ type: 'intuition' })}
           >
             <span class="material-symbols-outlined text-[14px]">lightbulb</span>
             <span>✨ 點擊由 AI 生成本節科研直覺</span>
@@ -468,7 +498,7 @@
           <button
             class="text-[#a89984] hover:text-[#8ec07c] text-[11px] flex items-center gap-0.5 cursor-pointer disabled:opacity-50 transition-colors"
             disabled={isGeneratingSyntax}
-            on:click={() => dispatch('triggerGenerate', { type: 'syntax' })}
+            onclick={() => ontriggerGenerate?.({ type: 'syntax' })}
             title="以 AI 重新拆解本節代表性長難句"
           >
             <span class="material-symbols-outlined text-[13px] {isGeneratingSyntax ? 'animate-spin text-[#8ec07c]' : ''}">refresh</span>
@@ -504,7 +534,7 @@
         <button
           class="flex items-center justify-center gap-1.5 bg-[#32302f] hover:bg-[#3c3836] text-[#8ec07c] border border-[#8ec07c]/30 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
           disabled={isGeneratingSyntax}
-          on:click={() => dispatch('triggerGenerate', { type: 'syntax' })}
+          onclick={() => ontriggerGenerate?.({ type: 'syntax' })}
         >
           <span class="material-symbols-outlined text-[14px]">psychology</span>
           <span>✨ 點擊由 AI 拆解本節長難句 (SVO)</span>
@@ -526,7 +556,7 @@
         <button
           class="text-[#a89984] hover:text-[#83a598] text-[11px] flex items-center gap-0.5 cursor-pointer disabled:opacity-50 transition-colors"
           disabled={isGeneratingTerminology}
-          on:click={() => dispatch('triggerGenerate', { type: 'terminology' })}
+          onclick={() => ontriggerGenerate?.({ type: 'terminology' })}
           title="以 AI 重新掃描並萃取本節前沿學術專有名詞"
         >
           <span class="material-symbols-outlined text-[13px] {isGeneratingTerminology ? 'animate-spin text-[#83a598]' : ''}">refresh</span>
@@ -553,7 +583,7 @@
           <button
             class="w-full flex items-center justify-center gap-1.5 bg-[#32302f] hover:bg-[#3c3836] text-[#83a598] hover:text-[#83a598] border border-[#83a598]/40 hover:border-[#83a598]/70 px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer shadow-sm"
             disabled={isGeneratingTerminology}
-            on:click={() => dispatch('triggerGenerate', { type: 'terminology' })}
+            onclick={() => ontriggerGenerate?.({ type: 'terminology' })}
           >
             <span class="material-symbols-outlined text-[14px]">translate</span>
             <span>✨ 點擊由 AI 萃取並對齊學術術語</span>
@@ -603,7 +633,7 @@
         <button
           class="flex items-center justify-center gap-1.5 bg-[#32302f] hover:bg-[#3c3836] text-[#83a598] hover:text-[#83a598] border border-[#83a598]/30 hover:border-[#83a598]/60 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
           disabled={isGeneratingTerminology}
-          on:click={() => dispatch('triggerGenerate', { type: 'terminology' })}
+          onclick={() => ontriggerGenerate?.({ type: 'terminology' })}
         >
           <span class="material-symbols-outlined text-[14px]">menu_book</span>
           <span>✨ 點擊萃取本節關鍵學術術語</span>
@@ -620,7 +650,7 @@
       {#each activeQuestions as sq}
         <button
           class="w-full text-left bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#504945] p-2 rounded-lg text-[#d5c4a1] hover:text-[#ebdbb2] transition-all flex items-start gap-2 group"
-          on:click={() => sendQuestion(sq.text, sq.answerSummary)}
+          onclick={() => sendQuestion(sq.text, sq.answerSummary)}
         >
           <span class="material-symbols-outlined text-[14px] {sq.color} mt-0.5 shrink-0 group-hover:scale-110 transition-transform">{sq.icon}</span>
           <span class="text-xs leading-snug">{sq.text}</span>
@@ -635,7 +665,7 @@
         {#if !apiKey && activeProvider !== 'ollama'}
           <button
             class="text-[#fabd2f] hover:underline flex items-center gap-0.5 normal-case"
-            on:click={handleOpenSettings}
+            onclick={handleOpenSettings}
           >
             <span class="material-symbols-outlined text-[12px]">key</span>
             設定 {activeProvider.toUpperCase()} Key
@@ -663,7 +693,7 @@
                     <button
                       type="button"
                       class="text-[10px] text-[#8ec07c] hover:underline flex items-center gap-0.5 cursor-pointer"
-                      on:click={() => dispatch('locateSource', { paragraphKey: focusedParagraphKey })}
+                      onclick={() => onlocateSource?.({ paragraphKey: focusedParagraphKey })}
                       title="在閱讀畫布高亮定位此解答對應之段落"
                     >
                       <span class="material-symbols-outlined text-[12px]">my_location</span>
@@ -674,7 +704,7 @@
                   {/if}
                   <button
                     class="text-[10px] text-[#a89984] hover:text-[#fabd2f] flex items-center gap-0.5 cursor-pointer"
-                    on:click={() => handleSaveMessageToNotes(msg.text)}
+                    onclick={() => handleSaveMessageToNotes(msg.text)}
                   >
                     <span class="material-symbols-outlined text-[12px]">note_add</span>
                     收錄至筆記
@@ -702,20 +732,20 @@
     <div class="flex items-center gap-1.5">
       <button
         class="flex-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] px-2 py-1 rounded font-mono text-[10px] flex items-center justify-center gap-1 transition-colors"
-        on:click={() => sendQuestion(`請針對「${activeContextText}」展開最詳盡的數學推導證明與極限分析`)}
+        onclick={() => sendQuestion(`請針對「${activeContextText}」展開最詳盡的數學推導證明與極限分析`)}
       >
         <span class="material-symbols-outlined text-[12px] text-[#fabd2f]">calculate</span> 追問推導細節
       </button>
       <button
         class="flex-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] px-2 py-1 rounded font-mono text-[10px] flex items-center justify-center gap-1 transition-colors"
-        on:click={() => dispatch('quickAction', { action: 'exportNotes' })}
+        onclick={() => onquickAction?.({ action: 'exportNotes' })}
       >
         <span class="material-symbols-outlined text-[12px] text-[#fe8019]">note_add</span> 輸出精讀筆記
       </button>
     </div>
 
     <!-- Input Form -->
-    <form on:submit|preventDefault={handleSubmit} class="relative flex items-center">
+    <form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="relative flex items-center">
       <input
         class="w-full bg-[#282828] border border-[#3c3836] text-[#ebdbb2] placeholder:text-[#a89984]/70 text-xs pl-2.5 pr-7 py-2 rounded-lg focus:outline-none focus:border-[#fe8019] focus:bg-[#32302f] transition-colors"
         placeholder={(apiKey || activeProvider === 'ollama') ? `${activeProvider.toUpperCase()} 伴讀推論中... (Enter 發送)` : "提問或追問推導... (Enter 發送)"}

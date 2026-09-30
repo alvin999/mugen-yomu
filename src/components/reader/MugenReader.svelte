@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import type { PaperDocument, ChapterSection, FormulaItem } from '../../types/document';
   import {
     flattenSections,
@@ -44,41 +44,115 @@
   import { findBestMatchCharIndex } from '../../utils/textSearchMatcher';
 
   // Props
-  export let paper: PaperDocument | null = null;
-  export let activeSectionId: string = '3.2.1';
-  export let readingMode: 'bilingual' | 'split' | 'zen' | 'figures' = 'bilingual';
-  export let isAbstractCollapsed: boolean = false;
+  interface Props {
+    paper?: PaperDocument | null;
+    activeSectionId?: string;
+    readingMode?: 'bilingual' | 'split' | 'zen' | 'figures';
+    isAbstractCollapsed?: boolean;
 
-  export let focusedParagraphKey: string = '';
-  export let focusedParagraphText: string = '';
-  export let selectedText: string = '';
+    focusedParagraphKey?: string;
+    focusedParagraphText?: string;
+    selectedText?: string;
 
-  export let loadingIntuitionId: string | null = null;
-  export let loadingSyntaxId: string | null = null;
-  export let loadingTerminologyId: string | null = null;
+    loadingIntuitionId?: string | null;
+    loadingSyntaxId?: string | null;
+    loadingTerminologyId?: string | null;
 
-  const dispatch = createEventDispatcher<{
-    selectSection: { id?: string; sectionId: string };
-    sectionChanged: { sectionId: string };
-    paragraphFocused: {
+    onselectSection?: (detail: { id?: string; sectionId: string }) => void;
+    onsectionChanged?: (detail: { sectionId: string }) => void;
+    onparagraphFocused?: (detail: {
       sectionId: string;
       paragraphIndex: number;
       paragraphKey: string;
       text: string;
       selectedText: string;
-    };
-    textSelected: { text: string };
-    probeCitation: { citation: string; sectionId: string; paragraphText: string };
-    readerAction: { action: string; [key: string]: any };
-    sectionDwell: { id: string; dwellSeconds: number };
-    sectionSkimmed: { id: string };
-    sectionInteracted: { id: string; action: string };
-    sectionsPassed: { readSectionIds: string[]; currentSectionId: string };
-    paragraphsRead: { paragraphs: Array<{ sectionId: string; paraIndex: number; words: number }> };
-    reachedBottom: void;
-    updatePaper: { paper: PaperDocument };
-    saveNote: any;
-  }>();
+    }) => void;
+    ontextSelected?: (detail: { text: string }) => void;
+    onprobeCitation?: (detail: { citation: string; sectionId: string; paragraphText: string }) => void;
+    onreaderAction?: (detail: { action: string; [key: string]: any }) => void;
+    onsectionDwell?: (detail: { id: string; dwellSeconds: number }) => void;
+    onsectionSkimmed?: (detail: { id: string }) => void;
+    onsectionInteracted?: (detail: { id: string; action: string }) => void;
+    onsectionsPassed?: (detail: { readSectionIds: string[]; currentSectionId: string }) => void;
+    onparagraphsRead?: (detail: { paragraphs: Array<{ sectionId: string; paraIndex: number; words: number }> }) => void;
+    onreachedBottom?: () => void;
+    onupdatePaper?: (detail: { paper: PaperDocument }) => void;
+    onsaveNote?: (detail: any) => void;
+  }
+
+  let {
+    paper = null,
+    activeSectionId = $bindable('3.2.1'),
+    readingMode = 'bilingual',
+    isAbstractCollapsed = $bindable(false),
+    focusedParagraphKey = '',
+    focusedParagraphText = '',
+    selectedText = '',
+    loadingIntuitionId = null,
+    loadingSyntaxId = null,
+    loadingTerminologyId = null,
+    onselectSection,
+    onsectionChanged,
+    onparagraphFocused,
+    ontextSelected,
+    onprobeCitation,
+    onreaderAction,
+    onsectionDwell,
+    onsectionSkimmed,
+    onsectionInteracted,
+    onsectionsPassed,
+    onparagraphsRead,
+    onreachedBottom,
+    onupdatePaper,
+    onsaveNote
+  }: Props = $props();
+
+  function dispatch(event: string, detail?: any) {
+    switch (event) {
+      case 'selectSection':
+        onselectSection?.(detail);
+        break;
+      case 'sectionChanged':
+        onsectionChanged?.(detail);
+        break;
+      case 'paragraphFocused':
+        onparagraphFocused?.(detail);
+        break;
+      case 'textSelected':
+        ontextSelected?.(detail);
+        break;
+      case 'probeCitation':
+        onprobeCitation?.(detail);
+        break;
+      case 'readerAction':
+        onreaderAction?.(detail);
+        break;
+      case 'sectionDwell':
+        onsectionDwell?.(detail);
+        break;
+      case 'sectionSkimmed':
+        onsectionSkimmed?.(detail);
+        break;
+      case 'sectionInteracted':
+        onsectionInteracted?.(detail);
+        break;
+      case 'sectionsPassed':
+        onsectionsPassed?.(detail);
+        break;
+      case 'paragraphsRead':
+        onparagraphsRead?.(detail);
+        break;
+      case 'reachedBottom':
+        onreachedBottom?.();
+        break;
+      case 'updatePaper':
+        onupdatePaper?.(detail);
+        break;
+      case 'saveNote':
+        onsaveNote?.(detail);
+        break;
+    }
+  }
 
   let scrollContainer: HTMLElement | null = null;
   let vimController = new ReaderVimController(null);
@@ -145,15 +219,15 @@
   let isGeneratingAbstract: boolean = false;
   let abstractGenError: string = '';
 
-  $: allSections = flattenSections(paper?.sections || []);
-  $: isCursorModeActive = Boolean($vimConfigStore.isVimEnabled && $vimCursorState.active);
-  $: {
+  let allSections = $derived(flattenSections(paper?.sections || []));
+  let isCursorModeActive = $derived(Boolean($vimConfigStore.isVimEnabled && $vimCursorState.active));
+  $effect(() => {
     flowStore.setCalculationMode(isCursorModeActive ? 'cursor' : 'page');
-  }
+  });
 
   let prevVimActive = false;
   // 當游標由非活躍恢復為活躍（例如關閉 Modal）時，自動重新吸附就位
-  $: {
+  $effect(() => {
     const curVimActive = Boolean($vimConfigStore.isVimEnabled && $vimCursorState.active);
     if (curVimActive && !prevVimActive) {
       if ($vimCursorState.sectionId && $vimCursorState.paraIndex !== undefined) {
@@ -170,7 +244,7 @@
       }
     }
     prevVimActive = curVimActive;
-  }
+  });
 
   // --- 閱讀進度保留 (有游標以游標為主，無游標以段落為主) ---
   let savePositionTimer: any = null;
@@ -318,30 +392,32 @@
     persistReadingPosition();
   };
 
-  $: if (paper) {
-    const isNewPaper = paper.id !== currentPaperId;
-    if (isNewPaper) {
-      if (currentPaperId) {
-        persistReadingPosition();
+  $effect(() => {
+    if (paper) {
+      const isNewPaper = paper.id !== currentPaperId;
+      if (isNewPaper) {
+        if (currentPaperId) {
+          persistReadingPosition();
+        }
+        currentPaperId = paper.id;
+        passedParaKeys = new Set<string>();
+        restoreLastReadingPosition();
       }
-      currentPaperId = paper.id;
-      passedParaKeys = new Set<string>();
-      restoreLastReadingPosition();
-    }
-    const allSecs = paper.sections ? flattenSections(paper.sections) : [];
-    const totalReadCount = allSecs.reduce((sum, s) => sum + (s.readParaIndices?.length || 0), 0);
-    if (totalReadCount === 0 && passedParaKeys.size > 0) {
-      passedParaKeys = new Set<string>();
-    }
-    // 同步歷史已讀段落到 passedParaKeys
-    for (const s of allSecs) {
-      if (s.readParaIndices && s.readParaIndices.length > 0) {
-        for (const idx of s.readParaIndices) {
-          passedParaKeys.add(`${s.id}_${idx}`);
+      const allSecs = paper.sections ? flattenSections(paper.sections) : [];
+      const totalReadCount = allSecs.reduce((sum, s) => sum + (s.readParaIndices?.length || 0), 0);
+      if (totalReadCount === 0 && passedParaKeys.size > 0) {
+        passedParaKeys = new Set<string>();
+      }
+      // 同步歷史已讀段落到 passedParaKeys
+      for (const s of allSecs) {
+        if (s.readParaIndices && s.readParaIndices.length > 0) {
+          for (const idx of s.readParaIndices) {
+            passedParaKeys.add(`${s.id}_${idx}`);
+          }
         }
       }
     }
-  }
+  });
 
   onMount(() => {
     vimController.setScrollContainer(scrollContainer);
@@ -1004,14 +1080,14 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions a11y_no_noninteractive_element_interactions -->
 <main
   bind:this={scrollContainer}
-  on:scroll={handleContainerScroll}
-  on:click={handleContainerClick}
-  on:mouseup={handleMouseUp}
+  onscroll={handleContainerScroll}
+  onclick={handleContainerClick}
+  onmouseup={handleMouseUp}
   class="relative h-full w-full overflow-y-auto overflow-x-hidden {readingMode === 'split' ? 'px-3 sm:px-5' : 'px-4 sm:px-8'} py-6 flex justify-center items-start bg-[#282828]"
 >
   <div class="w-full {readingMode === 'split' ? 'max-w-none' : (readingMode === 'zen' ? 'max-w-[980px]' : 'max-w-[880px] xl:max-w-[940px]')} flex flex-col gap-6 pb-[65vh] transition-[max-width] duration-300 mx-auto">
@@ -1110,7 +1186,7 @@
           <div class="flex items-center gap-3 mt-1">
             <button
               class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#32302f] hover:bg-[#3c3836] border border-[#504945] hover:border-[#fe8019] text-xs font-mono text-[#ebdbb2] hover:text-[#fe8019] transition-all cursor-pointer shadow-xs active:scale-95"
-              on:click={() => {
+              onclick={() => {
                 if (scrollContainer) {
                   scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
                 }
@@ -1121,7 +1197,7 @@
             </button>
             <button
               class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#32302f] hover:bg-[#3c3836] border border-[#504945] hover:border-[#8ec07c] text-xs font-mono text-[#8ec07c] transition-all cursor-pointer shadow-xs active:scale-95"
-              on:click={() => dispatch('readerAction', { action: 'exportNotes' })}
+              onclick={() => dispatch('readerAction', { action: 'exportNotes' })}
             >
               <span class="material-symbols-outlined text-[14px]">psychology</span>
               <span>檢視本篇認知筆記</span>
