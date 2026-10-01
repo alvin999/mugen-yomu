@@ -5,7 +5,7 @@
   import { retrieveRelevantContextForAI } from '../../services/embedding/hybridEmbeddingService';
   import { getApiKey, getStoredApiKeySync } from '../../services/crypto/keyVaultService';
   import { renderNoteMarkdown } from '../../utils/markdownNoteRenderer';
-  import { t } from '../../stores/localeStore';
+  import { t, currentLocale } from '../../stores/localeStore';
   import { get } from 'svelte/store';
 
   interface Props {
@@ -132,8 +132,44 @@
     }
   }
 
+  function getLocalizedQuestionText(text: string, locale: string): string {
+    if (!text || locale === 'zh-TW') return text;
+    
+    const match1 = text.match(/作者在[「『](.*?)[」』]章節中最核心的論點是什麼？能否以一句話概括？/);
+    if (match1) {
+      const chapter = match1[1];
+      if (locale === 'ja') {
+        return `著者による「${chapter}」の章における最も核心的な論点は何ですか？一言で要約できますか？`;
+      }
+      return `What is the core argument of the author in chapter "${chapter}"? Can it be summarized in one sentence?`;
+    }
+
+    if (text.includes('本章節提出的方法與傳統做法相比') || text.includes('最關鍵的創新或理論突破')) {
+      if (locale === 'ja') {
+        return '従来の学説や手法と比較して、本章で提示された最も重要な革新点や理論的ブレイクスルーは何ですか？';
+      }
+      return 'Compared to traditional approaches, what is the most critical innovation or breakthrough in this chapter?';
+    }
+
+    if (text.includes('本節的核心創新點與先前研究相比') || text.includes('有哪些根本差異')) {
+      if (locale === 'ja') {
+        return 'このセクションの核心的イノベーションは過去の研究とどう異なりますか？';
+      }
+      return 'What are the fundamental differences in innovation in this section compared to previous work?';
+    }
+
+    if (text.includes('數學變數與超參數設定有何理論直覺') || text.includes('超參數設定')) {
+      if (locale === 'ja') {
+        return '文中の数式変数とハイパーパラメータ設定の理論的直感は何ですか？';
+      }
+      return 'What is the theoretical intuition behind the mathematical variables and hyperparameter choices?';
+    }
+
+    return text;
+  }
+
   // Default fallback questions if not present in section
-  let activeQuestions = $derived(companionData?.socraticQuestions || [
+  let activeQuestions = $derived((companionData?.socraticQuestions || [
     {
       id: 'default_1',
       icon: 'help_outline',
@@ -148,7 +184,10 @@
       text: get(t)('companion.socraticQ2'),
       answerSummary: get(t)('companion.socraticA2')
     }
-  ]);
+  ]).map(q => ({
+    ...q,
+    text: getLocalizedQuestionText(q.text, $currentLocale)
+  })));
 
   // 判斷是否為尚未經 AI 解析之初始預設範本
   let isPlaceholderIntuition = $derived(

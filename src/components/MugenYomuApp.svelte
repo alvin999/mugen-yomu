@@ -6,6 +6,7 @@
   import PaperRepositoryView from './repository/PaperRepositoryView.svelte';
   import CitationGraphView from './citation/CitationGraphView.svelte';
   import CognitiveNotesView from './notes/CognitiveNotesView.svelte';
+  import DerivationsFiguresView from './reader/DerivationsFiguresView.svelte';
   import SettingsModal from './settings/SettingsModal.svelte';
   import ImportPaperModal from './repository/ImportPaperModal.svelte';
   import DeletePaperConfirmModal from './common/DeletePaperConfirmModal.svelte';
@@ -36,7 +37,7 @@
   import { isRailCollapsedStore, setRailCollapsed } from '../stores/layoutStore';
 
   // --- App View & Studio Modes ---
-  let currentMainView: 'workspace' | 'repository' | 'citation-graph' | 'notes' = 'workspace';
+  let currentMainView: 'workspace' | 'repository' | 'citation-graph' | 'notes' | 'formula-lab' = 'workspace';
   let readingMode: 'bilingual' | 'split' | 'zen' | 'figures' = 'bilingual';
   let isPdfDrawerOpen: boolean = false;
   let zoomLevel: number = 100;
@@ -318,6 +319,27 @@
     workspaceRef?.refreshCompanionKey();
     refreshCacheStats();
   }
+
+  function handleSaveNoteFromFormula(data: { title: string; text: string }) {
+    if (!activePaper) return;
+    try {
+      const key = `mugen_notes_${activePaper.id}`;
+      const raw = localStorage.getItem(key);
+      const existing = raw ? JSON.parse(raw) : [];
+      const newNote = {
+        id: `note_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        title: data.title,
+        text: data.text,
+        time: new Date().toLocaleTimeString(),
+        paperId: activePaper.id,
+        paperTitle: activePaper.title,
+        isPinned: false
+      };
+      localStorage.setItem(key, JSON.stringify([newNote, ...existing]));
+    } catch (err) {
+      console.error('Failed to save formula note:', err);
+    }
+  }
 </script>
 
 <div class="flex h-screen w-screen bg-[#282828] text-[#ebdbb2] overflow-hidden select-text">
@@ -327,7 +349,8 @@
       currentMainView === 'repository' ? 'paper-repository' :
       currentMainView === 'notes' ? 'cognitive-notes' :
       currentMainView === 'citation-graph' ? 'citation-graph' :
-      (readingMode === 'figures' ? 'prompt-formula-lab' : 'reading-workspace')
+      currentMainView === 'formula-lab' ? 'prompt-formula-lab' :
+      'reading-workspace'
     }
     paperCount={paperLibrary.length}
     isCollapsed={isRailCollapsed}
@@ -343,13 +366,12 @@
       } else if (data.path === 'citation-graph') {
         currentMainView = 'citation-graph';
       } else if (data.path === 'prompt-formula-lab') {
-        currentMainView = 'workspace';
-        readingMode = 'figures';
+        if (!activePaper && paperLibrary.length > 0) {
+          setPaper(paperLibrary[0]);
+        }
+        currentMainView = 'formula-lab';
       } else if (data.path === 'reading-workspace') {
         currentMainView = 'workspace';
-        if (readingMode === 'figures') {
-          readingMode = 'bilingual';
-        }
       }
     }}
   />
@@ -416,6 +438,19 @@
           onbackToWorkspace={() => currentMainView = 'workspace'}
           onloadPaper={handleLoadPaperFromCitation}
           onupdateCitationGraph={handleUpdateCitationGraph}
+        />
+      {:else if currentMainView === 'formula-lab'}
+        <DerivationsFiguresView
+          paper={activePaper}
+          onbackToReader={() => currentMainView = 'workspace'}
+          onselectSection={(data) => {
+            currentMainView = 'workspace';
+            if (workspaceRef) {
+              workspaceRef.jumpToSection?.(data.id);
+            }
+          }}
+          onsaveNote={handleSaveNoteFromFormula}
+          onupdatePaper={(data) => handleUpdatePaper(data)}
         />
       {:else}
         <!-- Reading Workspace Studio View -->

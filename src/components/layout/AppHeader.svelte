@@ -180,6 +180,18 @@
           <span class="material-symbols-outlined text-[12px]">arrow_back</span>
           <span>{$t('nav.backToWorkspace')}</span>
         </button>
+      {:else if currentMainView === 'formula-lab'}
+        <span class="text-[#ebdbb2] font-semibold flex items-center gap-1.5 truncate">
+          <span class="material-symbols-outlined text-[15px] text-[#fe8019]">schema</span>
+          <span>{$t('rail.formula')}</span>
+        </span>
+        <button
+          class="ml-2 px-2 py-0.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#fe8019] font-mono rounded text-[11px] flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+          onclick={backToWorkspace}
+        >
+          <span class="material-symbols-outlined text-[12px]">arrow_back</span>
+          <span>{$t('nav.backToWorkspace')}</span>
+        </button>
       {:else}
         <span class="text-[#ebdbb2] font-medium truncate max-w-[220px]" title={activePaper?.title}>
           {activePaper?.title || $t('header.loadingPaper')}

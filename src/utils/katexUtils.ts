@@ -79,3 +79,41 @@ export async function copyLatexToClipboard(latex: string): Promise<boolean> {
   }
   return false;
 }
+
+/**
+ * 解析文字與引述線索中的 LaTeX 數學式（支援 $...$ 混排、$$...$$ 或純 LaTeX 公式字串）
+ */
+export function renderLatexInSnippet(snippet: string): string {
+  if (!snippet) return '';
+  const trimmed = snippet.trim();
+
+  // 1. 若含有 $ 或 $$，依標準 inline / block math 逐一渲染
+  if (trimmed.includes('$')) {
+    const parts: string[] = [];
+    let lastIndex = 0;
+    const regex = /\$\$([^$]+?)\$\$|\$([^$\n]+?)\$/g;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(trimmed)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(escapeHtml(trimmed.slice(lastIndex, match.index)));
+      }
+      const mathContent = match[1] || match[2];
+      parts.push(renderMath(mathContent, false));
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < trimmed.length) {
+      parts.push(escapeHtml(trimmed.slice(lastIndex)));
+    }
+    return parts.join('');
+  }
+
+  // 2. 若不含 $，但包含典型 LaTeX 結構（如 \frac, \left, \right, \sum, \cdot, \int, \partial, 下標 _ 等）
+  // 且看起來是整段公式，直接進行 KaTeX 渲染
+  const hasLatexCommands = /\\[a-zA-Z]+|[_^]\{|\b[a-zA-Z]\s*\(.*?\)\s*=/i.test(trimmed);
+  if (hasLatexCommands) {
+    return renderMath(trimmed, false);
+  }
+
+  // 3. 一般純文字直接轉義輸出
+  return escapeHtml(trimmed);
+}

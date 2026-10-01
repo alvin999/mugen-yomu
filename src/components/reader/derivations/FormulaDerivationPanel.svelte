@@ -2,7 +2,7 @@
   import type { PaperDocument, FormulaItem } from '../../../types/document';
   import type { FormulaDerivationData } from '../../../types/derivation';
   import type { ExtractedFormulaItem } from '../../../utils/derivationExtractor';
-  import { renderMath, copyLatexToClipboard } from '../../../utils/katexUtils';
+  import { renderMath, copyLatexToClipboard, renderLatexInSnippet } from '../../../utils/katexUtils';
   import { t } from '../../../stores/localeStore';
   import { get } from 'svelte/store';
 
@@ -248,7 +248,7 @@
         {#if activeContextSnippet}
           <div class="bg-[#181a1b]/60 border-l-2 border-[#fe8019] px-3 py-1.5 rounded-r text-[11px] text-[#a89984] italic">
             <span class="text-[#fe8019] font-semibold not-italic mr-1">{$t('derivations.sourceQuoteClue')}</span>
-            “{activeContextSnippet}”
+            <span class="not-italic text-[#ebdbb2]">“{@html renderLatexInSnippet(activeContextSnippet)}”</span>
           </div>
         {/if}
 
@@ -292,7 +292,7 @@
             <h4 class="font-mono text-[11px] font-bold text-[#fabd2f]">{$t('derivations.formulationAssumptions')}</h4>
             <ul class="list-disc list-inside text-xs text-[#d5c4a1] space-y-1">
               {#each currentFormulaDerivation.assumptions as assumption}
-                <li class="leading-relaxed">{@html renderMath(assumption, false)}</li>
+                <li class="leading-relaxed">{@html renderLatexInSnippet(assumption)}</li>
               {/each}
             </ul>
           </div>

@@ -72,7 +72,7 @@
           <div class="pt-2 border-t border-[#3c3836] flex items-center justify-between">
             <span class="text-[#a89984] font-mono text-[10px]">{$t('citation.dossierCitations')}</span>
             <span class="text-[#8ec07c] font-mono font-bold bg-[#8ec07c]/10 px-2 py-0.5 rounded border border-[#8ec07c]/30">
-              {selectedNode.citations}
+              {selectedNode.citations === '最新成果' ? $t('citation.latestWork') : selectedNode.citations}
             </span>
           </div>
         {/if}
@@ -85,7 +85,7 @@
           <span>{$t('citation.dossierLineage')}</span>
         </div>
         <p class="text-[#ebdbb2] leading-relaxed text-[12px] bg-[#1d2021]/80 p-2.5 rounded-lg border border-[#3c3836]">
-          {selectedNode.connectionSnippet}
+          {selectedNode.connectionSnippet?.includes('當前研讀之核心主文') ? $t('citation.coreSnippet') : selectedNode.connectionSnippet}
         </p>
       </div>
 
@@ -97,7 +97,7 @@
             {$t('citation.dossierCoreInsight')}
           </span>
           <div class="bg-[#282828] border border-[#3c3836] p-3 rounded-lg text-[#d5c4a1] leading-relaxed text-[11px]">
-            {selectedNode.coreInsight}
+            {selectedNode.coreInsight?.includes('提出創新架構與實驗論證') ? $t('citation.coreBreakthrough') : selectedNode.coreInsight}
           </div>
         </div>
       {/if}

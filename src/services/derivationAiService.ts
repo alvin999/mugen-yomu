@@ -8,7 +8,7 @@ import { CLASSIC_FIGURE_DECONSTRUCTIONS } from '../data/derivations/figureDecons
 /**
  * 依據文獻主題領域智慧調適圖表資料流拓撲管線 (避免跨領域非 ML 論文誤套張量矩陣)
  */
-export function getDomainAdaptedFigurePipeline(paperTitle: string = '', figureName: string = ''): {
+export function getDomainAdaptedFigurePipeline(paperTitle: string = '', figureName: string = '', locale: string = 'zh-TW'): {
   conceptOverview: string;
   dataFlowSteps: { step: number; component: string; action: string; tensorTransformation?: string }[];
   designDecisions: { decision: string; rationale: string }[];
@@ -17,6 +17,34 @@ export function getDomainAdaptedFigurePipeline(paperTitle: string = '', figureNa
   const isMLPaper = /transformer|attention|neural|deep learning|resnet|machine learning|reinforcement|language model|convolution/i.test(paperTitle);
 
   if (isMLPaper) {
+    if (locale === 'en') {
+      return {
+        conceptOverview: `This diagram establishes hierarchical representation and tensor transformation of "${figureName || 'Neural Architecture'}" within the computation graph.`,
+        dataFlowSteps: [
+          { step: 1, component: 'Input Embedding & Preprocessing', action: 'Token sequence embedding and dimension formatting', tensorTransformation: '(B, S, D_{in})' },
+          { step: 2, component: 'Core Operator Computation', action: 'Multi-head attention projections and non-linear activation', tensorTransformation: '(B, S, D_{hidden})' },
+          { step: 3, component: 'Feature Aggregation & Output', action: 'Layer normalization, residual addition, and projection', tensorTransformation: '(B, S, D_{out})' }
+        ],
+        designDecisions: [
+          { decision: 'Modular Decoupling & Parallel Computation', rationale: 'Maintains bounded latency and numerical scale stability across deep layers.' }
+        ],
+        keyTakeaway: 'Establishes the core computational backbone of the proposed algorithm.'
+      };
+    }
+    if (locale === 'ja') {
+      return {
+        conceptOverview: `本図は計算グラフにおける「${figureName || 'ニューラルネットワーク構造'}」の階層的変換とテンソルフローを示します。`,
+        dataFlowSteps: [
+          { step: 1, component: '入力埋め込みと前処理', action: '系列トークンの埋め込みと次元フォーマット', tensorTransformation: '(B, S, D_{in})' },
+          { step: 2, component: '中核演算子処理', action: 'マルチヘッド自己注意射影と非線形活性化', tensorTransformation: '(B, S, D_{hidden})' },
+          { step: 3, component: '特徴集約と出力射影', action: '層正規化、残差接続加算および下流射影', tensorTransformation: '(B, S, D_{out})' }
+        ],
+        designDecisions: [
+          { decision: 'モジュール結合の分離と並列化設計', rationale: '推論レイテンシを抑制し、テンソル数値尺度の安定性を保持。' }
+        ],
+        keyTakeaway: '論文アルゴリズムの基盤的バックボーンを確立。'
+      };
+    }
     return {
       conceptOverview: `本圖表確立了「${figureName || '神經網路架構'}」在計算圖中的層級轉換與張量流動。`,
       dataFlowSteps: [
@@ -32,6 +60,70 @@ export function getDomainAdaptedFigurePipeline(paperTitle: string = '', figureNa
   }
 
   // 自然科學 / 食品科學 / 萃取動力學 / 物理化學實驗文獻
+  if (locale === 'en') {
+    return {
+      conceptOverview: `This diagram illustrates dynamic observation, boundary control, and mass transfer kinetics across "${figureName || 'Experimental Pipeline'}".`,
+      dataFlowSteps: [
+        {
+          step: 1,
+          component: 'Experimental Control Preprocessing',
+          action: 'Constant flow rate, temperature control, and coffee bed condition formulation.',
+          tensorTransformation: '[T,\\, Q,\\, d_{\\text{part}}]'
+        },
+        {
+          step: 2,
+          component: 'Solid-Liquid Mass Transfer Kinetics',
+          action: 'Pore diffusion, solute dissolution, and exponential decay kinetics in porous media.',
+          tensorTransformation: 'c(m_\\Sigma) = c_0 e^{-m_\\Sigma/\\lambda}'
+        },
+        {
+          step: 3,
+          component: 'Fractionated Eluate Analysis & Evaluation',
+          action: 'Cumulative cup mass collection, refractometric TDS % measurement, and extraction yield (EY %).',
+          tensorTransformation: '[\\text{TDS}\\,\\%,\\, \\text{EY}\\,\\%,\\, m_{\\text{cup}}]'
+        }
+      ],
+      designDecisions: [
+        {
+          decision: 'Dynamic Mass Balance & Kinetics Modeling',
+          rationale: 'Mitigates flow rate fluctuations to ensure reproducible extraction kinetics calibration.'
+        }
+      ],
+      keyTakeaway: 'Quantifies the deterministic relationship between flow rate variables and solute release kinetics.'
+    };
+  }
+  if (locale === 'ja') {
+    return {
+      conceptOverview: `本図は「${figureName || '実験構成と動力学パイプライン'}」における観測、境界制御、物質移動動力学の展開を示します。`,
+      dataFlowSteps: [
+        {
+          step: 1,
+          component: '実験制御変数の前処理',
+          action: '注水流量、温度制御、コーヒー層の初期条件設定。',
+          tensorTransformation: '[T,\\, Q,\\, d_{\\text{part}}]'
+        },
+        {
+          step: 2,
+          component: '固液物質移動と抽出動力学',
+          action: '多孔質媒体における細孔拡散、溶出と指数関数的減衰挙動。',
+          tensorTransformation: 'c(m_\\Sigma) = c_0 e^{-m_\\Sigma/\\lambda}'
+        },
+        {
+          step: 3,
+          component: '分取溶出液の分析と評価',
+          action: '累積質量収集、屈折計による TDS % 測定および抽出収率 (EY %)。',
+          tensorTransformation: '[\\text{TDS}\\,\\%,\\, \\text{EY}\\,\\%,\\, m_{\\text{cup}}]'
+        }
+      ],
+      designDecisions: [
+        {
+          decision: '動的物質収支と移動動力学モデル',
+          rationale: '流速変動による濃度測定への影響を排除し、再現性のある抽出速度論を確立。'
+        }
+      ],
+      keyTakeaway: '流量変数が抽出動力学および可溶性成分の溶出速度に与える決定論的関係を定量化。'
+    };
+  }
   return {
     conceptOverview: `本圖表呈現「${figureName || '實驗架構與動力學管線'}」中的動態觀測、邊界控制與傳質動力學演進路徑。`,
     dataFlowSteps: [

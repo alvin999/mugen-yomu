@@ -139,7 +139,11 @@
                   class="px-2.5 py-0.5 rounded-full text-xs font-semibold tracking-wide border shadow-xs"
                   style="background-color: {telemetry.stateColor}18; color: {telemetry.stateColor}; border-color: {telemetry.stateColor}40;"
                 >
-                  {telemetry.stateLabel}
+                  {telemetry.state === 'paused' ? $t('flowCockpit.statePaused') :
+                   telemetry.state === 'skimming' ? $t('flowCockpit.stateSkimming') :
+                   telemetry.state === 'flow' ? $t('flowCockpit.stateFlow') :
+                   telemetry.state === 'deep_rigor' ? $t('flowCockpit.stateDeepRigor') :
+                   (telemetry.stateLabel || $t('flowCockpit.defaultFlowState'))}
                 </span>
                 {#if telemetry.calculationMode === 'cursor'}
                   <span class="text-[11px] text-[#fe8019] bg-[#fe8019]/15 border border-[#fe8019]/40 px-2 py-0.5 rounded flex items-center gap-1 font-mono">
@@ -159,7 +163,11 @@
                 {/if}
               </div>
               <p class="text-xs text-[#d5c4a1] max-w-xs leading-relaxed">
-                {telemetry.stateDescription}
+                {telemetry.flowState === 'paused' ? $t('flowCockpit.stateDescPaused') :
+                 telemetry.flowState === 'skimming' ? $t('flowCockpit.stateDescSkimming') :
+                 telemetry.flowState === 'flow' ? $t('flowCockpit.stateDescFlow') :
+                 telemetry.flowState === 'deep_rigor' ? $t('flowCockpit.stateDescDeepRigor') :
+                 telemetry.stateDescription}
               </p>
             </div>
           </div>

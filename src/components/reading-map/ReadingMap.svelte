@@ -3,6 +3,7 @@
   import { calculateReadingStats } from '../../stores/readingStore';
   import { get } from 'svelte/store';
   import { t } from '../../stores/localeStore';
+  import { renderLatexInSnippet } from '../../utils/katexUtils';
 
   export interface DashboardFormulaItem {
     formula: FormulaItem;
@@ -58,7 +59,7 @@
 
     if (paper?.figureList) {
       for (const f of paper.figureList) {
-        if (!seenUrls.has(f.imageUrl)) {
+        if (f.imageUrl && !seenUrls.has(f.imageUrl)) {
           seenUrls.add(f.imageUrl);
           list.push({ ...f, imageUrl: normalizeAcademicImageUrl(f.imageUrl) });
         }
@@ -69,7 +70,7 @@
       for (const sec of secs) {
         if (sec.figures) {
           for (const f of sec.figures) {
-            if (!seenUrls.has(f.imageUrl)) {
+            if (f.imageUrl && !seenUrls.has(f.imageUrl)) {
               seenUrls.add(f.imageUrl);
               list.push({ ...f, imageUrl: normalizeAcademicImageUrl(f.imageUrl) });
             }
@@ -655,7 +656,7 @@
           <!-- Source Context Snippet (原文引述脈絡線索) -->
           {#if currentDashboardFormula.sourceContextSnippet}
             <div class="text-[9px] text-[#a89984] italic truncate px-1 border-l-2 border-[#fe8019]/70 bg-[#1d2021]/50 py-0.5 rounded-r">
-              <span class="text-[#fe8019] font-normal mr-1">“</span>{currentDashboardFormula.sourceContextSnippet}”
+              <span class="text-[#fe8019] font-normal mr-1">“</span>{@html renderLatexInSnippet(currentDashboardFormula.sourceContextSnippet)}”
             </div>
           {/if}
 

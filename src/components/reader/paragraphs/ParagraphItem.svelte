@@ -327,7 +327,7 @@
         {/if}
         <button
           class="text-[#a89984] hover:text-[#ebdbb2] text-[11px] flex items-center gap-1 cursor-pointer transition-colors bg-[#1d2021] hover:bg-[#32302f] border border-[#3c3836] px-2 py-0.5 rounded"
-          onclick={(e) => { e.stopPropagation(); copyTableAsMarkdown(item.tableData); }}
+          onclick={(e) => { e.stopPropagation(); if (item.tableData) copyTableAsMarkdown(item.tableData); }}
           title={$t('reader.paragraphs.copyMdTable')}
         >
           <span class="material-symbols-outlined text-[13px]">content_copy</span>
@@ -335,7 +335,7 @@
         </button>
         <button
           class="text-[#a89984] hover:text-[#ebdbb2] text-[11px] flex items-center gap-1 cursor-pointer transition-colors bg-[#1d2021] hover:bg-[#32302f] border border-[#3c3836] px-2 py-0.5 rounded"
-          onclick={(e) => { e.stopPropagation(); copyTableAsTSV(item.tableData); }}
+          onclick={(e) => { e.stopPropagation(); if (item.tableData) copyTableAsTSV(item.tableData); }}
           title={$t('reader.paragraphs.copyTsvTable')}
         >
           <span class="material-symbols-outlined text-[13px]">grid_on</span>

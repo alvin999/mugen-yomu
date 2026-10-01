@@ -5,7 +5,7 @@
   import { renderMath } from '../../../utils/katexUtils';
   import { normalizeAcademicImageUrl } from '../../../utils/academicImageUtils';
   import { getDomainAdaptedFigurePipeline } from '../../../services/derivationService';
-  import { t } from '../../../stores/localeStore';
+  import { t, currentLocale } from '../../../stores/localeStore';
 
   interface Props {
     paper?: PaperDocument | null;
@@ -43,9 +43,9 @@
     onswitchRightMode
   }: Props = $props();
 
-  let figureZoom = $state<number>(100);
   let brokenImageUrls = $state<Record<string, boolean>>({});
   let figureCanvasViewMode = $state<'auto' | 'topology' | 'image'>('auto');
+
 
   let activeItem = $derived(dynamicFigures[selectedFigureIndex]);
   let rawImg = $derived(activeItem?.figure?.imageUrl?.trim() || '');
@@ -54,7 +54,7 @@
   let showTopology = $derived(figureCanvasViewMode === 'topology' || (!hasImg && figureCanvasViewMode !== 'image'));
 
   let isML = $derived(/transformer|attention|neural|deep learning|resnet|machine learning|reinforcement|language model|convolution/i.test(paper?.title || ''));
-  let adaptedTopology = $derived(getDomainAdaptedFigurePipeline(paper?.title || '', activeItem?.figure?.name || ''));
+  let adaptedTopology = $derived(getDomainAdaptedFigurePipeline(paper?.title || '', activeItem?.figure?.name || '', $currentLocale));
 
   let topologySteps = $derived((() => {
     const rawSteps = currentFigureDeconstruction?.dataFlowSteps && currentFigureDeconstruction.dataFlowSteps.length > 0
@@ -70,7 +70,7 @@
 
   let displaySteps = $derived((() => {
     if (!currentFigureDeconstruction) return [];
-    const adapted = getDomainAdaptedFigurePipeline(paper?.title || '', currentFigureDeconstruction.name);
+    const adapted = getDomainAdaptedFigurePipeline(paper?.title || '', currentFigureDeconstruction.name, $currentLocale);
     return currentFigureDeconstruction.dataFlowSteps.map((s, idx) => {
       if (!isML && (s.tensorTransformation?.includes('(B, S, D') || s.component?.includes('輸入特徵') || s.component?.includes('核心表徵'))) {
         return adapted.dataFlowSteps[idx] || s;
@@ -84,45 +84,16 @@
   <!-- Dynamic Tabs for Document Figures -->
   {#if dynamicFigures.length > 0}
     <div class="p-2 border-b border-[#3c3836] flex items-center justify-between bg-[#1d2021] shrink-0">
-      <div class="flex items-center gap-1.5 overflow-x-auto max-w-[70%]">
+      <div class="flex items-center gap-1.5 overflow-x-auto w-full">
         {#each dynamicFigures as item, idx}
           <button
             class="font-mono text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1 shrink-0 {selectedFigureIndex === idx ? 'bg-[#3c3836] text-[#fe8019] font-semibold border border-[#fe8019]/40 shadow-sm' : 'text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2]'}"
-            onclick={() => {
-              onselectFigure?.({ index: idx });
-              figureZoom = 100;
-            }}
+            onclick={() => onselectFigure?.({ index: idx })}
           >
             <span class="material-symbols-outlined text-[13px]">image</span>
             <span>{item.figure.figureNumber || $t('derivations.figureTab', { num: idx + 1 })}</span>
           </button>
         {/each}
-      </div>
-
-      <!-- Figure Zoom Controls -->
-      <div class="flex items-center gap-1 shrink-0">
-        <button
-          class="w-6 h-6 rounded flex items-center justify-center bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] text-xs font-mono"
-          onclick={() => figureZoom = Math.max(50, figureZoom - 20)}
-          title={$t('derivations.zoomOut')}
-        >
-          -
-        </button>
-        <span class="font-mono text-[10px] text-[#a89984] w-9 text-center">{figureZoom}%</span>
-        <button
-          class="w-6 h-6 rounded flex items-center justify-center bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] text-xs font-mono"
-          onclick={() => figureZoom = Math.min(250, figureZoom + 20)}
-          title={$t('derivations.zoomIn')}
-        >
-          +
-        </button>
-        <button
-          class="w-6 h-6 rounded flex items-center justify-center bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#fe8019] text-xs"
-          onclick={() => figureZoom = 100}
-          title={$t('derivations.zoomReset')}
-        >
-          <span class="material-symbols-outlined text-[13px]">restart_alt</span>
-        </button>
       </div>
     </div>
   {:else}
@@ -241,158 +212,193 @@
 
         <!-- Canvas Area: 圖片或互動式 SVG 資料流拓撲圖 -->
         {#if showTopology}
-          <div class="w-full bg-[#141617] border border-[#504945] rounded-lg p-4 flex flex-col items-center justify-center min-h-[280px] max-h-[440px] overflow-auto relative select-none">
-            <!-- 頂部拓撲說明列 -->
-            <div class="w-full flex items-center justify-between pb-2 mb-2 border-b border-[#282828] text-xs font-mono">
-              <div class="flex items-center gap-1.5 text-[#fe8019]">
-                <span class="material-symbols-outlined text-[15px]">account_tree</span>
-                <span class="font-bold text-[11px]">{$t('derivations.pipelineTitle')}</span>
+          <div class="w-full bg-[#141617] border border-[#3c3836] rounded-xl p-4 flex flex-col min-h-[300px] overflow-hidden relative select-none shadow-xl" style="background-image: radial-gradient(rgba(80, 73, 69, 0.4) 1px, transparent 1px); background-size: 16px 16px;">
+            <!-- 頂部拓撲說明列 (科技感標題與狀態指示) -->
+            <div class="w-full flex items-center justify-between pb-2.5 mb-3 border-b border-[#282828] text-xs font-mono">
+              <div class="flex items-center gap-2 text-[#fe8019]">
+                <span class="flex h-2 w-2 relative">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#fe8019] opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-2 w-2 bg-[#fe8019]"></span>
+                </span>
+                <span class="font-bold text-[11px] tracking-wider uppercase">{$t('derivations.pipelineTitle')}</span>
+                <span class="px-1.5 py-0.2 bg-[#282828] text-[9px] text-[#a89984] rounded border border-[#3c3836]">TOPOLOGY HUD v2.5</span>
               </div>
-              <span class="text-[10px] text-[#a89984]">
-                {$t('derivations.stagesCount', { count: currentFigureDeconstruction?.dataFlowSteps?.length || 3 })}
-              </span>
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] text-[#8ec07c] font-mono flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-[#8ec07c]"></span>
+                  ONLINE
+                </span>
+                <span class="text-[10px] text-[#a89984]">
+                  {$t('derivations.stagesCount', { count: currentFigureDeconstruction?.dataFlowSteps?.length || 3 })}
+                </span>
+              </div>
             </div>
 
-            <!-- SVG 拓撲流程管線繪製 -->
-            <svg class="w-full max-h-[300px]" viewBox="0 0 540 230" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="nodeGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#1d2021" />
-                  <stop offset="100%" stop-color="#282828" />
-                </linearGradient>
-                <linearGradient id="nodeGradActive" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stop-color="#282828" />
-                  <stop offset="100%" stop-color="#32302f" />
-                </linearGradient>
-                <marker id="flowArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
-                  <polygon points="0 1, 7 4, 0 7" fill="#fe8019" />
-                </marker>
-              </defs>
+            <!-- 現代 HTML5 + HUD 藍圖彈性流式拓撲管線 -->
+            <div class="w-full flex-1 flex flex-col justify-center py-2 relative">
+              <div class="w-full grid grid-cols-[1fr_auto_1fr_auto_1fr] items-stretch gap-2.5 relative z-10">
+                <!-- 節點 1: Input Stage -->
+                <div
+                  class="group relative flex flex-col bg-gradient-to-b from-[#1d2021]/95 to-[#282828]/95 backdrop-blur-sm border border-[#504945] rounded-xl overflow-hidden shadow-md transition-all duration-300 ease-out hover:border-[#fabd2f] hover:shadow-[0_8px_24px_rgba(250,189,47,0.25)] hover:-translate-y-1.5"
+                >
+                  <!-- HUD 角隅裝飾 -->
+                  <span class="absolute top-0 left-0 w-2.5 h-2.5 border-t-2 border-l-2 border-[#fabd2f]/70 rounded-tl pointer-events-none transition-colors group-hover:border-[#fabd2f]"></span>
+                  <span class="absolute top-0 right-0 w-2.5 h-2.5 border-t-2 border-r-2 border-[#fabd2f]/70 rounded-tr pointer-events-none transition-colors group-hover:border-[#fabd2f]"></span>
+                  <span class="absolute bottom-0 left-0 w-2.5 h-2.5 border-b-2 border-l-2 border-[#fabd2f]/70 rounded-bl pointer-events-none transition-colors group-hover:border-[#fabd2f]"></span>
+                  <span class="absolute bottom-0 right-0 w-2.5 h-2.5 border-b-2 border-r-2 border-[#fabd2f]/70 rounded-br pointer-events-none transition-colors group-hover:border-[#fabd2f]"></span>
 
-              <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                <circle cx="2" cy="2" r="1" fill="#3c3836" opacity="0.3" />
-              </pattern>
-              <rect width="100%" height="100%" fill="url(#grid)" />
+                  <!-- 頂部標題列 (自然換行，字數不受限，帶有微晶片端口標記) -->
+                  <div class="px-3 py-2.5 bg-[#141617]/80 border-b border-[#3c3836] flex items-start gap-2">
+                    <span class="w-5 h-5 rounded bg-[#fabd2f] text-[#1d2021] font-mono text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                      01
+                    </span>
+                    <div class="flex-1 min-w-0">
+                      <div class="text-[9px] font-mono uppercase tracking-wider text-[#a89984] mb-0.5">INPUT PORT</div>
+                      <h5 class="font-mono text-xs font-bold text-[#fabd2f] leading-snug break-words">
+                        {topologySteps[0]?.component || $t('derivations.inputControlVar')}
+                      </h5>
+                    </div>
+                  </div>
+                  <!-- 卡片主體說明 -->
+                  <div class="p-3 flex-1 flex flex-col justify-between gap-2.5 bg-[#1d2021]/50">
+                    <p class="text-[11px] text-[#d5c4a1] leading-relaxed">
+                      {topologySteps[0]?.action || $t('derivations.inputFeatureAction')}
+                    </p>
+                    <div class="px-2.5 py-2 bg-[#141617] border border-[#3c3836] rounded-lg text-center text-[13.5px] leading-normal text-[#8ec07c] shadow-inner select-text font-mono flex items-center justify-center overflow-x-auto">
+                      {@html renderMath(topologySteps[0]?.tensorTransformation || '(B, S, D_{in})', false)}
+                    </div>
+                  </div>
+                </div>
 
-              <!-- 連接箭頭 1 -> 2 -->
-              <path d="M 170 100 L 205 100" stroke="#fe8019" stroke-width="2" stroke-dasharray="4 2" marker-end="url(#flowArrow)">
-                <animate attributeName="stroke-dashoffset" from="12" to="0" dur="1.2s" repeatCount="indefinite" />
-              </path>
+                <!-- 連接動態電路導軌 1 -> 2 (向量導軌與流動光粒子) -->
+                <div class="flex flex-col items-center justify-center text-[#fe8019] px-0.5 relative">
+                  <div class="flex items-center justify-center">
+                    <svg class="w-8 h-8 shrink-0 text-[#fe8019] drop-shadow-[0_0_8px_rgba(254,128,25,0.6)]" viewBox="0 0 32 32" fill="none">
+                      <!-- 基礎電路軌道 -->
+                      <line x1="2" y1="16" x2="24" y2="16" stroke="#504945" stroke-width="2" />
+                      <!-- 流動雷射光脈衝 -->
+                      <line x1="2" y1="16" x2="24" y2="16" stroke="currentColor" stroke-width="2.5" stroke-dasharray="6 14">
+                        <animate attributeName="stroke-dashoffset" from="20" to="0" dur="1s" repeatCount="indefinite" />
+                      </line>
+                      <!-- 箭頭端點 -->
+                      <polygon points="21,11 29,16 21,21" fill="currentColor" />
+                    </svg>
+                  </div>
+                  <span class="text-[8px] font-mono text-[#a89984] mt-1 tracking-widest">FLOW</span>
+                </div>
 
-              <!-- 連接箭頭 2 -> 3 -->
-              <path d="M 350 100 L 385 100" stroke="#fe8019" stroke-width="2" stroke-dasharray="4 2" marker-end="url(#flowArrow)">
-                <animate attributeName="stroke-dashoffset" from="12" to="0" dur="1.2s" repeatCount="indefinite" />
-              </path>
+                <!-- 節點 2: Core Processing Stage (主運算核心高亮) -->
+                <div
+                  class="group relative flex flex-col bg-gradient-to-b from-[#282828]/95 to-[#32302f]/95 backdrop-blur-sm border border-[#fe8019]/80 rounded-xl overflow-hidden shadow-lg transition-all duration-300 ease-out hover:border-[#fe8019] hover:shadow-[0_8px_28px_rgba(254,128,25,0.4)] hover:-translate-y-2"
+                >
+                  <!-- HUD 角隅裝飾 -->
+                  <span class="absolute top-0 left-0 w-2.5 h-2.5 border-t-2 border-l-2 border-[#fe8019] rounded-tl pointer-events-none"></span>
+                  <span class="absolute top-0 right-0 w-2.5 h-2.5 border-t-2 border-r-2 border-[#fe8019] rounded-tr pointer-events-none"></span>
+                  <span class="absolute bottom-0 left-0 w-2.5 h-2.5 border-b-2 border-l-2 border-[#fe8019] rounded-bl pointer-events-none"></span>
+                  <span class="absolute bottom-0 right-0 w-2.5 h-2.5 border-b-2 border-r-2 border-[#fe8019] rounded-br pointer-events-none"></span>
 
-              <!-- 節點 1: Input Stage -->
-              <g transform="translate(15, 35)">
-                <rect width="155" height="135" rx="8" fill="url(#nodeGrad1)" stroke="#504945" stroke-width="1.2" />
-                <rect x="0" y="0" width="155" height="28" rx="8" fill="#1d2021" />
-                <rect x="0" y="20" width="155" height="8" fill="#1d2021" />
-                <line x1="0" y1="28" x2="155" y2="28" stroke="#3c3836" stroke-width="1" />
-                <circle cx="16" cy="14" r="7" fill="#fe8019" />
-                <text x="16" y="17" fill="#1d2021" font-family="JetBrains Mono" font-size="9" font-weight="bold" text-anchor="middle">1</text>
-                <text x="30" y="18" fill="#fabd2f" font-family="JetBrains Mono" font-size="10" font-weight="bold">
-                  {topologySteps[0]?.component || $t('derivations.inputControlVar')}
-                </text>
-                <text x="12" y="52" fill="#ebdbb2" font-family="Noto Serif TC, serif" font-size="10" font-weight="bold">
-                  {(topologySteps[0]?.component || $t('derivations.inputFeatureLayer')).slice(0, 10)}
-                </text>
-                <foreignObject x="10" y="58" width="135" height="42">
-                  <div xmlns="http://www.w3.org/1999/xhtml" style="font-size: 9px; color: #a89984; font-family: sans-serif; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
-                    {topologySteps[0]?.action || $t('derivations.inputFeatureAction')}
+                  <!-- 頂部標題列 -->
+                  <div class="px-3 py-2.5 bg-[#1d2021]/90 border-b border-[#fe8019]/50 flex items-start gap-2">
+                    <span class="w-5 h-5 rounded bg-[#fe8019] text-[#1d2021] font-mono text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                      02
+                    </span>
+                    <div class="flex-1 min-w-0">
+                      <div class="text-[9px] font-mono uppercase tracking-wider text-[#fe8019] mb-0.5 flex items-center gap-1">
+                        <span>CORE ENGINE</span>
+                        <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#fe8019] animate-pulse"></span>
+                      </div>
+                      <h5 class="font-mono text-xs font-bold text-[#fe8019] leading-snug break-words">
+                        {topologySteps[1]?.component || $t('derivations.coreRepresentation')}
+                      </h5>
+                    </div>
                   </div>
-                </foreignObject>
-                <foreignObject x="8" y="104" width="139" height="24">
-                  <div
-                    xmlns="http://www.w3.org/1999/xhtml"
-                    class="w-full h-full flex items-center justify-center px-1 bg-[#141617] border border-[#3c3836] rounded text-[10px] text-[#8ec07c] overflow-hidden whitespace-nowrap text-ellipsis shadow-inner"
-                  >
-                    {@html renderMath(topologySteps[0]?.tensorTransformation || '(B, S, D_{in})')}
+                  <!-- 卡片主體說明 -->
+                  <div class="p-3 flex-1 flex flex-col justify-between gap-2.5 bg-[#282828]/50">
+                    <p class="text-[11px] text-[#ebdbb2] leading-relaxed">
+                      {topologySteps[1]?.action || $t('derivations.coreDynamicAction')}
+                    </p>
+                    <div class="px-2.5 py-2 bg-[#1d2021] border border-[#fe8019]/70 rounded-lg text-center text-[13.5px] leading-normal text-[#fe8019] font-bold shadow-sm select-text font-mono flex items-center justify-center overflow-x-auto">
+                      {@html renderMath(topologySteps[1]?.tensorTransformation || '(B, S, D_{hidden})', false)}
+                    </div>
                   </div>
-                </foreignObject>
-              </g>
+                </div>
 
-              <!-- 節點 2: Core Processing Stage -->
-              <g transform="translate(195, 30)">
-                <rect width="155" height="145" rx="8" fill="url(#nodeGradActive)" stroke="#fe8019" stroke-width="1.8" />
-                <rect x="0" y="0" width="155" height="28" rx="8" fill="#1d2021" />
-                <rect x="0" y="20" width="155" height="8" fill="#1d2021" />
-                <line x1="0" y1="28" x2="155" y2="28" stroke="#fe8019" stroke-width="1" />
-                <circle cx="16" cy="14" r="7" fill="#fe8019" />
-                <text x="16" y="17" fill="#1d2021" font-family="JetBrains Mono" font-size="9" font-weight="bold" text-anchor="middle">2</text>
-                <text x="30" y="18" fill="#fe8019" font-family="JetBrains Mono" font-size="10" font-weight="bold">
-                  {topologySteps[1]?.component || $t('derivations.coreRepresentation')}
-                </text>
-                <text x="12" y="52" fill="#ebdbb2" font-family="Noto Serif TC, serif" font-size="10" font-weight="bold">
-                  {(topologySteps[1]?.component || $t('derivations.coreDynamicLayer')).slice(0, 10)}
-                </text>
-                <foreignObject x="10" y="58" width="135" height="46">
-                  <div xmlns="http://www.w3.org/1999/xhtml" style="font-size: 9px; color: #d5c4a1; font-family: sans-serif; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
-                    {topologySteps[1]?.action || $t('derivations.coreDynamicAction')}
+                <!-- 連接動態電路導軌 2 -> 3 -->
+                <div class="flex flex-col items-center justify-center text-[#fe8019] px-0.5 relative">
+                  <div class="flex items-center justify-center">
+                    <svg class="w-8 h-8 shrink-0 text-[#fe8019] drop-shadow-[0_0_8px_rgba(254,128,25,0.6)]" viewBox="0 0 32 32" fill="none">
+                      <line x1="2" y1="16" x2="24" y2="16" stroke="#504945" stroke-width="2" />
+                      <line x1="2" y1="16" x2="24" y2="16" stroke="currentColor" stroke-width="2.5" stroke-dasharray="6 14">
+                        <animate attributeName="stroke-dashoffset" from="20" to="0" dur="1s" repeatCount="indefinite" />
+                      </line>
+                      <polygon points="21,11 29,16 21,21" fill="currentColor" />
+                    </svg>
                   </div>
-                </foreignObject>
-                <foreignObject x="8" y="112" width="139" height="26">
-                  <div
-                    xmlns="http://www.w3.org/1999/xhtml"
-                    class="w-full h-full flex items-center justify-center px-1 bg-[#1d2021] border border-[#fe8019]/80 rounded text-[10px] text-[#fe8019] font-bold overflow-hidden whitespace-nowrap text-ellipsis shadow-sm"
-                  >
-                    {@html renderMath(topologySteps[1]?.tensorTransformation || '(B, S, D_{hidden})')}
-                  </div>
-                </foreignObject>
-              </g>
+                  <span class="text-[8px] font-mono text-[#a89984] mt-1 tracking-widest">FLOW</span>
+                </div>
 
-              <!-- 節點 3: Output Stage -->
-              <g transform="translate(375, 35)">
-                <rect width="155" height="135" rx="8" fill="url(#nodeGrad1)" stroke="#504945" stroke-width="1.2" />
-                <rect x="0" y="0" width="155" height="28" rx="8" fill="#1d2021" />
-                <rect x="0" y="20" width="155" height="8" fill="#1d2021" />
-                <line x1="0" y1="28" x2="155" y2="28" stroke="#3c3836" stroke-width="1" />
-                <circle cx="16" cy="14" r="7" fill="#8ec07c" />
-                <text x="16" y="17" fill="#1d2021" font-family="JetBrains Mono" font-size="9" font-weight="bold" text-anchor="middle">3</text>
-                <text x="30" y="18" fill="#8ec07c" font-family="JetBrains Mono" font-size="10" font-weight="bold">
-                  {topologySteps[2]?.component || $t('derivations.outputPredict')}
-                </text>
-                <text x="12" y="52" fill="#ebdbb2" font-family="Noto Serif TC, serif" font-size="10" font-weight="bold">
-                  {(topologySteps[2]?.component || $t('derivations.targetResponseLayer')).slice(0, 10)}
-                </text>
-                <foreignObject x="10" y="58" width="135" height="42">
-                  <div xmlns="http://www.w3.org/1999/xhtml" style="font-size: 9px; color: #a89984; font-family: sans-serif; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
-                    {topologySteps[2]?.action || $t('derivations.targetResponseAction')}
+                <!-- 節點 3: Output Stage -->
+                <div
+                  class="group relative flex flex-col bg-gradient-to-b from-[#1d2021]/95 to-[#282828]/95 backdrop-blur-sm border border-[#504945] rounded-xl overflow-hidden shadow-md transition-all duration-300 ease-out hover:border-[#8ec07c] hover:shadow-[0_8px_24px_rgba(142,192,124,0.25)] hover:-translate-y-1.5"
+                >
+                  <!-- HUD 角隅裝飾 -->
+                  <span class="absolute top-0 left-0 w-2.5 h-2.5 border-t-2 border-l-2 border-[#8ec07c]/70 rounded-tl pointer-events-none transition-colors group-hover:border-[#8ec07c]"></span>
+                  <span class="absolute top-0 right-0 w-2.5 h-2.5 border-t-2 border-r-2 border-[#8ec07c]/70 rounded-tr pointer-events-none transition-colors group-hover:border-[#8ec07c]"></span>
+                  <span class="absolute bottom-0 left-0 w-2.5 h-2.5 border-b-2 border-l-2 border-[#8ec07c]/70 rounded-bl pointer-events-none transition-colors group-hover:border-[#8ec07c]"></span>
+                  <span class="absolute bottom-0 right-0 w-2.5 h-2.5 border-b-2 border-r-2 border-[#8ec07c]/70 rounded-br pointer-events-none transition-colors group-hover:border-[#8ec07c]"></span>
+
+                  <!-- 頂部標題列 -->
+                  <div class="px-3 py-2.5 bg-[#141617]/80 border-b border-[#3c3836] flex items-start gap-2">
+                    <span class="w-5 h-5 rounded bg-[#8ec07c] text-[#1d2021] font-mono text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                      03
+                    </span>
+                    <div class="flex-1 min-w-0">
+                      <div class="text-[9px] font-mono uppercase tracking-wider text-[#a89984] mb-0.5">OUTPUT PORT</div>
+                      <h5 class="font-mono text-xs font-bold text-[#8ec07c] leading-snug break-words">
+                        {topologySteps[2]?.component || $t('derivations.outputPredict')}
+                      </h5>
+                    </div>
                   </div>
-                </foreignObject>
-                <foreignObject x="8" y="104" width="139" height="24">
-                  <div
-                    xmlns="http://www.w3.org/1999/xhtml"
-                    class="w-full h-full flex items-center justify-center px-1 bg-[#141617] border border-[#3c3836] rounded text-[10px] text-[#8ec07c] overflow-hidden whitespace-nowrap text-ellipsis shadow-inner"
-                  >
-                    {@html renderMath(topologySteps[2]?.tensorTransformation || '(B, S, D_{out})')}
+                  <!-- 卡片主體說明 -->
+                  <div class="p-3 flex-1 flex flex-col justify-between gap-2.5 bg-[#1d2021]/50">
+                    <p class="text-[11px] text-[#d5c4a1] leading-relaxed">
+                      {topologySteps[2]?.action || $t('derivations.targetResponseAction')}
+                    </p>
+                    <div class="px-2.5 py-2 bg-[#141617] border border-[#3c3836] rounded-lg text-center text-[13.5px] leading-normal text-[#8ec07c] shadow-inner select-text font-mono flex items-center justify-center overflow-x-auto">
+                      {@html renderMath(topologySteps[2]?.tensorTransformation || '(B, S, D_{out})', false)}
+                    </div>
                   </div>
-                </foreignObject>
-              </g>
+                </div>
+              </div>
 
               <!-- 底部全域資料流標註 -->
-              <text x="270" y="205" fill="#a89984" font-family="JetBrains Mono" font-size="9" text-anchor="middle">
-                {$t('derivations.systemEvolution')}
-              </text>
-            </svg>
+              <div class="w-full text-center pt-3 text-[10px] font-mono text-[#a89984] tracking-wider select-none flex items-center justify-center gap-2">
+                <span class="h-px w-8 bg-[#3c3836]"></span>
+                <span>{$t('derivations.systemEvolution')}</span>
+                <span class="h-px w-8 bg-[#3c3836]"></span>
+              </div>
+            </div>
           </div>
         {:else}
           <!-- 原始論文圖片視圖 -->
           <div class="w-full bg-[#141617] border border-[#504945] rounded-lg p-3 flex items-center justify-center overflow-auto min-h-[260px] max-h-[420px]">
-            <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_noninteractive_element_interactions -->
-            <img
-              src={normalizeAcademicImageUrl(rawImg)}
-              alt={activeItem.figure.name}
-              referrerpolicy="no-referrer"
-              style="transform: scale({figureZoom / 100}); transform-origin: center center;"
-              class="max-h-[360px] max-w-full object-contain rounded transition-transform duration-200 cursor-zoom-in"
+            <button
+              type="button"
+              class="max-h-[360px] max-w-full flex items-center justify-center p-0 bg-transparent border-0 cursor-zoom-in focus:outline-none"
               onclick={() => activeItem && onopenLightbox?.({ url: normalizeAcademicImageUrl(rawImg), title: activeItem.figure.name })}
-              onerror={() => {
-                if (rawImg) brokenImageUrls[rawImg] = true;
-              }}
-              loading="lazy"
-            />
+              aria-label={activeItem?.figure?.name || 'Academic Figure'}
+            >
+              <img
+                src={normalizeAcademicImageUrl(rawImg)}
+                alt={activeItem?.figure?.name || 'Academic Figure'}
+                referrerpolicy="no-referrer"
+                class="max-h-[360px] max-w-full object-contain rounded"
+                onerror={() => {
+                  if (rawImg) brokenImageUrls[rawImg] = true;
+                }}
+                loading="lazy"
+              />
+            </button>
           </div>
         {/if}
 

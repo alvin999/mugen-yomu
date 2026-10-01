@@ -26,7 +26,13 @@
   let currentTelemetry = $derived($flowStore);
   let displayWpm = $derived(currentTelemetry?.currentWpm || flowWpm);
   let activeColor = $derived(currentTelemetry?.stateColor || '#b8bb26');
-  let activeLabel = $derived(currentTelemetry?.stateLabel || $t('flowCockpit.defaultFlowState'));
+  let activeLabel = $derived(
+    currentTelemetry?.flowState === 'paused' ? $t('flowCockpit.statePaused') :
+    currentTelemetry?.flowState === 'skimming' ? $t('flowCockpit.stateSkimming') :
+    currentTelemetry?.flowState === 'flow' ? $t('flowCockpit.stateFlow') :
+    currentTelemetry?.flowState === 'deep_rigor' ? $t('flowCockpit.stateDeepRigor') :
+    $t('flowCockpit.defaultFlowState')
+  );
   let isPaused = $derived(currentTelemetry?.isPaused || false);
   let isPacerActive = $derived(currentTelemetry?.isPacerActive || false);
 

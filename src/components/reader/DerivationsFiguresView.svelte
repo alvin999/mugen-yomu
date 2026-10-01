@@ -23,8 +23,8 @@
   import FigureDeconstructionPanel from './derivations/FigureDeconstructionPanel.svelte';
   import FormulaDerivationPanel from './derivations/FormulaDerivationPanel.svelte';
   import DerivationScratchpadPanel from './derivations/DerivationScratchpadPanel.svelte';
+  import { t, currentLocale } from '../../stores/localeStore';
   import { get } from 'svelte/store';
-  import { t } from '../../stores/localeStore';
 
   interface Props {
     paper?: PaperDocument | null;
@@ -232,7 +232,7 @@
         isAnalyzingFigure = false;
       }
     } else {
-      const adapted = getDomainAdaptedFigurePipeline(paper?.title || '', fig.name);
+      const adapted = getDomainAdaptedFigurePipeline(paper?.title || '', fig.name, $currentLocale);
       let rawData: FigureDeconstructionData | null = CLASSIC_FIGURE_DECONSTRUCTIONS[fig.id] || null;
 
       const isML = /transformer|attention|neural|deep learning|resnet|machine learning|reinforcement|language model|convolution/i.test(paper?.title || '');
@@ -274,11 +274,14 @@
         currentFormulaDerivation = res;
         showToast($t('derivations.formulaAiSuccessToast'));
       } catch (err: any) {
-        formulaDerivationError = get(t)('derivations.scanFailToast', { msg: err.message || 'AI' });
+        formulaDerivationError = $t('derivations.scanFailToast', { msg: err.message || 'AI' });
       } finally {
         isDerivingFormula = false;
       }
     } else {
+      const isEn = $currentLocale === 'en';
+      const isJa = $currentLocale === 'ja';
+
       currentFormulaDerivation = CLASSIC_FORMULA_DERIVATIONS[formula.id] || {
         formulaId: formula.id,
         formulaNumber: formula.number,
@@ -288,42 +291,52 @@
         sourceSectionTitle: formula.sectionTitle,
         sourcePage: formula.page,
         sourceContextSnippet: formula.sourceContextSnippet,
-        assumptions: [
+        assumptions: isEn ? [
+          'Assumes physical quantities and state variables exhibit local continuity and differentiability within experimental boundaries.',
+          'Satisfies conservation laws of mass/energy and numerical convergence criteria.'
+        ] : isJa ? [
+          '実験境界範囲内において、物理量および状態変数が局所的連続性と可微分性を備えていると仮定。',
+          '質量/エネルギー保存則または数値積分/反復の収束条件を充足。'
+        ] : [
           '假設系統物理量與狀態變數在實驗邊界範圍內具備局部連續性與可微性。',
           '滿足質量/能量守恆定律或數值積分/迭代之收斂性條件。'
         ],
         steps: [
           {
             stepNumber: 1,
-            title: '控制方程與核心算式形式化',
+            title: isEn ? 'Governing Equations & Core Formulation' : isJa ? '支配方程式および中核定式化' : '控制方程與核心算式形式化',
             latexFormula: formula.latexText,
-            explanation: '依據論文理論架構，將系統關鍵狀態量與連續動態過程以精確的微分/積分或函數映射刻畫。',
-            intuition: '確立系統核心控制變因與輸出指標之間的動態關聯。'
+            explanation: isEn ? 'Formalizes the critical state variables and dynamic process using exact differential/integral formulations based on the theoretical framework.' : isJa ? '理論的枠組みに基づき、主要状態量と動的プロセスを微分・積分方程式として厳密に定式化。' : '依據論文理論架構，將系統關鍵狀態量與連續動態過程以精確的微分/積分或函數映射刻畫。',
+            intuition: isEn ? 'Establishes the dynamic relationship between governing parameters and response metrics.' : isJa ? '中核制御パラメータと出力指標との動的関連性を確立。' : '確立系統核心控制變因與輸出指標之間的動態關聯。'
           },
           {
             stepNumber: 2,
-            title: '邊界條件帶入與微分解算',
+            title: isEn ? 'Boundary Condition Substitution & Analytic Solution' : isJa ? '境界条件の代入と微分方程式の解法' : '邊界條件帶入與微分解算',
             latexFormula: formula.latexText,
-            explanation: '將各分段初始條件與實驗常數代入微分/積分算式，推導連續狀態演進軌跡。',
-            intuition: '在實驗設定邊界下精確預測物理量之連續累積效應。'
+            explanation: isEn ? 'Integrates piecewise initial conditions and constants to derive continuous evolution trajectories.' : isJa ? '区分初期条件と実験定数を代入し、連続的な状態推移軌道を導出。' : '將各分段初始條件與實驗常數代入微分/積分算式，推導連續狀態演進軌跡。',
+            intuition: isEn ? 'Predicts cumulative physical effects precisely under experimental constraints.' : isJa ? '実験制約下における物理量の累積効果を正確に予測。' : '在實驗設定邊界下精確預測物理量之連續累積效應。'
           }
         ],
         limitAnalysis: [
           {
-            condition: '邊界條件趨近極限 (t \\to t_{end} 或 m \\to m_{max})',
-            consequence: '系統指標呈現飽和漸進收斂，計算曲線與實驗實測吻合。',
-            mathSnippet: '\\lim_{t \\to \\infty} \\text{ 或 } \\lim_{m \\to M}'
+            condition: isEn ? 'Boundary limit condition (t \\to t_{end} or m \\to m_{max})' : isJa ? '境界極限条件 (t \\to t_{end} または m \\to m_{max})' : '邊界條件趨近極限 (t \\to t_{end} 或 m \\to m_{max})',
+            consequence: isEn ? 'System response exhibits asymptotic saturation, closely matching empirical measurements.' : isJa ? 'システム応答は漸近的飽和を示し、実験実測値と良好に一致。' : '系統指標呈現飽和漸進收斂，計算曲線與實驗實測吻合。',
+            mathSnippet: '\\lim_{t \\to \\infty} \\text{ or } \\lim_{m \\to M}'
           }
         ],
         tensorShapes: formula.variables?.map(v => ({
           stage: v.symbol,
-          shape: '(數值序列/純量)',
+          shape: isEn ? '(scalar/seq)' : isJa ? '(スカラー/系列)' : '(數值序列/純量)',
           description: v.meaning
         })) || [
-          { stage: '輸入變數', shape: '(純量/序列)', description: '實驗控制變因' },
-          { stage: '目標輸出', shape: '(純量/數值)', description: '系統響應指標' }
+          { stage: isEn ? 'Input Variable' : isJa ? '入力変数' : '輸入變數', shape: isEn ? '(scalar)' : '(純量)', description: isEn ? 'Experimental control parameter' : isJa ? '実験制御パラメータ' : '實驗控制變因' },
+          { stage: isEn ? 'Target Output' : isJa ? '目標出力' : '目標輸出', shape: isEn ? '(scalar)' : '(純量)', description: isEn ? 'System response metric' : isJa ? 'システム応答指標' : '系統響應指標' }
         ],
-        physicalIntuition: `本公式「${formula.name}」在論文論證體系中擔任核心動力學/數學表徵，量化了實驗控制變因與系統響應之間的連續確定性關聯。`
+        physicalIntuition: isEn
+          ? `Formula "${formula.name}" serves as a central dynamic representation in the paper, quantifying the deterministic link between control parameters and system response.`
+          : isJa
+          ? `本数式「${formula.name}」は論文論証体系において中核的動力学・数学的表現として機能し、制御変数と応答指標の決定論的関係を定量化します。`
+          : `本公式「${formula.name}」在論文論證體系中擔任核心動力學/數學表徵，量化了實驗控制變因與系統響應之間的連續確定性關聯。`
       };
     }
   }
