@@ -12,6 +12,13 @@
     onnavigate?: (data: { path: string }) => void;
   }
 
+  interface NavItem {
+    id: string;
+    label: string;
+    icon: string;
+    badge?: boolean;
+  }
+
   let {
     currentPath = $bindable('reading-workspace'),
     memoryUsageMb = 0.8,
@@ -25,9 +32,9 @@
 
   let resolvedMemoryTooltip = $derived(memoryTooltip || $t('header.localIndexedDbTooltip'));
 
-  let navItems = $derived([
+  let navItems = $derived<NavItem[]>([
     { id: 'reading-workspace', label: $t('rail.workspace'), icon: 'menu_book' },
-    { id: 'paper-repository', label: $t('rail.repo'), icon: 'library_books', badge: true },
+    { id: 'paper-repository', label: $t('rail.repo'), icon: 'library_books' },
     { id: 'citation-graph', label: $t('rail.citation'), icon: 'hub' },
     { id: 'cognitive-notes', label: $t('rail.notes'), icon: 'draw' },
     { id: 'prompt-formula-lab', label: $t('rail.formula'), icon: 'functions' }
