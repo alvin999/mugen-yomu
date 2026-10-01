@@ -6,6 +6,7 @@
   import ParagraphItem from '../paragraphs/ParagraphItem.svelte';
   import SectionFormulaChips from './SectionFormulaChips.svelte';
   import CognitiveActionToolbar from './CognitiveActionToolbar.svelte';
+  import { t } from '../../../stores/localeStore';
 
   interface Props {
     sec: ChapterSection;
@@ -105,7 +106,7 @@
   <div
     class="flex items-center justify-between gap-2 pb-2 mb-0.5 border-b border-[#3c3836]/60 cursor-pointer group/sec-header"
     onclick={() => onsectionClick?.({ secId: sec.id })}
-    title="點擊定位至此章節頂部"
+    title={$t('reader.sectionHeading.locateTopTooltip')}
   >
     <div class="flex items-baseline gap-2.5 min-w-0">
       <span class="font-mono text-sm font-bold {sec.level === 1 ? 'text-[#fe8019]' : 'text-[#fabd2f] bg-[#282828] border border-[#504945]/70 px-2 py-0.5 rounded'} shrink-0">
@@ -122,15 +123,15 @@
           class="flex items-center gap-1 bg-[#282828] hover:bg-[#3c3836] border border-[#504945] hover:border-[#fe8019] px-2 py-0.5 rounded text-[11px] font-mono text-[#fabd2f] transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
           onclick={(e) => { e.stopPropagation(); onopenOriginalToPage?.({ page: sec.page || 1, sectionId: sec.id }); }}
           title={paper?.type === 'web'
-            ? (paper.pdfUrl ? `在原始抽屜開啟（第 ${sec.page || 1} 頁 / 章節）` : '在原始抽屜開啟原文網頁')
-            : `在原始 PDF 檢視第 ${sec.page || 1} 頁`}
+            ? (paper.pdfUrl ? $t('reader.sectionHeading.openInOriginalDrawer', { page: sec.page || 1 }) : $t('reader.sectionHeading.openInOriginalWeb'))
+            : $t('reader.sectionHeading.openInOriginalPage', { page: sec.page || 1 })}
         >
           <span class="material-symbols-outlined text-[13px] text-[#fe8019]">
             {paper?.type === 'web' ? 'dock_to_left' : 'find_in_page'}
           </span>
           <span>
             {paper?.type === 'web'
-              ? (paper.pdfUrl ? `原 p.${sec.page || 1}` : '原文抽屜')
+              ? (paper.pdfUrl ? $t('reader.sectionHeading.origPage', { page: sec.page || 1 }) : $t('reader.sectionHeading.origDrawer'))
               : `PDF p.${sec.page || 1}`} ↗
           </span>
         </button>

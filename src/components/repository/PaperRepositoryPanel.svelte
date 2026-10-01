@@ -7,6 +7,7 @@
     deletePaperFromLibrary
   } from '../../stores/documentStore';
   import DeletePaperConfirmModal from '../common/DeletePaperConfirmModal.svelte';
+  import { t } from '../../stores/localeStore';
 
   interface Props {
     isOpen?: boolean;
@@ -95,7 +96,7 @@
     <div
       role="button"
       tabindex="-1"
-      aria-label="關閉文獻庫側邊面板"
+      aria-label={$t('repo.panel.closeAria')}
       class="fixed inset-0 bg-black/60 backdrop-blur-sm cursor-default"
       onclick={close}
       onkeydown={(e) => (e.key === 'Escape' || e.key === 'Enter') && close()}
@@ -112,8 +113,8 @@
             <span class="material-symbols-outlined text-[18px]">library_books</span>
           </div>
           <div class="flex flex-col">
-            <h3 class="text-sm font-bold text-[#ebdbb2]">本地文獻與網頁庫 (Paper Repository)</h3>
-            <span class="font-mono text-[10px] text-[#a89984]">已收錄 {library.length} 篇作品 · 本地加密存儲</span>
+            <h3 class="text-sm font-bold text-[#ebdbb2]">{$t('repo.panel.title')}</h3>
+            <span class="font-mono text-[10px] text-[#a89984]">{$t('repo.panel.countNotice').replace('{count}', String(library.length))}</span>
           </div>
         </div>
 
@@ -132,16 +133,16 @@
           onclick={handleOpenImport}
         >
           <span class="material-symbols-outlined text-[15px]">add_circle</span>
-          匯入新論文 / 網頁
+          {$t('repo.panel.importBtn')}
         </button>
 
         <button
           class="px-3 py-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] text-xs font-mono rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
           onclick={handleExportBackup}
-          title="匯出本機文獻庫備份 (JSON)"
+          title={$t('repo.panel.backupTooltip')}
         >
           <span class="material-symbols-outlined text-[15px]">download</span>
-          備份
+          {$t('repo.panel.backupBtn')}
         </button>
       </div>
 
@@ -160,11 +161,11 @@
               <div class="flex items-center gap-1.5">
                 {#if paper.type === 'web'}
                   <span class="font-mono text-[9px] bg-[#83a598]/15 border border-[#83a598]/40 text-[#83a598] px-1.5 py-0.2 rounded font-semibold uppercase flex items-center gap-0.5">
-                    <span class="material-symbols-outlined text-[10px]">language</span> 網頁文章
+                    <span class="material-symbols-outlined text-[10px]">language</span> {$t('repo.panel.webBadge')}
                   </span>
                 {:else}
                   <span class="font-mono text-[9px] bg-[#fe8019]/15 border border-[#fe8019]/40 text-[#fe8019] px-1.5 py-0.2 rounded font-semibold uppercase flex items-center gap-0.5">
-                    <span class="material-symbols-outlined text-[10px]">description</span> 學術論文
+                    <span class="material-symbols-outlined text-[10px]">description</span> {$t('repo.panel.paperBadge')}
                   </span>
                 {/if}
                 <span class="font-mono text-[10px] text-[#a89984] truncate max-w-[170px]">{paper.venue}</span>
@@ -175,13 +176,13 @@
                 {#if paper.id === activePaperId}
                   <span class="font-mono text-[10px] text-[#fe8019] flex items-center gap-1 font-semibold">
                     <span class="h-1.5 w-1.5 rounded-full bg-[#fe8019] animate-pulse"></span>
-                    當前研讀中
+                    {$t('repo.panel.currentBadge')}
                   </span>
                 {/if}
                 <button
                   type="button"
                   class="w-6 h-6 rounded flex items-center justify-center text-[#a89984] hover:text-[#fb4934] hover:bg-[#1d2021] transition-colors cursor-pointer"
-                  title="刪除文章"
+                  title={$t('repo.panel.deleteTooltip')}
                   onclick={(e) => promptDeletePaper(paper.id, e)}
                 >
                   <span class="material-symbols-outlined text-[14px]">delete</span>
@@ -196,12 +197,12 @@
 
             <!-- Author / Meta -->
             <span class="text-[11px] text-[#a89984] truncate">
-              {paper.authors.join(', ')}
+              {Array.isArray(paper.authors) ? paper.authors.join(', ') : (paper.authors || '')}
             </span>
 
             <!-- Footer Stats -->
             <div class="pt-2 border-t border-[#3c3836]/60 flex items-center justify-between text-[#a89984] font-mono text-[10px]">
-              <span>{paper.sections.length} 個章節</span>
+              <span>{paper.sections.length} {$t('repo.panel.sectionsUnit')}</span>
               {#if paper.arxivId}
                 <span class="text-[#fabd2f]">{paper.arxivId}</span>
               {:else if paper.sourceUrl}

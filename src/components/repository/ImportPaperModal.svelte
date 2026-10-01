@@ -17,6 +17,8 @@
   import { getStoredApiKey } from '../../services/cognitiveDispatcher';
   import { cleanPaperText } from '../../utils/paperTextSanitizer';
   import { pdfViewerStore } from '../../stores/pdfViewerStore';
+  import { get } from 'svelte/store';
+  import { t } from '../../stores/localeStore';
 
   interface Props {
     isOpen?: boolean;
@@ -36,50 +38,50 @@
 
   let hasGeminiKey = $derived(typeof window !== 'undefined' ? Boolean(getStoredApiKey('google') || getStoredApiKey('gemini')) : false);
 
-  let activeTab: 'arxiv' | 'pdf' | 'book' | 'web' | 'preset' | 'paste' | 'upload' = 'arxiv';
+  let activeTab = $state<'arxiv' | 'pdf' | 'book' | 'web' | 'preset' | 'paste' | 'upload'>('arxiv');
 
   // Tab Book: EPUB Local File Import State
-  let isParsingBook: boolean = false;
-  let bookParsePercent: number = 0;
-  let bookParseStepText: string = '';
-  let bookError: string = '';
-  let previewBookPaper: PaperDocument | null = null;
-  let bookDragOver: boolean = false;
+  let isParsingBook = $state(false);
+  let bookParsePercent = $state(0);
+  let bookParseStepText = $state('');
+  let bookError = $state('');
+  let previewBookPaper = $state<PaperDocument | null>(null);
+  let bookDragOver = $state(false);
 
   // Tab 0: arXiv ID Import State
-  let arxivInput: string = '1706.03762';
-  let isFetchingArxiv: boolean = false;
-  let arxivError: string = '';
-  let previewArxivPaper: PaperDocument | null = null;
+  let arxivInput = $state('1706.03762');
+  let isFetchingArxiv = $state(false);
+  let arxivError = $state('');
+  let previewArxivPaper = $state<PaperDocument | null>(null);
 
   // Tab 1: Web URL State
-  let webUrl: string = 'https://transformer-circuits.pub/2021/framework/index.html';
-  let isFetchingWeb: boolean = false;
-  let webError: string = '';
-  let previewWebPaper: PaperDocument | null = null;
+  let webUrl = $state('https://transformer-circuits.pub/2021/framework/index.html');
+  let isFetchingWeb = $state(false);
+  let webError = $state('');
+  let previewWebPaper = $state<PaperDocument | null>(null);
 
   // Tab 3: Paste Text State
-  let pasteTitle: string = '';
-  let pasteContent: string = '';
-  let pasteError: string = '';
-  let autoSanitizePaste: boolean = true;
+  let pasteTitle = $state('');
+  let pasteContent = $state('');
+  let pasteError = $state('');
+  let autoSanitizePaste = $state(true);
 
   // Tab PDF: Local Offline & Online PDF Parser State
-  let pdfUrlInput: string = '';
-  let isParsingPdf: boolean = false;
-  let pdfParsePercent: number = 0;
-  let pdfParseStepText: string = '';
-  let pdfError: string = '';
-  let previewPdfPaper: PaperDocument | null = null;
-  let pdfDragOver: boolean = false;
+  let pdfUrlInput = $state('');
+  let isParsingPdf = $state(false);
+  let pdfParsePercent = $state(0);
+  let pdfParseStepText = $state('');
+  let pdfError = $state('');
+  let previewPdfPaper = $state<PaperDocument | null>(null);
+  let pdfDragOver = $state(false);
 
   // Tab 4: File Upload State
-  let uploadJsonText: string = '';
-  let uploadError: string = '';
-  let previewUploadPaper: PaperDocument | null = null;
+  let uploadJsonText = $state('');
+  let uploadError = $state('');
+  let previewUploadPaper = $state<PaperDocument | null>(null);
 
   // --- Clipboard Helper & Paste Handlers ---
-  let clipboardToast: string = '';
+  let clipboardToast = $state('');
   let toastTimeout: any = null;
 
   function showToast(msg: string) {
@@ -92,18 +94,18 @@
 
   async function getClipboardText(): Promise<string | null> {
     if (!navigator.clipboard || !navigator.clipboard.readText) {
-      showToast('瀏覽器限制讀取剪貼簿，請使用 Ctrl+V 貼上');
+      showToast(get(t)('import.clipboardDenied'));
       return null;
     }
     try {
       const text = await navigator.clipboard.readText();
       if (!text || !text.trim()) {
-        showToast('剪貼簿目前沒有文字內容');
+        showToast(get(t)('import.clipboardEmpty'));
         return null;
       }
       return text;
     } catch (err: any) {
-      showToast('無法讀取剪貼簿（可能需要允許瀏覽器權限）');
+      showToast(get(t)('import.clipboardReadFail'));
       return null;
     }
   }
@@ -116,10 +118,10 @@
     const match = cleaned.match(/(?:arxiv\.org\/(?:abs|pdf|html)\/|arxiv:)?([0-9]{4}\.[0-9]{4,5}(?:v[0-9]+)?)/i);
     if (match && match[1]) {
       arxivInput = match[1];
-      showToast(`已貼上 arXiv ID: ${arxivInput}`);
+      showToast(get(t)('import.pastedArxiv', { id: arxivInput }));
     } else {
       arxivInput = cleaned;
-      showToast('已從剪貼簿貼上');
+      showToast(get(t)('import.pastedFromClipboard'));
     }
     arxivError = '';
   }
@@ -129,14 +131,14 @@
     if (!text) return;
     webUrl = text.trim();
     webError = '';
-    showToast('已從剪貼簿貼上網址');
+    showToast(get(t)('import.pastedWebUrl'));
   }
 
   async function handlePasteTitle() {
     const text = await getClipboardText();
     if (!text) return;
     pasteTitle = text.trim().replace(/^#+\s*/, '');
-    showToast('已從剪貼簿貼上標題');
+    showToast(get(t)('import.pastedTitle'));
   }
 
   async function handlePasteContent() {
@@ -153,7 +155,7 @@
         pasteTitle = firstLine;
       }
     }
-    showToast(`已貼上內容 (${contentToUse.length.toLocaleString()} 字元)`);
+    showToast(get(t)('import.pastedContent', { count: contentToUse.length.toLocaleString() }));
   }
 
   function close() {
@@ -164,7 +166,7 @@
   // --- Tab 0: arXiv Fetch Logic ---
   async function handleFetchArxiv() {
     if (!arxivInput.trim()) {
-      arxivError = '請輸入有效的 arXiv ID 或論文網址';
+      arxivError = get(t)('import.arxivInvalid');
       return;
     }
     arxivError = '';
@@ -175,7 +177,7 @@
       const doc = await fetchArxivDocument(arxivInput);
       previewArxivPaper = doc;
     } catch (err: any) {
-      arxivError = `抓取 arXiv 失敗：${err.message || '無法解析該論文'}`;
+      arxivError = get(t)('import.arxivFetchFail', { error: err.message || 'Error' });
     } finally {
       isFetchingArxiv = false;
     }
@@ -194,14 +196,14 @@
   // --- Tab 1: Web Fetch Logic ---
   async function handleFetchWeb() {
     if (!webUrl.trim()) {
-      webError = '請輸入有效的網頁網址 (URL)';
+      webError = get(t)('import.webInvalidUrl');
       return;
     }
     const trimmed = webUrl.trim();
     if (trimmed.toLowerCase().endsWith('.pdf') || trimmed.includes('/pdf/')) {
       activeTab = 'pdf';
       pdfUrlInput = trimmed;
-      showToast('檢測到此為 PDF 網址，已自動切換至 PDF 解析');
+      showToast(get(t)('import.switchedToPdf'));
       handleFetchPdfUrl();
       return;
     }
@@ -214,7 +216,7 @@
       const doc = await fetchWebArticle(webUrl);
       previewWebPaper = doc;
     } catch (err: any) {
-      webError = `解析網頁失敗：${err.message || '無法訪問該網址'}`;
+      webError = get(t)('import.webFetchFail', { error: err.message || 'Error' });
     } finally {
       isFetchingWeb = false;
     }
@@ -245,7 +247,7 @@
     }
     saveLibraryToStorage(updated);
     onpaperLoaded?.({ paper: userManualDocument, library: updated });
-    clipboardToast = '已成功補齊並還原預設核心文獻！';
+    clipboardToast = get(t)('import.restorePresetSuccess');
     setTimeout(() => {
       clipboardToast = '';
       close();
@@ -260,11 +262,11 @@
 
   function handleParsePaste() {
     if (!pasteContent.trim()) {
-      pasteError = '請貼上文章內容或 Markdown 文字';
+      pasteError = get(t)('import.pasteEmptyError');
       return;
     }
     pasteError = '';
-    const title = pasteTitle.trim() || '自訂貼上文獻';
+    const title = pasteTitle.trim() || get(t)('import.defaultPasteDocTitle');
     const contentToParse = autoSanitizePaste ? cleanPaperText(pasteContent) : pasteContent;
     const doc = parseMarkdownToDocument(title, contentToParse);
     importAndActivatePaper(doc);
@@ -282,14 +284,14 @@
         const text = e.target?.result as string;
         const parsed = JSON.parse(text);
         if (!parsed.title || !parsed.sections) {
-          throw new Error('缺少必要之 title 或 sections 欄位');
+          throw new Error(get(t)('import.missingRequiredFields'));
         }
         if (!parsed.id) parsed.id = `custom_${Date.now()}`;
         if (!parsed.type) parsed.type = 'paper';
         previewUploadPaper = parsed as PaperDocument;
         uploadError = '';
       } catch (err: any) {
-        uploadError = `檔案解析失敗：${err.message || '無效的 JSON 結構'}`;
+        uploadError = get(t)('import.jsonParseFail', { error: err.message || 'Error' });
         previewUploadPaper = null;
       }
     };
@@ -297,20 +299,20 @@
   }
 
   // --- Tab PDF: Local Offline & Online PDF Parser Logic ---
-  let currentPdfFile: File | null = null;
+  let currentPdfFile = $state<File | null>(null);
 
   async function handlePastePdfUrl() {
     const text = await getClipboardText();
     if (!text) return;
     pdfUrlInput = text.trim();
     pdfError = '';
-    showToast('已從剪貼簿貼上 PDF 網址');
+    showToast(get(t)('import.pastedPdfUrl'));
   }
 
   async function handleFetchPdfUrl() {
     let url = pdfUrlInput.trim();
     if (!url) {
-      pdfError = '請輸入有效的 PDF 網址 (URL)';
+      pdfError = get(t)('import.pdfInvalidUrl');
       return;
     }
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -320,21 +322,21 @@
     pdfError = '';
     isParsingPdf = true;
     pdfParsePercent = 10;
-    pdfParseStepText = '正在透過安全代理下載遠端 PDF 資料流...';
+    pdfParseStepText = get(t)('import.pdfDownloadingProxy');
     previewPdfPaper = null;
 
     try {
       const proxyUrl = getProxiedPdfUrl(url);
       const res = await fetch(proxyUrl);
       if (!res.ok) {
-        throw new Error(`遠端連線異常 (${res.status}): ${res.statusText}`);
+        throw new Error(get(t)('import.remoteConnectionError', { status: res.status, statusText: res.statusText }));
       }
       const arrayBuffer = await res.arrayBuffer();
       if (!arrayBuffer || arrayBuffer.byteLength === 0) {
-        throw new Error('下載的 PDF 內容為空 (0 bytes)');
+        throw new Error(get(t)('import.pdfEmptyContent'));
       }
 
-      const fileName = url.split('/').pop()?.split('?')[0] || '遠端 PDF 文獻';
+      const fileName = url.split('/').pop()?.split('?')[0] || get(t)('import.remotePdfTitle');
       const paper = await parsePdfToDocument(
         arrayBuffer,
         fileName,
@@ -349,7 +351,7 @@
       previewPdfPaper = paper;
     } catch (err: any) {
       console.error('PDF 解析失敗:', err);
-      pdfError = `PDF 解析中斷：${err?.message || '無法下載或解析該網址'}`;
+      pdfError = get(t)('import.pdfInterrupt', { error: err?.message || 'Download/parse error' });
     } finally {
       isParsingPdf = false;
     }
@@ -359,13 +361,13 @@
     if (!file) return;
     currentPdfFile = file;
     if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
-      pdfError = '請選取標準 PDF 格式檔案 (.pdf)！';
+      pdfError = get(t)('import.selectPdfHint');
       return;
     }
     pdfError = '';
     isParsingPdf = true;
     pdfParsePercent = 0;
-    pdfParseStepText = '準備啟動純前端 PDF.js 本地極速解析引擎...';
+    pdfParseStepText = get(t)('import.launchingPdfEngine');
     previewPdfPaper = null;
 
     try {
@@ -380,7 +382,7 @@
       previewPdfPaper = paper;
     } catch (err: any) {
       console.error('PDF 解析失敗:', err);
-      pdfError = `PDF 解析中斷：${err?.message || '未知錯誤'}`;
+      pdfError = get(t)('import.pdfInterrupt', { error: err?.message || get(t)('import.unknownError') });
     } finally {
       isParsingPdf = false;
     }
@@ -430,7 +432,7 @@
       if (file.name.toLowerCase().endsWith('.epub')) {
         await parseEpubFile(file);
       } else {
-        bookError = '請拖放副檔名為 .epub 的電子書檔案';
+        bookError = get(t)('import.dropEpubFileHint');
       }
     }
   }
@@ -440,7 +442,7 @@
     bookError = '';
     previewBookPaper = null;
     bookParsePercent = 10;
-    bookParseStepText = '讀取本機 EPUB 檔案...';
+    bookParseStepText = get(t)('import.readingLocalEpubFile');
 
     try {
       const arrayBuffer = await file.arrayBuffer();
@@ -453,7 +455,7 @@
       });
       previewBookPaper = paper;
     } catch (err: any) {
-      bookError = err?.message || 'EPUB 解析失敗，請確認檔案結構是否完整';
+      bookError = err?.message || get(t)('import.epubParseFail');
     } finally {
       isParsingBook = false;
     }
@@ -498,13 +500,14 @@
             <span class="material-symbols-outlined text-[17px]">add_notes</span>
           </div>
           <div class="flex flex-col">
-            <h3 class="text-sm font-bold text-[#ebdbb2] tracking-wide">匯入文獻與網頁文章 (Import Document)</h3>
-            <span class="font-mono text-[10px] text-[#a89984]">支援學術論文、AI 研究報告、Distill 與技術部落格</span>
+            <h3 class="text-sm font-bold text-[#ebdbb2] tracking-wide">{$t('import.title')}</h3>
+            <span class="font-mono text-[10px] text-[#a89984]">{$t('import.subtitle')}</span>
           </div>
         </div>
         <button
           class="w-7 h-7 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f] transition-colors"
-          on:click={close}
+          onclick={close}
+          title={$t('settings.close')}
         >
           <span class="material-symbols-outlined text-[18px]">close</span>
         </button>
@@ -514,58 +517,58 @@
       <div class="px-5 pt-3 bg-[#1d2021]/80 border-b border-[#3c3836] flex items-center gap-1.5 overflow-x-auto">
         <button
           class="px-3.5 py-2 font-mono text-xs rounded-t-lg transition-colors flex items-center gap-1.5 {activeTab === 'arxiv' ? 'bg-[#282828] text-[#fe8019] border-t-2 border-[#fe8019] font-semibold' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]/50'}"
-          on:click={() => activeTab = 'arxiv'}
+          onclick={() => activeTab = 'arxiv'}
         >
           <span class="material-symbols-outlined text-[15px] text-[#fabd2f]">auto_stories</span>
-          <span>arXiv 一鍵匯入 (原圖)</span>
+          <span>{$t('import.tabArxiv')}</span>
         </button>
 
         <button
           class="px-3.5 py-2 font-mono text-xs rounded-t-lg transition-colors flex items-center gap-1.5 {activeTab === 'pdf' ? 'bg-[#282828] text-[#fe8019] border-t-2 border-[#fe8019] font-semibold' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]/50'}"
-          on:click={() => activeTab = 'pdf'}
+          onclick={() => activeTab = 'pdf'}
         >
           <span class="material-symbols-outlined text-[15px] text-[#fe8019]">picture_as_pdf</span>
-          <span>PDF 文獻解析</span>
+          <span>{$t('import.tabPdf')}</span>
         </button>
 
         <button
           class="px-3.5 py-2 font-mono text-xs rounded-t-lg transition-colors flex items-center gap-1.5 {activeTab === 'book' ? 'bg-[#282828] text-[#8ec07c] border-t-2 border-[#8ec07c] font-semibold' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]/50'}"
-          on:click={() => activeTab = 'book'}
+          onclick={() => activeTab = 'book'}
         >
           <span class="material-symbols-outlined text-[15px] text-[#8ec07c]">menu_book</span>
-          <span>EPUB 電子書</span>
+          <span>{$t('import.tabEpub')}</span>
         </button>
 
         <button
           class="px-3.5 py-2 font-mono text-xs rounded-t-lg transition-colors flex items-center gap-1.5 {activeTab === 'web' ? 'bg-[#282828] text-[#fe8019] border-t-2 border-[#fe8019] font-semibold' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]/50'}"
-          on:click={() => activeTab = 'web'}
+          onclick={() => activeTab = 'web'}
         >
           <span class="material-symbols-outlined text-[15px]">language</span>
-          網頁 URL 匯入
+          {$t('import.tabWeb')}
         </button>
 
         <button
           class="px-3.5 py-2 font-mono text-xs rounded-t-lg transition-colors flex items-center gap-1.5 {activeTab === 'preset' ? 'bg-[#282828] text-[#fe8019] border-t-2 border-[#fe8019] font-semibold' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]/50'}"
-          on:click={() => activeTab = 'preset'}
+          onclick={() => activeTab = 'preset'}
         >
           <span class="material-symbols-outlined text-[15px]">stars</span>
-          經典學術與專文
+          {$t('import.tabPreset')}
         </button>
 
         <button
           class="px-3.5 py-2 font-mono text-xs rounded-t-lg transition-colors flex items-center gap-1.5 {activeTab === 'paste' ? 'bg-[#282828] text-[#fe8019] border-t-2 border-[#fe8019] font-semibold' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]/50'}"
-          on:click={() => activeTab = 'paste'}
+          onclick={() => activeTab = 'paste'}
         >
           <span class="material-symbols-outlined text-[15px]">content_paste</span>
-          文字 / Markdown 貼上
+          {$t('import.tabPaste')}
         </button>
 
         <button
           class="px-3.5 py-2 font-mono text-xs rounded-t-lg transition-colors flex items-center gap-1.5 {activeTab === 'upload' ? 'bg-[#282828] text-[#fe8019] border-t-2 border-[#fe8019] font-semibold' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828]/50'}"
-          on:click={() => activeTab = 'upload'}
+          onclick={() => activeTab = 'upload'}
         >
           <span class="material-symbols-outlined text-[15px]">upload_file</span>
-          JSON 檔案上傳
+          {$t('import.tabUpload')}
         </button>
       </div>
 
@@ -579,11 +582,11 @@
               <span class="material-symbols-outlined text-[20px] text-[#fe8019] shrink-0 mt-0.5">auto_stories</span>
               <div class="flex flex-col gap-0.5">
                 <span class="font-semibold text-[#ebdbb2] flex items-center gap-1.5">
-                  ar5iv 官方原生學術圖表無損抓取
-                  <span class="font-mono text-[10px] text-[#fabd2f] bg-[#282828] px-1.5 py-0.2 rounded border border-[#504945]">SVG / WebP 原圖</span>
+                  {$t('import.arxivFeature')}
+                  <span class="font-mono text-[10px] text-[#fabd2f] bg-[#282828] px-1.5 py-0.2 rounded border border-[#504945]">SVG / WebP</span>
                 </span>
                 <span class="text-[#a89984] leading-relaxed">
-                  輸入任何 arXiv 論文 ID 或網址，系統自動透過 ar5iv HTML5 服務擷取官方高解析度模型架構圖、Figure 圖說與章節目錄，並自動綁定官方 PDF 供雙軌對照。
+                  {$t('import.arxivFeatureDesc')}
                 </span>
               </div>
             </div>
@@ -591,38 +594,38 @@
             <!-- arXiv ID Input -->
             <div class="flex flex-col gap-1.5">
               <label for="import-arxiv-input" class="font-mono text-[11px] text-[#d5c4a1] flex items-center justify-between">
-                <span>arXiv 論文編號或網址</span>
-                <span class="text-[#a89984]">支援格式如 1706.03762 或 https://arxiv.org/abs/...</span>
+                <span>{$t('import.arxivIdLabel')}</span>
+                <span class="text-[#a89984]">1706.03762 / https://arxiv.org/abs/...</span>
               </label>
               <div class="flex items-center gap-2">
                 <input
                   id="import-arxiv-input"
                   class="flex-1 bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] px-3 py-2 rounded-lg focus:outline-none focus:border-[#fe8019] font-mono text-xs placeholder:text-[#a89984]/50"
                   type="text"
-                  placeholder="例如: 1706.03762"
+                  placeholder="1706.03762"
                   bind:value={arxivInput}
-                  on:keydown={(e) => e.key === 'Enter' && handleFetchArxiv()}
+                  onkeydown={(e) => e.key === 'Enter' && handleFetchArxiv()}
                 />
                 <button
                   type="button"
                   class="px-2.5 py-2 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019] text-[#ebdbb2] rounded-lg transition-colors flex items-center gap-1 cursor-pointer shrink-0"
-                  title="從剪貼簿貼上"
-                  on:click={handlePasteArxiv}
+                  title={$t('import.pasteTooltip')}
+                  onclick={handlePasteArxiv}
                 >
                   <span class="material-symbols-outlined text-[15px] text-[#fe8019]">content_paste</span>
-                  <span class="font-mono text-[11px]">貼上</span>
+                  <span class="font-mono text-[11px]">{$t('import.pasteBtn')}</span>
                 </button>
                 <button
                   class="px-4 py-2 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-bold rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shrink-0"
                   disabled={isFetchingArxiv}
-                  on:click={handleFetchArxiv}
+                  onclick={handleFetchArxiv}
                 >
                   {#if isFetchingArxiv}
                     <span class="material-symbols-outlined text-[15px] animate-spin">sync</span>
-                    <span>抓取圖文中...</span>
+                    <span>{$t('import.loadingArxiv')}</span>
                   {:else}
                     <span class="material-symbols-outlined text-[15px]">download</span>
-                    <span>抓取論文</span>
+                    <span>{$t('import.fetchPaper')}</span>
                   {/if}
                 </button>
               </div>
@@ -637,28 +640,28 @@
 
             <!-- Demo Quick Chips -->
             <div class="flex flex-col gap-1.5">
-              <span class="font-mono text-[10px] text-[#a89984] uppercase tracking-wider">熱門經典論文推薦</span>
+              <span class="font-mono text-[10px] text-[#a89984] uppercase tracking-wider">{$t('import.popularArxiv')}</span>
               <div class="flex flex-wrap gap-1.5">
                 <button
                   class="px-2 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 text-[#fabd2f] hover:text-[#fe8019] rounded font-mono text-[10px] flex items-center gap-1 transition-colors cursor-pointer"
-                  on:click={() => setDemoArxiv('1706.03762')}
+                  onclick={() => setDemoArxiv('1706.03762')}
                 >
                   <span class="material-symbols-outlined text-[11px]">bolt</span>
                   1706.03762 (Attention Is All You Need)
                 </button>
                 <button
                   class="px-2 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 text-[#fabd2f] hover:text-[#fe8019] rounded font-mono text-[10px] flex items-center gap-1 transition-colors cursor-pointer"
-                  on:click={() => setDemoArxiv('1512.03385')}
+                  onclick={() => setDemoArxiv('1512.03385')}
                 >
                   <span class="material-symbols-outlined text-[11px]">bolt</span>
-                  1512.03385 (ResNet 深度殘差)
+                  1512.03385 (ResNet)
                 </button>
                 <button
                   class="px-2 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 text-[#fabd2f] hover:text-[#fe8019] rounded font-mono text-[10px] flex items-center gap-1 transition-colors cursor-pointer"
-                  on:click={() => setDemoArxiv('2005.14165')}
+                  onclick={() => setDemoArxiv('2005.14165')}
                 >
                   <span class="material-symbols-outlined text-[11px]">bolt</span>
-                  2005.14165 (GPT-3 語言模型)
+                  2005.14165 (GPT-3)
                 </button>
               </div>
             </div>
@@ -669,7 +672,7 @@
                 <div class="flex items-center justify-between text-[11px] font-mono">
                   <span class="text-[#b8bb26] font-semibold flex items-center gap-1">
                     <span class="material-symbols-outlined text-[14px]">check_circle</span>
-                    已成功解析 arXiv 圖文結構
+                    {$t('import.parsedArxivSuccess')}
                   </span>
                   <span class="text-[#fabd2f] bg-[#fabd2f]/10 border border-[#fabd2f]/40 px-1.5 py-0.2 rounded">
                     {previewArxivPaper.arxivId || 'arXiv'}
@@ -681,24 +684,24 @@
                     {previewArxivPaper.title}
                   </h4>
                   <span class="text-[11px] text-[#a89984]">
-                    {previewArxivPaper.authors.slice(0, 4).join(', ')} {previewArxivPaper.authors.length > 4 ? '等' : ''}
+                    {previewArxivPaper.authors.slice(0, 4).join(', ')} {previewArxivPaper.authors.length > 4 ? '...' : ''}
                   </span>
                 </div>
 
                 <div class="flex items-center gap-3 font-mono text-[10px] text-[#d5c4a1] pt-1 border-t border-[#3c3836]">
-                  <span>{previewArxivPaper.sections.length} 個主要章節</span>
+                  <span>{previewArxivPaper.sections.length} {$t('repo.panel.sectionsUnit')}</span>
                   <span class="text-[#fe8019] flex items-center gap-0.5">
                     <span class="material-symbols-outlined text-[12px]">picture_as_pdf</span>
-                    已關聯官方 PDF
+                    {$t('import.associatedPdf')}
                   </span>
                 </div>
 
                 <button
                   class="mt-1 w-full py-2 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
-                  on:click={handleImportArxivPaper}
+                  onclick={handleImportArxivPaper}
                 >
                   <span class="material-symbols-outlined text-[16px]">library_add</span>
-                  匯入至文獻庫並開啟研讀
+                  {$t('import.importAndStudy')}
                 </button>
               </div>
             {/if}
@@ -710,38 +713,38 @@
             <!-- Online PDF URL Input -->
             <div class="flex flex-col gap-1.5">
               <label for="import-pdf-url-input" class="font-mono text-[11px] text-[#d5c4a1] flex items-center justify-between">
-                <span>線上 PDF 網址 (URL)</span>
-                <span class="text-[#a89984]">支援 arXiv、OpenReview、各研討會與學術平台 PDF</span>
+                <span>{$t('import.onlinePdfLabel')}</span>
+                <span class="text-[#a89984]">{$t('import.onlinePdfDesc')}</span>
               </label>
               <div class="flex items-center gap-2">
                 <input
                   id="import-pdf-url-input"
                   class="flex-1 bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] px-3 py-2 rounded-lg focus:outline-none focus:border-[#fe8019] font-mono text-xs placeholder:text-[#a89984]/50"
                   type="text"
-                  placeholder="例如: https://arxiv.org/pdf/1512.03385.pdf 或任意 PDF 網址"
+                  placeholder="https://arxiv.org/pdf/... .pdf"
                   bind:value={pdfUrlInput}
-                  on:keydown={(e) => e.key === 'Enter' && handleFetchPdfUrl()}
+                  onkeydown={(e) => e.key === 'Enter' && handleFetchPdfUrl()}
                 />
                 <button
                   type="button"
                   class="px-2.5 py-2 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019] text-[#ebdbb2] rounded-lg transition-colors flex items-center gap-1 cursor-pointer shrink-0"
-                  title="從剪貼簿貼上"
-                  on:click={handlePastePdfUrl}
+                  title={$t('import.pasteTooltip')}
+                  onclick={handlePastePdfUrl}
                 >
                   <span class="material-symbols-outlined text-[15px] text-[#fe8019]">content_paste</span>
-                  <span class="font-mono text-[11px]">貼上</span>
+                  <span class="font-mono text-[11px]">{$t('import.pasteBtn')}</span>
                 </button>
                 <button
                   class="px-4 py-2 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-bold rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shrink-0"
                   disabled={isParsingPdf}
-                  on:click={handleFetchPdfUrl}
+                  onclick={handleFetchPdfUrl}
                 >
                   {#if isParsingPdf && pdfUrlInput}
                     <span class="material-symbols-outlined text-[15px] animate-spin">sync</span>
-                    <span>解析中...</span>
+                    <span>{$t('import.parsing')}</span>
                   {:else}
                     <span class="material-symbols-outlined text-[15px]">download</span>
-                    <span>下載並解析</span>
+                    <span>{$t('import.downloadAndParse')}</span>
                   {/if}
                 </button>
               </div>
@@ -750,7 +753,7 @@
             <!-- 分隔線 -->
             <div class="flex items-center gap-3 my-0.5">
               <div class="flex-1 h-px bg-[#3c3836]"></div>
-              <span class="text-[10px] font-mono text-[#a89984]">或選擇本機檔案</span>
+              <span class="text-[10px] font-mono text-[#a89984]">{$t('import.orLocalFile')}</span>
               <div class="flex-1 h-px bg-[#3c3836]"></div>
             </div>
 
@@ -758,24 +761,24 @@
             <div
               class="border-2 border-dashed {pdfDragOver ? 'border-[#fe8019] bg-[#fe8019]/10' : 'border-[#504945] hover:border-[#fe8019] bg-[#1d2021]'} p-6 rounded-xl flex flex-col items-center justify-center gap-2 text-center transition-all cursor-pointer relative"
               role="region"
-              aria-label="PDF 上傳拖曳區"
-              on:dragover|preventDefault={() => pdfDragOver = true}
-              on:dragleave|preventDefault={() => pdfDragOver = false}
-              on:drop|preventDefault={handlePdfDrop}
+              aria-label="PDF dropzone"
+              ondragover={(e) => { e.preventDefault(); pdfDragOver = true; }}
+              ondragleave={(e) => { e.preventDefault(); pdfDragOver = false; }}
+              ondrop={handlePdfDrop}
             >
               <input
                 class="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
                 type="file"
                 accept=".pdf,application/pdf"
                 disabled={isParsingPdf}
-                on:change={handlePdfInput}
+                onchange={handlePdfInput}
               />
               <span class="material-symbols-outlined text-4xl text-[#fe8019]">picture_as_pdf</span>
               <span class="text-xs font-semibold text-[#ebdbb2]">
-                {isParsingPdf ? '正在解析中，請稍候...' : '點擊選擇或直接拖曳 PDF 檔案至此'}
+                {isParsingPdf ? $t('import.pdfDropzoneParsing') : $t('import.pdfDropzone')}
               </span>
               <span class="font-mono text-[10px] text-[#a89984]">
-                支援 IEEE、NeurIPS、ACM、Nature 等雙欄與單欄論文排版格式
+                {$t('import.pdfFormatHint')}
               </span>
             </div>
 
@@ -785,7 +788,7 @@
                 <div class="flex items-center justify-between font-mono text-[11px]">
                   <span class="text-[#fe8019] font-semibold flex items-center gap-1.5">
                     <span class="material-symbols-outlined text-[15px] animate-spin">sync</span>
-                    {pdfParseStepText || '正在解析 PDF 文件...'}
+                    {pdfParseStepText || $t('import.parsing')}
                   </span>
                   <span class="text-[#fabd2f] font-bold">{pdfParsePercent}%</span>
                 </div>
@@ -808,10 +811,10 @@
                   <div class="flex items-center gap-2 pt-2 border-t border-[#fb4934]/20">
                     <button
                       class="px-2.5 py-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#504945] hover:border-[#b8bb26] text-[#b8bb26] rounded text-[11px] font-sans font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                      on:click={() => handlePdfFile(currentPdfFile)}
+                      onclick={() => handlePdfFile(currentPdfFile)}
                     >
                       <span class="material-symbols-outlined text-[13px]">refresh</span>
-                      重試本機離線解析
+                      {$t('search.reindex')}
                     </button>
                   </div>
                 {/if}
@@ -824,16 +827,16 @@
                 <div class="flex items-center justify-between text-[11px] font-mono">
                   <span class="text-[#b8bb26] font-semibold flex items-center gap-1">
                     <span class="material-symbols-outlined text-[14px]">check_circle</span>
-                    已成功解析本機文獻結構
+                    {$t('import.parsedPdfSuccess')}
                   </span>
                   <span class="text-[#8ec07c] bg-[#8ec07c]/10 border border-[#8ec07c]/40 px-1.5 py-0.2 rounded">
-                    純本機離線文獻
+                    {$t('import.offlineLocalPaper')}
                   </span>
                 </div>
 
                 <!-- Editable Title -->
                 <div class="flex flex-col gap-1">
-                  <label for="pdf-preview-title" class="font-mono text-[10px] text-[#a89984]">文獻標題 (可直接修改確認):</label>
+                  <label for="pdf-preview-title" class="font-mono text-[10px] text-[#a89984]">{$t('import.paperTitleLabel')}</label>
                   <input
                     id="pdf-preview-title"
                     type="text"
@@ -844,17 +847,17 @@
 
                 <!-- Meta row -->
                 <div class="flex items-center gap-3 font-mono text-[10px] text-[#d5c4a1] pt-1 border-t border-[#3c3836]">
-                  <span>{previewPdfPaper.sections.length} 個主要章節</span>
+                  <span>{previewPdfPaper.sections.length} {$t('repo.panel.sectionsUnit')}</span>
                   <span class="text-[#8ec07c]">{previewPdfPaper.authors.slice(0, 2).join(', ')}</span>
                   <span class="text-[#fe8019] flex items-center gap-0.5">
                     <span class="material-symbols-outlined text-[12px]">picture_as_pdf</span>
-                    已就緒原檔畫布
+                    {$t('import.pdfCanvasReady')}
                   </span>
                 </div>
 
                 <!-- Outline Preview -->
                 <div class="flex flex-col gap-1">
-                  <span class="font-mono text-[10px] text-[#a89984]">辨識之章節目錄預覽：</span>
+                  <span class="font-mono text-[10px] text-[#a89984]">{$t('import.sectionsOutlinePreview')}</span>
                   <div class="max-h-28 overflow-y-auto bg-[#282828] p-2 rounded border border-[#3c3836] flex flex-col gap-1 font-mono text-[11px] text-[#ebdbb2]">
                     {#each previewPdfPaper.sections.slice(0, 8) as sec}
                       <div class="flex items-center justify-between text-[#d5c4a1]">
@@ -863,17 +866,17 @@
                       </div>
                     {/each}
                     {#if previewPdfPaper.sections.length > 8}
-                      <span class="text-[#a89984] text-[10px] italic">... 其餘 {previewPdfPaper.sections.length - 8} 個章節</span>
+                      <span class="text-[#a89984] text-[10px] italic">... {previewPdfPaper.sections.length - 8}</span>
                     {/if}
                   </div>
                 </div>
 
                 <button
                   class="mt-1 w-full py-2 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
-                  on:click={handleImportPdfPaper}
+                  onclick={handleImportPdfPaper}
                 >
                   <span class="material-symbols-outlined text-[16px]">library_add</span>
-                  匯入至文獻庫並開啟雙語研讀
+                  {$t('import.importAndBilingual')}
                 </button>
               </div>
             {/if}
@@ -885,9 +888,9 @@
             <div class="bg-[#32302f] border border-[#3c3836] p-3 rounded-lg flex items-start gap-2.5">
               <span class="material-symbols-outlined text-[18px] text-[#8ec07c] shrink-0 mt-0.5">menu_book</span>
               <div class="flex flex-col gap-0.5">
-                <span class="font-semibold text-[#ebdbb2]">EPUB 電子書無損解析引擎</span>
+                <span class="font-semibold text-[#ebdbb2]">{$t('import.epubEngineTitle')}</span>
                 <span class="text-[#a89984] leading-relaxed">
-                  徹底告別 PDF 排版錯位與 Markdown 圖片破損！直接上傳或拖放本機 <code class="text-[#fabd2f]">.epub</code> 檔案，純前端秒級解開全書章節目錄樹，完整內嵌高畫質圖表與原始代碼縮排。
+                  {$t('import.epubEngineDesc')}
                 </span>
               </div>
             </div>
@@ -897,11 +900,11 @@
               <!-- svelte-ignore a11y-no-static-element-interactions -->
               <div
                 class="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center gap-2.5 transition-colors cursor-pointer {bookDragOver ? 'border-[#8ec07c] bg-[#8ec07c]/10' : 'border-[#504945] hover:border-[#8ec07c]/60 bg-[#1d2021]/50'}"
-                on:dragover|preventDefault={() => bookDragOver = true}
-                on:dragleave={() => bookDragOver = false}
-                on:drop={handleEpubDrop}
-                on:click={() => document.getElementById('epub-file-input')?.click()}
-                on:keydown={(e) => e.key === 'Enter' && document.getElementById('epub-file-input')?.click()}
+                ondragover={(e) => { e.preventDefault(); bookDragOver = true; }}
+                ondragleave={() => bookDragOver = false}
+                ondrop={handleEpubDrop}
+                onclick={() => document.getElementById('epub-file-input')?.click()}
+                onkeydown={(e) => e.key === 'Enter' && document.getElementById('epub-file-input')?.click()}
                 tabindex="0"
                 role="button"
               >
@@ -910,12 +913,12 @@
                   type="file"
                   accept=".epub"
                   class="hidden"
-                  on:change={handleEpubFileInput}
+                  onchange={handleEpubFileInput}
                 />
                 <span class="material-symbols-outlined text-[36px] text-[#8ec07c]">file_open</span>
                 <div class="flex flex-col items-center gap-0.5 text-center">
-                  <span class="font-semibold text-[#ebdbb2] text-sm">拖曳 .epub 檔案至此處，或點擊選擇本機檔案</span>
-                  <span class="text-[#a89984] text-[11px]">純前端本地秒級解析 · 完整提取全書章節、段落、代碼與高畫質圖表</span>
+                  <span class="font-semibold text-[#ebdbb2] text-sm">{$t('import.epubDropzone')}</span>
+                  <span class="text-[#a89984] text-[11px]">{$t('import.epubDropzoneHint')}</span>
                 </div>
               </div>
             </div>
@@ -926,7 +929,7 @@
                 <div class="flex items-center justify-between font-mono text-[11px]">
                   <span class="text-[#8ec07c] font-semibold flex items-center gap-1.5">
                     <span class="material-symbols-outlined text-[14px] animate-spin">sync</span>
-                    {bookParseStepText || '正在解析書籍結構...'}
+                    {bookParseStepText || $t('import.parsing')}
                   </span>
                   <span class="text-[#fabd2f] font-bold">{bookParsePercent}%</span>
                 </div>
@@ -951,36 +954,36 @@
                   <div class="flex flex-col gap-1">
                     <div class="flex items-center gap-2">
                       <span class="px-2 py-0.5 bg-[#8ec07c]/20 text-[#8ec07c] font-mono text-[10px] font-bold rounded">
-                        EPUB 解析完成
+                        {$t('import.epubParseSuccess')}
                       </span>
                     </div>
                     <h4 class="text-sm font-bold text-[#ebdbb2] leading-snug">{previewBookPaper.title}</h4>
                     <span class="text-[#a89984] text-[11px] font-mono">
-                      作者：{previewBookPaper.authors?.join(', ') || '技術作者'} · 來源：{previewBookPaper.venue}
+                      {previewBookPaper.authors?.join(', ') || ''} · {previewBookPaper.venue}
                     </span>
                   </div>
                 </div>
 
                 <div class="grid grid-cols-3 gap-2 bg-[#282828] p-2.5 rounded border border-[#3c3836] font-mono text-center">
                   <div class="flex flex-col">
-                    <span class="text-[10px] text-[#a89984]">收錄章節</span>
-                    <span class="text-xs font-bold text-[#8ec07c]">{previewBookPaper.sections.length} 章</span>
+                    <span class="text-[10px] text-[#a89984]">{$t('repo.inspector.sectionsLabel')}</span>
+                    <span class="text-xs font-bold text-[#8ec07c]">{previewBookPaper.sections.length} {$t('repo.inspector.sectionsUnit')}</span>
                   </div>
                   <div class="flex flex-col">
-                    <span class="text-[10px] text-[#a89984]">總段落數</span>
+                    <span class="text-[10px] text-[#a89984]">{$t('import.paragraphsCount')}</span>
                     <span class="text-xs font-bold text-[#fabd2f]">
-                      {previewBookPaper.sections.reduce((acc, s) => acc + s.paragraphs.length, 0)} 段
+                      {previewBookPaper.sections.reduce((acc, s) => acc + s.paragraphs.length, 0)}
                     </span>
                   </div>
                   <div class="flex flex-col">
-                    <span class="text-[10px] text-[#a89984]">高畫質圖表</span>
-                    <span class="text-xs font-bold text-[#b8bb26]">{previewBookPaper.figureList?.length || 0} 張</span>
+                    <span class="text-[10px] text-[#a89984]">{$t('import.hdFigures')}</span>
+                    <span class="text-xs font-bold text-[#b8bb26]">{previewBookPaper.figureList?.length || 0} {$t('import.hdFiguresUnit')}</span>
                   </div>
                 </div>
 
                 <!-- 目錄大綱前 8 章預覽 -->
                 <div class="flex flex-col gap-1 font-mono text-[11px]">
-                  <span class="text-[#a89984] text-[10px]">章節目錄預覽：</span>
+                  <span class="text-[#a89984] text-[10px]">{$t('import.sectionsOutlinePreview')}</span>
                   <div class="max-h-28 overflow-y-auto flex flex-col gap-1 bg-[#282828]/60 p-2 rounded border border-[#3c3836]">
                     {#each previewBookPaper.sections.slice(0, 8) as sec, idx}
                       <div class="flex items-center gap-1.5 text-[#ebdbb2] text-[10px] truncate">
@@ -989,17 +992,17 @@
                       </div>
                     {/each}
                     {#if previewBookPaper.sections.length > 8}
-                      <span class="text-[#a89984] text-[9px] italic">... 還有 {previewBookPaper.sections.length - 8} 個章節</span>
+                      <span class="text-[#a89984] text-[9px] italic">... {previewBookPaper.sections.length - 8}</span>
                     {/if}
                   </div>
                 </div>
 
                 <button
                   class="mt-1 w-full py-2 bg-[#8ec07c] hover:bg-[#b8bb26] text-[#1d2021] font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
-                  on:click={handleImportBookPaper}
+                  onclick={handleImportBookPaper}
                 >
                   <span class="material-symbols-outlined text-[16px]">library_add</span>
-                  收錄全書至文獻庫並開啟閱讀
+                  {$t('import.importFullBook')}
                 </button>
               </div>
             {/if}
@@ -1011,45 +1014,45 @@
             <div class="bg-[#32302f] border border-[#3c3836] p-3 rounded-lg flex items-start gap-2.5">
               <span class="material-symbols-outlined text-[18px] text-[#8ec07c] shrink-0 mt-0.5">smart_toy</span>
               <div class="flex flex-col gap-0.5">
-                <span class="font-semibold text-[#ebdbb2]">智慧 Reader 網頁解析引擎</span>
+                <span class="font-semibold text-[#ebdbb2]">{$t('import.webEngineTitle')}</span>
                 <span class="text-[#a89984] leading-relaxed">
-                  輸入任何技術專文或研究部落格網址，系統自動萃取標題、過濾雜訊，並依標題切分章節目錄與段落。
+                  {$t('import.webEngineDesc')}
                 </span>
               </div>
             </div>
 
             <!-- URL Input Bar -->
             <div class="flex flex-col gap-1.5">
-              <label for="import-web-url" class="font-mono text-[11px] text-[#d5c4a1]">文章或論文網址 (URL)</label>
+              <label for="import-web-url" class="font-mono text-[11px] text-[#d5c4a1]">{$t('import.webUrlLabel')}</label>
               <div class="flex items-center gap-2">
                 <input
                   id="import-web-url"
                   class="flex-1 bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] px-3 py-2 rounded-lg focus:outline-none focus:border-[#fe8019] font-mono text-xs placeholder:text-[#a89984]/50"
                   type="url"
-                  placeholder="https://transformer-circuits.pub/... 或 https://arxiv.org/html/..."
+                  placeholder="https://..."
                   bind:value={webUrl}
-                  on:keydown={(e) => e.key === 'Enter' && handleFetchWeb()}
+                  onkeydown={(e) => e.key === 'Enter' && handleFetchWeb()}
                 />
                 <button
                   type="button"
                   class="px-2.5 py-2 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019] text-[#ebdbb2] rounded-lg transition-colors flex items-center gap-1 cursor-pointer shrink-0"
-                  title="從剪貼簿貼上網址"
-                  on:click={handlePasteWebUrl}
+                  title={$t('import.pasteTooltip')}
+                  onclick={handlePasteWebUrl}
                 >
                   <span class="material-symbols-outlined text-[15px] text-[#fe8019]">content_paste</span>
-                  <span class="font-mono text-[11px]">貼上</span>
+                  <span class="font-mono text-[11px]">{$t('import.pasteBtn')}</span>
                 </button>
                 <button
                   class="px-4 py-2 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold rounded-lg flex items-center gap-1.5 transition-colors shrink-0 disabled:opacity-50"
                   disabled={isFetchingWeb}
-                  on:click={handleFetchWeb}
+                  onclick={handleFetchWeb}
                 >
                   {#if isFetchingWeb}
                     <span class="material-symbols-outlined text-[15px] animate-spin">refresh</span>
-                    <span>抓取解析中...</span>
+                    <span>{$t('import.webFetching')}</span>
                   {:else}
                     <span class="material-symbols-outlined text-[15px]">download</span>
-                    <span>抓取並解析</span>
+                    <span>{$t('import.webFetchAndParse')}</span>
                   {/if}
                 </button>
               </div>
@@ -1060,16 +1063,16 @@
 
             <!-- Sample URL Recommendations -->
             <div class="flex flex-wrap items-center gap-1.5 pt-1">
-              <span class="font-mono text-[10px] text-[#a89984]">推薦示範網址：</span>
+              <span class="font-mono text-[10px] text-[#a89984]">{$t('import.recommendUrls')}</span>
               <button
                 class="font-mono text-[10px] bg-[#1d2021] hover:bg-[#32302f] border border-[#3c3836] text-[#fabd2f] px-2 py-0.5 rounded transition-colors"
-                on:click={() => setDemoUrl('https://transformer-circuits.pub/2021/framework/index.html')}
+                onclick={() => setDemoUrl('https://transformer-circuits.pub/2021/framework/index.html')}
               >
-                Anthropic Circuits 專文
+                Anthropic Circuits
               </button>
               <button
                 class="font-mono text-[10px] bg-[#1d2021] hover:bg-[#32302f] border border-[#3c3836] text-[#8ec07c] px-2 py-0.5 rounded transition-colors"
-                on:click={() => setDemoUrl('https://distill.pub/2016/augmented-rnns/')}
+                onclick={() => setDemoUrl('https://distill.pub/2016/augmented-rnns/')}
               >
                 Distill: Augmented RNNs
               </button>
@@ -1080,10 +1083,10 @@
               <div class="mt-2 bg-[#1d2021] border border-[#504945] p-3.5 rounded-xl flex flex-col gap-2.5">
                 <div class="flex items-center justify-between">
                   <span class="font-mono text-[10px] bg-[#8ec07c]/15 text-[#8ec07c] border border-[#8ec07c]/30 px-1.5 py-0.5 rounded font-semibold uppercase">
-                    解析完成 · Web Article
+                    {$t('import.webParseSuccess')}
                   </span>
                   <span class="font-mono text-[10px] text-[#a89984]">
-                    已切分 {previewWebPaper.sections.length} 個章節大綱
+                    {$t('import.sectionsSplit').replace('{count}', String(previewWebPaper.sections.length))}
                   </span>
                 </div>
 
@@ -1097,14 +1100,14 @@
 
                 <div class="pt-2 border-t border-[#3c3836] flex items-center justify-between">
                   <span class="font-mono text-[10px] text-[#a89984] truncate max-w-[320px]">
-                    來源：{previewWebPaper.sourceUrl}
+                    {previewWebPaper.sourceUrl}
                   </span>
                   <button
                     class="px-3.5 py-1.5 bg-[#b8bb26] hover:bg-[#98971a] text-[#1d2021] font-semibold rounded-lg flex items-center gap-1 transition-colors"
-                    on:click={handleImportWebArticle}
+                    onclick={handleImportWebArticle}
                   >
                     <span class="material-symbols-outlined text-[15px]">auto_stories</span>
-                    立即載入閱讀
+                    {$t('import.loadStudy')}
                   </button>
                 </div>
               </div>
@@ -1115,15 +1118,15 @@
         {:else if activeTab === 'preset'}
           <div class="flex flex-col gap-3">
             <div class="flex items-center justify-between flex-wrap gap-2 pb-1 border-b border-[#3c3836]">
-              <span class="font-mono text-[11px] text-[#a89984]">點擊任一手冊或經典文獻重新載入 (Fallback 恢復)：</span>
+              <span class="font-mono text-[11px] text-[#a89984]">{$t('import.fallbackNotice')}</span>
               <button
                 type="button"
                 class="px-2.5 py-1 bg-[#32302f] hover:bg-[#3c3836] border border-[#504945] hover:border-[#fe8019]/60 text-[#fabd2f] text-xs font-mono rounded flex items-center gap-1.5 transition-colors cursor-pointer"
-                on:click={handleRestoreAllPresets}
-                title="一鍵將全部 4 篇預設核心論文與手冊重新補齊至本地文獻庫"
+                onclick={handleRestoreAllPresets}
+                title={$t('import.restoreTooltip')}
               >
                 <span class="material-symbols-outlined text-[14px]">history</span>
-                <span>一鍵還原全部核心文獻</span>
+                <span>{$t('import.restoreCore')}</span>
               </button>
             </div>
 
@@ -1134,13 +1137,13 @@
                   <span class="font-mono text-[10px] bg-[#fe8019]/20 border border-[#fe8019]/50 text-[#fe8019] px-2 py-0.5 rounded font-semibold flex items-center gap-1">
                     <span class="material-symbols-outlined text-[12px]">menu_book</span> {userManualDocument.venue}
                   </span>
-                  <span class="font-mono text-[10px] text-[#fabd2f] font-semibold">★ 官方說明書</span>
+                  <span class="font-mono text-[10px] text-[#fabd2f] font-semibold">{$t('import.officialManual')}</span>
                 </div>
                 <button
                   class="px-3 py-1 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-bold rounded text-xs transition-colors flex items-center gap-1 shadow-sm"
-                  on:click={() => handleSelectPreset(userManualDocument)}
+                  onclick={() => handleSelectPreset(userManualDocument)}
                 >
-                  <span class="material-symbols-outlined text-[13px]">arrow_forward</span> 載入研讀
+                  <span class="material-symbols-outlined text-[13px]">arrow_forward</span> {$t('import.loadAndRead')}
                 </button>
               </div>
 
@@ -1166,9 +1169,9 @@
                 </div>
                 <button
                   class="px-3 py-1 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold rounded text-xs transition-colors flex items-center gap-1"
-                  on:click={() => handleSelectPreset(attentionPaper)}
+                  onclick={() => handleSelectPreset(attentionPaper)}
                 >
-                  <span class="material-symbols-outlined text-[13px]">arrow_forward</span> 載入研讀
+                  <span class="material-symbols-outlined text-[13px]">arrow_forward</span> {$t('import.loadAndRead')}
                 </button>
               </div>
 
@@ -1194,9 +1197,9 @@
                 </div>
                 <button
                   class="px-3 py-1 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold rounded text-xs transition-colors flex items-center gap-1"
-                  on:click={() => handleSelectPreset(resnetPaper)}
+                  onclick={() => handleSelectPreset(resnetPaper)}
                 >
-                  <span class="material-symbols-outlined text-[13px]">arrow_forward</span> 載入研讀
+                  <span class="material-symbols-outlined text-[13px]">arrow_forward</span> {$t('import.loadAndRead')}
                 </button>
               </div>
 
@@ -1222,9 +1225,9 @@
                 </div>
                 <button
                   class="px-3 py-1 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold rounded text-xs transition-colors flex items-center gap-1"
-                  on:click={() => handleSelectPreset(anthropicCircuitsWeb)}
+                  onclick={() => handleSelectPreset(anthropicCircuitsWeb)}
                 >
-                  <span class="material-symbols-outlined text-[13px]">arrow_forward</span> 載入研讀
+                  <span class="material-symbols-outlined text-[13px]">arrow_forward</span> {$t('import.loadAndRead')}
                 </button>
               </div>
 
@@ -1245,22 +1248,22 @@
           <div class="flex flex-col gap-3">
             <div class="flex flex-col gap-1">
               <div class="flex items-center justify-between">
-                <label for="import-paste-title" class="font-mono text-[11px] text-[#d5c4a1]">文獻標題 (Title)</label>
+                <label for="import-paste-title" class="font-mono text-[11px] text-[#d5c4a1]">{$t('import.pasteTitleLabel')}</label>
                 <button
                   type="button"
                   class="text-[10px] font-mono text-[#a89984] hover:text-[#ebdbb2] flex items-center gap-0.5 cursor-pointer transition-colors"
-                  title="貼上剪貼簿內容至標題"
-                  on:click={handlePasteTitle}
+                  title={$t('import.pasteTitleBtn')}
+                  onclick={handlePasteTitle}
                 >
                   <span class="material-symbols-outlined text-[12px] text-[#fe8019]">content_paste</span>
-                  <span>貼上標題</span>
+                  <span>{$t('import.pasteTitleBtn')}</span>
                 </button>
               </div>
               <input
                 id="import-paste-title"
                 class="w-full bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] px-3 py-2 rounded-lg focus:outline-none focus:border-[#fe8019] text-xs"
                 type="text"
-                placeholder="例如：Self-Attention Mechanism Explained"
+                placeholder="Self-Attention Explained"
                 bind:value={pasteTitle}
               />
             </div>
@@ -1268,31 +1271,31 @@
             <div class="flex flex-col gap-1">
               <div class="flex items-center justify-between flex-wrap gap-2">
                 <div class="flex items-center gap-2">
-                  <label for="import-paste-content" class="font-mono text-[11px] text-[#d5c4a1]">正文內容或 Markdown</label>
-                  <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono text-[#b8bb26] bg-[#b8bb26]/10 px-1.5 py-0.5 rounded border border-[#b8bb26]/30 hover:bg-[#b8bb26]/20 transition-colors" title="自動將 PDF 複製之硬換行、斷詞連字號 (如 Sys-tem) 與連字分離修復為乾淨段落">
+                  <label for="import-paste-content" class="font-mono text-[11px] text-[#d5c4a1]">{$t('import.pasteContentLabel')}</label>
+                  <label class="flex items-center gap-1 cursor-pointer text-[10px] font-mono text-[#b8bb26] bg-[#b8bb26]/10 px-1.5 py-0.5 rounded border border-[#b8bb26]/30 hover:bg-[#b8bb26]/20 transition-colors" title={$t('import.sanitizeToggleTooltip')}>
                     <input type="checkbox" bind:checked={autoSanitizePaste} class="rounded text-[#fe8019] focus:ring-0 cursor-pointer w-3 h-3" />
-                    <span>自動淨化 PDF 換行與連字號</span>
+                    <span>{$t('import.sanitizeToggle')}</span>
                   </label>
                 </div>
                 <div class="flex items-center gap-2">
                   <button
                     type="button"
                     class="text-[10px] font-mono text-[#ebdbb2] bg-[#32302f] hover:bg-[#3c3836] border border-[#504945] hover:border-[#fe8019] px-2 py-0.5 rounded flex items-center gap-1 transition-colors cursor-pointer"
-                    title="從剪貼簿貼上完整文章內容"
-                    on:click={handlePasteContent}
+                    title={$t('import.pasteContentBtn')}
+                    onclick={handlePasteContent}
                   >
                     <span class="material-symbols-outlined text-[13px] text-[#fe8019]">content_paste_go</span>
-                    <span>貼上剪貼簿內容</span>
+                    <span>{$t('import.pasteContentBtn')}</span>
                   </button>
                   {#if pasteContent.trim()}
                     <button
                       type="button"
                       class="text-[10px] font-mono text-[#fe8019] hover:text-[#fabd2f] flex items-center gap-0.5 hover:underline cursor-pointer"
-                      on:click={handleCleanPasteText}
-                      title="立即在文字框內預覽淨化後的排版"
+                      onclick={handleCleanPasteText}
+                      title={$t('import.cleanPreviewTooltip')}
                     >
                       <span class="material-symbols-outlined text-[13px]">cleaning_services</span>
-                      預先淨化文字框
+                      {$t('import.cleanPreview')}
                     </button>
                   {/if}
                 </div>
@@ -1311,10 +1314,10 @@
 
             <button
               class="w-full py-2 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1.5"
-              on:click={handleParsePaste}
+              onclick={handleParsePaste}
             >
               <span class="material-symbols-outlined text-[15px]">auto_fix_high</span>
-              智能解析並開啟研讀
+              {$t('import.parseAndStudy')}
             </button>
           </div>
 
@@ -1326,11 +1329,11 @@
                 class="absolute inset-0 opacity-0 cursor-pointer"
                 type="file"
                 accept=".json"
-                on:change={handleFileUpload}
+                onchange={handleFileUpload}
               />
               <span class="material-symbols-outlined text-3xl text-[#fabd2f]">upload_file</span>
-              <span class="text-xs font-semibold text-[#ebdbb2]">點擊選擇或拖曳 MUGEN Paper JSON 檔案至此</span>
-              <span class="font-mono text-[10px] text-[#a89984]">符合標準文獻 Schema（包含章節、段落與伴讀知識庫）</span>
+              <span class="text-xs font-semibold text-[#ebdbb2]">{$t('import.jsonDropzone')}</span>
+              <span class="font-mono text-[10px] text-[#a89984]">{$t('import.jsonSchemaHint')}</span>
             </div>
 
             {#if uploadError}
@@ -1341,13 +1344,13 @@
               <div class="bg-[#1d2021] border border-[#b8bb26]/50 p-3 rounded-lg flex items-center justify-between">
                 <div class="flex flex-col">
                   <span class="font-semibold text-[#ebdbb2] text-xs">{previewUploadPaper.title}</span>
-                  <span class="font-mono text-[10px] text-[#a89984]">{previewUploadPaper.sections.length} 個章節</span>
+                  <span class="font-mono text-[10px] text-[#a89984]">{previewUploadPaper.sections.length} {$t('repo.panel.sectionsUnit')}</span>
                 </div>
                 <button
                   class="px-3.5 py-1.5 bg-[#b8bb26] hover:bg-[#98971a] text-[#1d2021] font-semibold rounded text-xs transition-colors"
-                  on:click={handleImportUploadedPaper}
+                  onclick={handleImportUploadedPaper}
                 >
-                  匯入至文獻庫
+                  {$t('import.importToLibrary')}
                 </button>
               </div>
             {/if}
@@ -1359,13 +1362,13 @@
       <!-- Modal Footer -->
       <div class="p-3.5 bg-[#1d2021] border-t border-[#3c3836] flex items-center justify-between">
         <span class="font-mono text-[10px] text-[#a89984]">
-          本機文獻庫目前已收錄 {currentLibrary.length} 篇作品
+          {$t('import.currentCount').replace('{count}', String(currentLibrary.length))}
         </span>
         <button
           class="px-4 py-1.5 rounded-lg text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f] transition-colors"
-          on:click={close}
+          onclick={close}
         >
-          關閉
+          {$t('import.close')}
         </button>
       </div>
 

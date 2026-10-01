@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { flowStore, type FlowTelemetry } from '../../stores/flowStore';
+  import { t } from '../../stores/localeStore';
 
   interface Props {
     isOpen?: boolean;
@@ -32,14 +33,17 @@
   }
 
   function formatTime(seconds: number): string {
-    if (seconds <= 0) return '0 秒';
+    const sUnit = $t('flowCockpit.secondUnit');
+    const mUnit = $t('flowCockpit.minuteUnit');
+    const hUnit = $t('flowCockpit.hourUnit');
+    if (seconds <= 0) return `0 ${sUnit}`;
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
-    if (m === 0) return `${s} 秒`;
-    if (m < 60) return `${m} 分 ${s > 0 ? s + ' 秒' : ''}`;
+    if (m === 0) return `${s} ${sUnit}`;
+    if (m < 60) return `${m} ${mUnit} ${s > 0 ? s + ' ' + sUnit : ''}`;
     const h = Math.floor(m / 60);
     const remM = m % 60;
-    return `${h} 小時 ${remM > 0 ? remM + ' 分' : ''}`;
+    return `${h} ${hUnit} ${remM > 0 ? remM + ' ' + mUnit : ''}`;
   }
 
   function handlePacerSlider(e: Event) {
@@ -58,7 +62,7 @@
   }
 
   function resetStats() {
-    if (confirm('確定要重設本篇論文的閱讀心流速率與專注時長統計嗎？')) {
+    if (confirm($t('flowCockpit.resetConfirm'))) {
       flowStore.resetSessionStats();
     }
   }
@@ -96,13 +100,13 @@
           </div>
           <div>
             <h2 class="text-base font-semibold text-[#ebdbb2] flex items-center gap-2">
-              閱讀心流遙測儀表板
+              {$t('flowCockpit.title')}
               <span class="text-[10px] font-mono text-[#fabd2f] bg-[#32302f] px-2 py-0.5 rounded border border-[#504945]">
                 Saccadic Flow Telemetry
               </span>
             </h2>
             <p class="text-[11px] text-[#a89984]">
-              實時認知負載、眼動速率與智能節奏引導監測
+              {$t('flowCockpit.subtitle')}
             </p>
           </div>
         </div>
@@ -110,7 +114,7 @@
           type="button"
           class="p-1.5 text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f] rounded-lg transition-colors cursor-pointer"
           onclick={close}
-          title="關閉 (Esc)"
+          title={$t('flowCockpit.close')}
         >
           <span class="material-symbols-outlined text-[20px]">close</span>
         </button>
@@ -140,17 +144,17 @@
                 {#if telemetry.calculationMode === 'cursor'}
                   <span class="text-[11px] text-[#fe8019] bg-[#fe8019]/15 border border-[#fe8019]/40 px-2 py-0.5 rounded flex items-center gap-1 font-mono">
                     <span class="material-symbols-outlined text-[12px]">ads_click</span>
-                    游標導向精準遙測
+                    {$t('flowCockpit.cursorPacing')}
                   </span>
                 {:else}
                   <span class="text-[11px] text-[#8ec07c] bg-[#8ec07c]/15 border border-[#8ec07c]/40 px-2 py-0.5 rounded flex items-center gap-1 font-mono">
                     <span class="material-symbols-outlined text-[12px]">view_stream</span>
-                    頁重視窗滾動遙測
+                    {$t('flowCockpit.scrollPacing')}
                   </span>
                 {/if}
                 {#if telemetry.isPaused}
                   <span class="text-[11px] text-[#fe8019] bg-[#fe8019]/10 border border-[#fe8019]/30 px-1.5 py-0.2 rounded">
-                    閒置暫停
+                    {$t('flowCockpit.idlePaused')}
                   </span>
                 {/if}
               </div>
@@ -162,13 +166,13 @@
 
           <!-- Focus Score Capsule -->
           <div class="flex flex-col items-center justify-center px-4 py-3 bg-[#282828] border border-[#3c3836] rounded-xl text-center shrink-0 min-w-[110px]">
-            <span class="text-[10px] text-[#a89984] font-mono uppercase tracking-wider">心流專注指數</span>
+            <span class="text-[10px] text-[#a89984] font-mono uppercase tracking-wider">{$t('flowCockpit.focusScore')}</span>
             <span class="text-2xl font-mono font-bold text-[#fabd2f] mt-0.5">
               {telemetry.focusScore}<span class="text-xs text-[#a89984] font-normal">/100</span>
             </span>
             <span class="text-[10px] text-[#8ec07c] mt-0.5 flex items-center gap-0.5">
               <span class="material-symbols-outlined text-[12px]">verified</span>
-              {telemetry.focusScore >= 90 ? '極致專注' : telemetry.focusScore >= 75 ? '平穩吸收' : '低頻沉思'}
+              {telemetry.focusScore >= 90 ? $t('flowCockpit.focusDeep') : telemetry.focusScore >= 75 ? $t('flowCockpit.focusSteady') : $t('flowCockpit.focusLight')}
             </span>
           </div>
         </div>
@@ -178,23 +182,23 @@
           <div class="flex items-center justify-between text-xs font-mono text-[#a89984]">
             <span class="text-[#ebdbb2] font-semibold flex items-center gap-1">
               <span class="material-symbols-outlined text-[14px] text-[#fe8019]">tune</span>
-              認知心流光譜分佈 (Flow Spectrum)
+              {$t('flowCockpit.spectrumTitle')}
             </span>
-            <span>即時座標: {telemetry.currentWpm} WPM</span>
+            <span>{$t('flowCockpit.currentCoord', { wpm: telemetry.currentWpm })}</span>
           </div>
 
           <!-- Spectrum Bar Container -->
           <div class="relative pt-3 pb-1">
             <!-- Spectrum Multi-tone track -->
             <div class="h-3.5 w-full rounded-full flex overflow-hidden border border-[#504945] p-0.5 bg-[#1d2021] gap-0.5">
-              <div class="flex-1 bg-[#a89984]/30 rounded-l-full" title="視線停頓 (<60 wpm)"></div>
-              <div class="flex-2 bg-[#83a598]/40" title="深度思辨 (60~190 wpm)"></div>
-              <div class="flex-3 bg-[#fe8019]/60 relative" title="沉浸心流 (190~320 wpm - 黃金區間)">
+              <div class="flex-1 bg-[#a89984]/30 rounded-l-full" title={$t('flowCockpit.spectrumPaused')}></div>
+              <div class="flex-2 bg-[#83a598]/40" title={$t('flowCockpit.spectrumDeep')}></div>
+              <div class="flex-3 bg-[#fe8019]/60 relative" title={$t('flowCockpit.spectrumFlow')}>
                 <span class="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-[#ebdbb2] uppercase tracking-wider opacity-80">
                   Sweet Spot
                 </span>
               </div>
-              <div class="flex-2 bg-[#8ec07c]/40 rounded-r-full" title="飛速掃讀 (>320 wpm)"></div>
+              <div class="flex-2 bg-[#8ec07c]/40 rounded-r-full" title={$t('flowCockpit.spectrumSkim')}></div>
             </div>
 
             <!-- Position Pointer Indicator -->
@@ -207,10 +211,10 @@
 
             <!-- Spectrum Labels -->
             <div class="flex justify-between items-center text-[10px] font-mono text-[#a89984] pt-2 px-1">
-              <span>⏸️ 停頓 (&lt;60)</span>
-              <span>🧠 深度思辨 (60-190)</span>
-              <span class="text-[#fabd2f] font-semibold">⚡ 沉浸心流 (190-320)</span>
-              <span>🚀 飛速掃讀 (&gt;320)</span>
+              <span>{$t('flowCockpit.pausedLabel')}</span>
+              <span>{$t('flowCockpit.deepLabel')}</span>
+              <span class="text-[#fabd2f] font-semibold">{$t('flowCockpit.flowLabel')}</span>
+              <span>{$t('flowCockpit.skimLabel')}</span>
             </div>
           </div>
         </div>
@@ -219,38 +223,38 @@
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <!-- Average WPM -->
           <div class="p-3 bg-[#1d2021] border border-[#3c3836] rounded-xl flex flex-col">
-            <span class="text-[10px] text-[#a89984] font-mono uppercase">本次研讀均速</span>
+            <span class="text-[10px] text-[#a89984] font-mono uppercase">{$t('flowCockpit.sessionAvgWpm')}</span>
             <span class="text-lg font-mono font-bold text-[#b8bb26] mt-1">
               {telemetry.averageWpm} <span class="text-[10px] text-[#a89984] font-normal">wpm</span>
             </span>
-            <span class="text-[10px] text-[#a89984] mt-0.5">基準預設: {telemetry.baselineWpm}</span>
+            <span class="text-[10px] text-[#a89984] mt-0.5">{$t('flowCockpit.baselineDefault', { wpm: telemetry.baselineWpm })}</span>
           </div>
 
           <!-- Active Focus Time -->
           <div class="p-3 bg-[#1d2021] border border-[#3c3836] rounded-xl flex flex-col">
-            <span class="text-[10px] text-[#a89984] font-mono uppercase">有效專注時長</span>
+            <span class="text-[10px] text-[#a89984] font-mono uppercase">{$t('flowCockpit.effectiveTime')}</span>
             <span class="text-lg font-mono font-bold text-[#fabd2f] mt-1 truncate">
               {formatTime(telemetry.activeSeconds)}
             </span>
-            <span class="text-[10px] text-[#a89984] mt-0.5">自動排除閒置</span>
+            <span class="text-[10px] text-[#a89984] mt-0.5">{$t('flowCockpit.autoExcludeIdle')}</span>
           </div>
 
           <!-- Est. Remaining Time -->
           <div class="p-3 bg-[#1d2021] border border-[#3c3836] rounded-xl flex flex-col">
-            <span class="text-[10px] text-[#a89984] font-mono uppercase">預估剩餘時間</span>
+            <span class="text-[10px] text-[#a89984] font-mono uppercase">{$t('flowCockpit.estRemaining')}</span>
             <span class="text-lg font-mono font-bold text-[#fe8019] mt-1 truncate">
               {formatTime(telemetry.estimatedTimeRemainingSec)}
             </span>
-            <span class="text-[10px] text-[#a89984] mt-0.5">以當前均速推估</span>
+            <span class="text-[10px] text-[#a89984] mt-0.5">{$t('flowCockpit.estBasedOnAvg')}</span>
           </div>
 
           <!-- Words Read -->
           <div class="p-3 bg-[#1d2021] border border-[#3c3836] rounded-xl flex flex-col">
-            <span class="text-[10px] text-[#a89984] font-mono uppercase">本次研讀詞數</span>
+            <span class="text-[10px] text-[#a89984] font-mono uppercase">{$t('flowCockpit.sessionWords')}</span>
             <span class="text-lg font-mono font-bold text-[#8ec07c] mt-1">
-              {telemetry.sessionWordsRead.toLocaleString()} <span class="text-[10px] text-[#a89984] font-normal">詞</span>
+              {telemetry.sessionWordsRead.toLocaleString()} <span class="text-[10px] text-[#a89984] font-normal">{$t('flowCockpit.wordsUnit')}</span>
             </span>
-            <span class="text-[10px] text-[#a89984] mt-0.5">總字詞: ~{telemetry.totalPaperWords.toLocaleString()}</span>
+            <span class="text-[10px] text-[#a89984] mt-0.5">{$t('flowCockpit.totalWords', { words: telemetry.totalPaperWords.toLocaleString() })}</span>
           </div>
         </div>
 
@@ -260,8 +264,8 @@
             <div class="flex items-center gap-2">
               <span class="material-symbols-outlined text-[18px] text-[#fe8019]">auto_read_play</span>
               <div>
-                <h4 class="text-xs font-semibold text-[#ebdbb2]">智能視線節奏導引 (Saccadic Flow Pacer)</h4>
-                <p class="text-[10px] text-[#a89984]">在當前聚焦段落提供勻速前進的微光引導線，防止視線游移與跳行</p>
+                <h4 class="text-xs font-semibold text-[#ebdbb2]">{$t('flowCockpit.pacerTitle')}</h4>
+                <p class="text-[10px] text-[#a89984]">{$t('flowCockpit.pacerDesc')}</p>
               </div>
             </div>
             <!-- Switch Button -->
@@ -271,14 +275,14 @@
               onclick={togglePacer}
             >
               <span class="w-2 h-2 rounded-full {telemetry.isPacerActive ? 'bg-[#fe8019] animate-ping' : 'bg-[#504945]'}"></span>
-              <span>{telemetry.isPacerActive ? '導引進行中' : '已關閉'}</span>
+              <span>{telemetry.isPacerActive ? $t('flowCockpit.pacerActive') : $t('flowCockpit.pacerInactive')}</span>
             </button>
           </div>
 
           <!-- Target Pacing Slider -->
           <div class="space-y-2 pt-1">
             <div class="flex justify-between items-center text-[11px] font-mono">
-              <span class="text-[#a89984]">設定目標巡航速率:</span>
+              <span class="text-[#a89984]">{$t('flowCockpit.targetSpeed')}</span>
               <span class="text-[#fabd2f] font-bold text-sm">{telemetry.targetPacingWpm} WPM</span>
             </div>
             <input
@@ -297,21 +301,21 @@
                 class="flex-1 py-1 px-2 text-[10px] font-mono rounded bg-[#282828] hover:bg-[#32302f] border border-[#504945] text-[#d5c4a1] transition-colors cursor-pointer {telemetry.targetPacingWpm === 180 ? 'border-[#83a598] text-[#83a598]' : ''}"
                 onclick={() => setPresetPacing(180)}
               >
-                180 慢速精讀
+                {$t('flowCockpit.speedSlow')}
               </button>
               <button
                 type="button"
                 class="flex-1 py-1 px-2 text-[10px] font-mono rounded bg-[#282828] hover:bg-[#32302f] border border-[#504945] text-[#d5c4a1] transition-colors cursor-pointer {telemetry.targetPacingWpm === 260 ? 'border-[#fe8019] text-[#fe8019]' : ''}"
                 onclick={() => setPresetPacing(260)}
               >
-                260 標準心流
+                {$t('flowCockpit.speedNormal')}
               </button>
               <button
                 type="button"
                 class="flex-1 py-1 px-2 text-[10px] font-mono rounded bg-[#282828] hover:bg-[#32302f] border border-[#504945] text-[#d5c4a1] transition-colors cursor-pointer {telemetry.targetPacingWpm === 360 ? 'border-[#8ec07c] text-[#8ec07c]' : ''}"
                 onclick={() => setPresetPacing(360)}
               >
-                360 飛速掃讀
+                {$t('flowCockpit.speedFast')}
               </button>
             </div>
           </div>
@@ -324,10 +328,10 @@
           type="button"
           class="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[#a89984] hover:text-[#fb4934] hover:bg-[#32302f] rounded border border-transparent hover:border-[#504945] transition-colors cursor-pointer"
           onclick={resetStats}
-          title="重設本篇心流時長與字數統計"
+          title={$t('flowCockpit.resetStatsTooltip')}
         >
           <span class="material-symbols-outlined text-[15px]">restart_alt</span>
-          <span>重設計時統計</span>
+          <span>{$t('flowCockpit.resetStats')}</span>
         </button>
 
         <button
@@ -335,7 +339,7 @@
           class="px-4 py-1.5 text-xs font-medium text-[#282828] bg-[#fabd2f] hover:bg-[#fe8019] rounded-lg transition-colors cursor-pointer shadow-sm"
           onclick={close}
         >
-          完成並返回閱讀
+          {$t('flowCockpit.doneAndReturn')}
         </button>
       </div>
     </div>

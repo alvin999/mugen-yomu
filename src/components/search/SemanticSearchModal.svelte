@@ -12,6 +12,7 @@
     findBestMatchCharIndex,
     formatSearchHighlight
   } from '../../utils/textSearchMatcher';
+  import { t } from '../../stores/localeStore';
 
   interface Props {
     isOpen?: boolean;
@@ -78,7 +79,7 @@
 
       await refreshStatus();
     } catch (err: any) {
-      searchError = '向量索引建立失敗: ' + (err.message || String(err));
+      searchError = `${$t('search.indexFailed')}: ${err.message || String(err)}`;
     } finally {
       isIndexing = false;
     }
@@ -101,7 +102,7 @@
         await handleSearch();
       }
     } catch (err: any) {
-      searchError = '重新建立索引失敗: ' + (err.message || String(err));
+      searchError = `${$t('search.reindexFailed')}: ${err.message || String(err)}`;
     } finally {
       isIndexing = false;
     }
@@ -125,7 +126,7 @@
       const results = await searchSemantic(paperId, q, 6);
       searchResults = results;
     } catch (err: any) {
-      searchError = '語意搜尋發生錯誤: ' + (err.message || String(err));
+      searchError = `${$t('search.searchFailed')}: ${err.message || String(err)}`;
       searchResults = [];
     } finally {
       isSearching = false;
@@ -181,12 +182,12 @@
           </div>
           <div>
             <div class="flex items-center gap-2">
-              <h3 class="font-bold text-base tracking-wide text-[#fbf1c7]">語意檢索雷達 (Semantic Vector Radar)</h3>
+              <h3 class="font-bold text-base tracking-wide text-[#fbf1c7]">{$t('search.modalTitle')}</h3>
               <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-[#32302f] border border-[#504945] text-[#fabd2f] font-medium">
-                384 維向量
+                {$t('search.dimBadge')}
               </span>
             </div>
-            <p class="text-xs text-[#a89984] mt-0.5">跨越字面關鍵字，依據學術思想與自然語意定位段落</p>
+            <p class="text-xs text-[#a89984] mt-0.5">{$t('search.modalSubtitle')}</p>
           </div>
         </div>
 
@@ -195,7 +196,7 @@
             type="button"
             class="p-1 rounded-lg text-[#a89984] hover:text-[#fbf1c7] hover:bg-[#3c3836] transition-colors cursor-pointer"
             onclick={() => onclose?.()}
-            aria-label="關閉"
+            aria-label={$t('common.close')}
           >
             <span class="material-symbols-outlined text-[20px]">close</span>
           </button>
@@ -211,7 +212,7 @@
           <input
             type="text"
             bind:value={query}
-            placeholder="請以自然語言輸入概念，如「殘差連接改善了什麼」「注意力計算複雜度」..."
+            placeholder={$t('search.inputPlaceholder')}
             class="w-full bg-[#141617] border border-[#504945] focus:border-[#fabd2f] rounded-lg pl-10 pr-24 py-2.5 text-sm text-[#ebdbb2] placeholder-[#7c6f64] outline-none transition-all shadow-inner"
             use:focusOnMount
           />
@@ -223,10 +224,10 @@
           >
             {#if isSearching}
               <span class="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
-              <span>檢索中</span>
+              <span>{$t('search.searching')}</span>
             {:else}
               <span class="material-symbols-outlined text-[14px]">search</span>
-              <span>語意檢索</span>
+              <span>{$t('search.btnSearch')}</span>
             {/if}
           </button>
         </div>
@@ -237,12 +238,12 @@
             {#if status && status.indexedCount > 0}
               <span class="flex items-center gap-1 text-[#8ec07c]">
                 <span class="material-symbols-outlined text-[14px]">verified</span>
-                已就緒 {status.indexedCount} 個段落向量
+                {$t('search.readyCount').replace('{count}', String(status.indexedCount))}
               </span>
             {:else}
               <span class="flex items-center gap-1 text-[#fabd2f]">
                 <span class="material-symbols-outlined text-[14px]">info</span>
-                尚未建立向量索引（檢索時將自動即時建立）
+                {$t('search.notIndexed')}
               </span>
             {/if}
           </div>
@@ -253,10 +254,10 @@
                 type="button"
                 class="text-xs text-[#a89984] hover:text-[#fabd2f] hover:underline flex items-center gap-1 transition-colors cursor-pointer"
                 onclick={handleReindexNow}
-                title="重新為當前文獻運算向量索引"
+                title={$t('search.reindexTooltip')}
               >
                 <span class="material-symbols-outlined text-[13px]">refresh</span>
-                <span>重新索引</span>
+                <span>{$t('search.reindex')}</span>
               </button>
             {:else if !isIndexing && (!status || status.indexedCount === 0)}
               <button
@@ -265,7 +266,7 @@
                 onclick={handleIndexNow}
               >
                 <span class="material-symbols-outlined text-[13px]">bolt</span>
-                立即建立索引
+                {$t('search.indexNow')}
               </button>
             {/if}
           </div>
@@ -274,7 +275,7 @@
         {#if isIndexing}
           <div class="mt-2">
             <div class="flex items-center justify-between text-[11px] text-[#fabd2f] mb-1 font-mono">
-              <span>正在建立段落向量 ({indexingProgress.current} / {indexingProgress.total})</span>
+              <span>{$t('search.indexingProgress').replace('{current}', String(indexingProgress.current)).replace('{total}', String(indexingProgress.total))}</span>
               <span>{Math.round((indexingProgress.current / (indexingProgress.total || 1)) * 100)}%</span>
             </div>
             <div class="w-full bg-[#141617] h-1.5 rounded-full overflow-hidden">
@@ -299,12 +300,12 @@
         {#if isSearching}
           <div class="py-12 flex flex-col items-center justify-center text-[#a89984] gap-2">
             <div class="w-8 h-8 border-2 border-[#fabd2f] border-t-transparent rounded-full animate-spin"></div>
-            <p class="text-xs font-mono">比對全篇高維度語意特徵向量中...</p>
+            <p class="text-xs font-mono">{$t('search.comparingVectors')}</p>
           </div>
         {:else if searchResults.length > 0}
           <div class="text-xs font-mono text-[#a89984] px-1 flex items-center justify-between">
-            <span>找到 {searchResults.length} 處最相符段落 (依關聯度排序)：</span>
-            <span>點擊段落直達研讀現場</span>
+            <span>{$t('search.foundMatches').replace('{count}', String(searchResults.length))}</span>
+            <span>{$t('search.clickToNavigate')}</span>
           </div>
 
           {#each searchResults as item, idx}
@@ -321,7 +322,7 @@
                   <!-- 科學餘弦指標 -->
                   <span
                     class="px-2 py-0.5 rounded text-[11px] font-mono font-medium border border-[#504945] bg-[#1d2021] text-[#a89984]"
-                    title="高維向量空間餘弦相似度 (Cosine Similarity)"
+                    title="Cosine Similarity"
                   >
                     cos θ <span class="text-[#fbf1c7] font-semibold">{(item.similarity ?? (item.scorePercent / 100)).toFixed(2)}</span>
                   </span>
@@ -333,8 +334,8 @@
                     >
                       <span class="material-symbols-outlined text-[13px]">center_focus_strong</span>
                       <span>
-                        命中: "{matchInfo.matchedText}"
-                        <span class="text-[#1d2021]/80 font-normal">· 第 {matchInfo.charIndex + 1} 字</span>
+                        {$t('search.directHit')}: "{matchInfo.matchedText}"
+                        <span class="text-[#1d2021]/80 font-normal">· #{matchInfo.charIndex + 1}</span>
                       </span>
                     </span>
                   {/if}
@@ -347,7 +348,7 @@
                 </div>
 
                 <span class="text-[11px] font-mono text-[#a89984] group-hover:text-[#fabd2f] transition-colors flex items-center gap-0.5 shrink-0 ml-2">
-                  {matchInfo.isDirectMatch ? '跳轉落字' : '定位段落'} <span class="material-symbols-outlined text-[13px]">arrow_forward</span>
+                  {matchInfo.isDirectMatch ? $t('search.jumpToWord') : $t('search.jumpToParagraph')} <span class="material-symbols-outlined text-[13px]">arrow_forward</span>
                 </span>
               </div>
 
@@ -359,15 +360,15 @@
         {:else if hasSearched}
           <div class="py-12 text-center text-[#7c6f64]">
             <span class="material-symbols-outlined text-[36px] mb-1">travel_explore</span>
-            <p class="text-sm">未在文獻中找到關聯度較高的段落</p>
-            <p class="text-xs text-[#665c54] mt-1">請嘗試換一種自然語言問法或精簡關鍵概念</p>
+            <p class="text-sm">{$t('search.noResultsTitle')}</p>
+            <p class="text-xs text-[#665c54] mt-1">{$t('search.noResultsHint')}</p>
           </div>
         {:else}
           <div class="py-10 text-center text-[#7c6f64]">
             <span class="material-symbols-outlined text-[40px] text-[#504945] mb-2">auto_awesome</span>
-            <p class="text-sm text-[#a89984]">學術語意檢索雷達已就緒</p>
+            <p class="text-sm text-[#a89984]">{$t('search.readyTitle')}</p>
             <p class="text-xs text-[#665c54] max-w-md mx-auto mt-1">
-              支援以中文或英文輸入任何學術直覺、假設或結論，我們將利用高維向量空間自動跨越詞彙藩籬定位原文。
+              {$t('search.readyHint')}
             </p>
           </div>
         {/if}
@@ -376,8 +377,8 @@
       <!-- Footer (Clean & Pure) -->
       <div class="px-5 py-3 border-t border-[#3c3836] bg-[#1d2021] flex items-center justify-end text-[11px] text-[#7c6f64] font-mono">
         <div class="flex items-center gap-3">
-          <span>按 <kbd class="px-1.5 py-0.5 bg-[#32302f] border border-[#504945] rounded text-[#ebdbb2]">Enter</kbd> 搜尋</span>
-          <span>按 <kbd class="px-1.5 py-0.5 bg-[#32302f] border border-[#504945] rounded text-[#ebdbb2]">Esc</kbd> 關閉</span>
+          <span>{$t('search.pressEnter')}</span>
+          <span>{$t('search.pressEsc')}</span>
         </div>
       </div>
     </div>

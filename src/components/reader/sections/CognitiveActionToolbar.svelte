@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ChapterSection } from '../../../types/document';
+  import { t } from '../../../stores/localeStore';
 
   interface Props {
     sec: ChapterSection;
@@ -38,14 +39,14 @@
       class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#fabd2f] border border-[#fabd2f]/30 px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
       disabled={loadingIntuitionId === sec.id}
       onclick={(e) => { e.stopPropagation(); onshowIntuition?.({ sec }); }}
-      title="深度生成本章節的白話科學直覺"
+      title={$t('reader.actionToolbar.intuitionTooltip')}
     >
       {#if loadingIntuitionId === sec.id}
         <span class="material-symbols-outlined text-[14px] text-[#fabd2f] animate-spin">sync</span>
-        <span>直覺生成中...</span>
+        <span>{$t('reader.actionToolbar.generatingIntuition')}</span>
       {:else}
         <span class="material-symbols-outlined text-[14px] text-[#fabd2f]">lightbulb</span>
-        <span>白話科學直覺</span>
+        <span>{$t('reader.actionToolbar.intuition')}</span>
       {/if}
     </button>
 
@@ -53,14 +54,14 @@
       class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#8ec07c] border border-[#8ec07c]/30 px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
       disabled={loadingSyntaxId === sec.id}
       onclick={(e) => { e.stopPropagation(); onshowSyntax?.({ sec }); }}
-      title="解析長難句，呼叫 AI 自動拆解本節主謂賓句型"
+      title={$t('reader.actionToolbar.syntaxTooltip')}
     >
       {#if loadingSyntaxId === sec.id}
         <span class="material-symbols-outlined text-[14px] text-[#8ec07c] animate-spin">sync</span>
-        <span>句構拆解中...</span>
+        <span>{$t('reader.actionToolbar.analyzingSyntax')}</span>
       {:else}
         <span class="material-symbols-outlined text-[14px] text-[#8ec07c]">account_tree</span>
-        <span>句構拆解</span>
+        <span>{$t('reader.actionToolbar.syntax')}</span>
       {/if}
     </button>
 
@@ -68,14 +69,14 @@
       class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#ebdbb2] border border-[#504945] px-2.5 py-1 rounded text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
       disabled={loadingTerminologyId === sec.id}
       onclick={(e) => { e.stopPropagation(); onshowTerminology?.({ sec }); }}
-      title="提取並對齊本節學術術語與台灣繁體標準翻譯"
+      title={$t('reader.actionToolbar.termsTooltip')}
     >
       {#if loadingTerminologyId === sec.id}
         <span class="material-symbols-outlined text-[14px] text-[#fe8019] animate-spin">sync</span>
-        <span>術語提取中...</span>
+        <span>{$t('reader.actionToolbar.extractingTerms')}</span>
       {:else}
         <span class="material-symbols-outlined text-[14px] text-[#fe8019]">menu_book</span>
-        <span>學術術語表</span>
+        <span>{$t('reader.actionToolbar.terms')}</span>
       {/if}
     </button>
   {/if}
@@ -84,14 +85,14 @@
     class="flex items-center gap-1.5 bg-[#3c3836] hover:bg-[#504945] text-[#fabd2f] border border-[#fabd2f]/40 px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer disabled:opacity-50"
     disabled={isSectionTranslating}
     onclick={(e) => { e.stopPropagation(); ontranslateSection?.({ sec }); }}
-    title="依序平滑展開當前章節所有段落繁體中文翻譯（含 429 速率保護）"
+    title={$t('reader.actionToolbar.smoothTranslateTooltip')}
   >
     {#if isSectionTranslating}
       <span class="material-symbols-outlined text-[14px] text-[#fe8019] animate-spin">sync</span>
-      <span>平滑翻譯中...</span>
+      <span>{$t('reader.actionToolbar.translating')}</span>
     {:else}
       <span class="material-symbols-outlined text-[14px] text-[#fabd2f]">translate</span>
-      <span>整節翻譯</span>
+      <span>{$t('reader.actionToolbar.translateSection')}</span>
     {/if}
   </button>
 
@@ -103,7 +104,7 @@
       onclick={(e) => { e.stopPropagation(); onaddNote?.({ title: sec.title }); }}
     >
       <span class="material-symbols-outlined text-[14px]">push_pin</span>
-      <span>便箋筆記</span>
+      <span>{$t('reader.actionToolbar.stickyNote')}</span>
     </button>
   {/if}
 </div>

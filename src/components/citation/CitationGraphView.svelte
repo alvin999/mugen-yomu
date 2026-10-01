@@ -22,6 +22,7 @@
   } from '../../services/citation/citationPhysicsEngine';
   import CitationGraphControls from './CitationGraphControls.svelte';
   import CitationDetailPanel from './CitationDetailPanel.svelte';
+  import { t } from '../../stores/localeStore';
 
   interface Props {
     paper?: PaperDocument | null;
@@ -106,7 +107,7 @@
       });
     } catch (err: any) {
       console.error('動態引文拓撲分析失敗:', err);
-      analysisError = err?.message || '引文分析遭遇異常，請檢查網路連線或 API 金鑰設定';
+      analysisError = err?.message || $t('citation.errorDefault');
     } finally {
       isAnalyzing = false;
     }
@@ -143,25 +144,25 @@
 
   let categoryMeta = $derived({
     core: {
-      name: '核心研讀主文',
+      name: $t('citation.coreMainPaper'),
       color: graphColors.core,
       bgBadge: `color-mix(in srgb, ${graphColors.core} 15%, transparent)`,
       borderBadge: `color-mix(in srgb, ${graphColors.core} 40%, transparent)`
     },
     foundational: {
-      name: '奠基前置理論',
+      name: $t('citation.foundationalTheory'),
       color: graphColors.foundational,
       bgBadge: `color-mix(in srgb, ${graphColors.foundational} 15%, transparent)`,
       borderBadge: `color-mix(in srgb, ${graphColors.foundational} 40%, transparent)`
     },
     derivative: {
-      name: '後續衍生突破',
+      name: $t('citation.subsequentBreakthrough'),
       color: graphColors.derivative,
       bgBadge: `color-mix(in srgb, ${graphColors.derivative} 15%, transparent)`,
       borderBadge: `color-mix(in srgb, ${graphColors.derivative} 40%, transparent)`
     },
     methodological: {
-      name: '架構組件親緣',
+      name: $t('citation.architecturalAffinity'),
       color: graphColors.methodological,
       bgBadge: `color-mix(in srgb, ${graphColors.methodological} 15%, transparent)`,
       borderBadge: `color-mix(in srgb, ${graphColors.methodological} 40%, transparent)`
@@ -344,7 +345,7 @@
   onmousemove={handleMouseMove}
   onmouseup={handleMouseUp}
   role="region"
-  aria-label="引用文獻關聯圖譜互動視圖"
+  aria-label={$t('citation.graphAria')}
 >
   <!-- ==================== TOP CONTROL TOOLBAR ==================== -->
   <CitationGraphControls
@@ -380,17 +381,17 @@
               </div>
               <div class="flex flex-col">
                 <h4 class="text-xs font-bold text-[#ebdbb2] font-mono leading-snug">
-                  ✦ 探索《{paper?.title || '此篇文獻'}》真實學術星系圖譜
+                  {$t('citation.exploreTitle', { title: paper?.title || 'Paper' })}
                 </h4>
                 <p class="text-[11px] text-[#a89984] leading-relaxed mt-1">
-                  當前畫面為初始備援結構。啟動動態分析後，系統將自動向 <span class="text-[#fabd2f] font-semibold">OpenAlex 學術庫</span> 檢索前置文獻與引用數據，並由 <span class="text-[#fe8019] font-semibold">AI 伴讀引擎</span> 為您精準剖析各篇論文的理論承接關係與核心突破。
+                  {$t('citation.exploreDesc')}
                 </p>
               </div>
             </div>
             <button
               class="text-[#a89984] hover:text-[#ebdbb2] p-1 rounded hover:bg-[#282828] transition-colors shrink-0 cursor-pointer"
               onclick={() => dismissedBanner = true}
-              title="關閉提示"
+              title={$t('citation.closeNoticeTooltip')}
             >
               <span class="material-symbols-outlined text-[16px]">close</span>
             </button>
@@ -401,14 +402,14 @@
               class="px-3 py-1.5 rounded-lg text-xs font-mono text-[#a89984] hover:text-[#ebdbb2] transition-colors cursor-pointer"
               onclick={() => dismissedBanner = true}
             >
-              暫以預設備援瀏覽
+              {$t('citation.fallbackBrowsing')}
             </button>
             <button
               class="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[#fe8019] hover:bg-[#d65d0e] text-[#141617] text-xs font-bold font-mono transition-all shadow-md hover:shadow-lg cursor-pointer"
               onclick={() => handleStartAnalysis(false)}
             >
               <span class="material-symbols-outlined text-[15px]">psychology</span>
-              <span>⚡ 立即啟動 AI 深度引文分析</span>
+              <span>{$t('citation.startAiAnalysis')}</span>
             </button>
           </div>
         </div>
@@ -420,7 +421,7 @@
       <div class="absolute bottom-12 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-5 py-3 rounded-2xl bg-[#1d2021]/95 backdrop-blur-md border border-[#fabd2f]/60 shadow-2xl text-xs font-mono text-[#ebdbb2] animate-fade-in">
         <div class="w-5 h-5 border-2 border-[#fabd2f] border-t-transparent rounded-full animate-spin shrink-0"></div>
         <div class="flex flex-col">
-          <span class="font-bold text-[#fabd2f] text-xs">{analysisStatus?.message || '正在進行學術引文拓撲分析...'}</span>
+          <span class="font-bold text-[#fabd2f] text-xs">{analysisStatus?.message || $t('citation.analyzing')}</span>
           {#if analysisStatus?.details}
             <span class="text-[10px] text-[#a89984] mt-0.5">{analysisStatus.details}</span>
           {/if}
@@ -433,7 +434,7 @@
       <div class="absolute bottom-12 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#282828] border border-[#cc241d] text-xs text-[#ebdbb2] shadow-2xl animate-fade-in">
         <span class="material-symbols-outlined text-[17px] text-[#fb4934]">error</span>
         <span class="text-[11px] font-mono">{analysisError}</span>
-        <button class="ml-2 px-2 py-0.5 rounded bg-[#3c3836] text-[10px] text-[#ebdbb2] hover:bg-[#504945] cursor-pointer" onclick={() => analysisError = null}>關閉</button>
+        <button class="ml-2 px-2 py-0.5 rounded bg-[#3c3836] text-[10px] text-[#ebdbb2] hover:bg-[#504945] cursor-pointer" onclick={() => analysisError = null}>{$t('common.close')}</button>
       </div>
     {/if}
     
@@ -445,7 +446,7 @@
       onmousedown={handleMouseDownSvg}
       onwheel={handleWheel}
       role="application"
-      aria-label="引文關聯圖譜畫布"
+      aria-label={$t('citation.canvasAria')}
     >
       <!-- Defs: Arrow Markers & Glow Filters -->
       <defs>
@@ -678,11 +679,11 @@
     <!-- Floating Interaction Guide Capsule -->
     <div class="absolute left-4 bottom-4 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1d2021]/90 backdrop-blur-md border border-[#3c3836] text-[11px] font-mono text-[#a89984] shadow-lg pointer-events-none select-none">
       <span class="material-symbols-outlined text-[15px] text-[#fe8019]">touch_app</span>
-      <span class="text-[#ebdbb2] font-medium">按住空白處拖曳平移</span>
+      <span class="text-[#ebdbb2] font-medium">{$t('citation.panHint')}</span>
       <span class="text-[#504945]">·</span>
-      <span>拖曳節點自訂佈局</span>
+      <span>{$t('citation.dragNodeHint')}</span>
       <span class="text-[#504945]">·</span>
-      <span>滾輪縮放視野</span>
+      <span>{$t('citation.zoomHint')}</span>
     </div>
 
     <!-- ==================== RIGHT SCHOLAR CITATION DOSSIER ==================== -->

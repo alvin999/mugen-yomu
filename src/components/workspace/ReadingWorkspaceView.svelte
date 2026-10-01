@@ -12,6 +12,8 @@
   import { flattenSections, loadLastReadingPosition } from '../../stores/readingStore';
   import { calculateSplitRatio, adjustSplitRatioByStep } from '../../utils/useSplitPane';
   import { addNoteToPaper } from '../../stores/notesStore';
+  import { t } from '../../stores/localeStore';
+  import { get } from 'svelte/store';
   import {
     applySectionDwell,
     applySectionSkimmed,
@@ -324,7 +326,7 @@
     const { citation, paragraphText } = detail;
     if (paragraphText) activeParagraphText = paragraphText;
     if (companionRef && companionRef.askWithCustomPrompt) {
-      companionRef.askWithCustomPrompt(`請深入剖析文中引用的文獻 ${citation}：作者引用該論文的論證目的是什麼？其實驗設計或條件（如壓力、流速等）與本文有何關聯與局限性？`);
+      companionRef.askWithCustomPrompt(get(t)('workspace.askCitationPrompt', { citation }));
     }
   }
 
@@ -340,7 +342,7 @@
     const detail = (event && 'detail' in event ? event.detail : event) || {};
     const { imageUrl, name } = detail;
     if (imageUrl && readerRef && (readerRef as any).openLightbox) {
-      (readerRef as any).openLightbox(imageUrl, name || '學術圖表預覽');
+      (readerRef as any).openLightbox(imageUrl, name || $t('formula.previewMode'));
     } else {
       readingMode = 'figures';
     }
@@ -467,9 +469,9 @@
     const secTitle = targetSec ? targetSec.title : activeSectionId;
 
     if (action === 'explainTerm') {
-      activeContextText = `術語解析 · ${payload}`;
+      activeContextText = get(t)('workspace.termAnalysisContext', { term: payload });
     } else if (action === 'showIntuition') {
-      activeContextText = `§ ${secTitle} · 白話科研直覺`;
+      activeContextText = get(t)('workspace.intuitionContext', { title: secTitle });
       if (targetSec) {
         const hasValidIntuition =
           activePaper?.companionData?.[targetSec.id]?.intuition &&
@@ -482,7 +484,7 @@
         }
       }
     } else if (action === 'showSyntax') {
-      activeContextText = `§ ${secTitle} · 長難句語法拆解`;
+      activeContextText = get(t)('workspace.syntaxContext', { title: secTitle });
       if (targetSec) {
         const hasSyntax = activePaper?.companionData?.[targetSec.id]?.syntaxTree;
         if (hasSyntax && !selectedText) {
@@ -492,7 +494,7 @@
         }
       }
     } else if (action === 'showTerminology') {
-      activeContextText = `§ ${secTitle} · 關鍵術語對齊`;
+      activeContextText = get(t)('workspace.termsContext', { title: secTitle });
       if (targetSec) {
         const terms = activePaper?.companionData?.[targetSec.id]?.terminology;
         const hasTerms = terms && terms.length > 1;
@@ -507,19 +509,19 @@
       if (activePaper) {
         addNoteToPaper({
           title: noteTitle,
-          text: `於 ${activeContextText} 標註之重要論文觀點與筆記內容。`,
+          text: get(t)('workspace.defaultNoteText', { context: activeContextText }),
           paperId: activePaper.id,
           paperTitle: activePaper.title,
           sectionId: activeSectionId,
           sectionTitle: secTitle
         });
       }
-      alert(`已為「${noteTitle}」新增精讀筆記！可點選左側 Cognitive Notes 檢視與編輯。`);
+      alert(get(t)('workspace.noteAddedAlert', { title: noteTitle }));
     } else if (action === 'focusCompanion') {
       const { text } = event.detail as any;
       if (text) activeParagraphText = text;
       if (companionRef && companionRef.askWithCustomPrompt) {
-        companionRef.askWithCustomPrompt(`請針對這一段文字進行伴讀深度解析：作者在此處的核心論據與關鍵實驗變因是什麼？`);
+        companionRef.askWithCustomPrompt(get(t)('workspace.askParagraphDeepPrompt'));
       }
     } else if (action === 'translationCompleted') {
       dispatch('refreshCacheStats');
@@ -543,7 +545,7 @@
 
   function handleAskQuestion(event: { query: string; reply: string; cached?: boolean } | CustomEvent<{ query: string; reply?: string }>) {
     const detail = 'detail' in event ? event.detail : event;
-    activeContextText = `探討中: ${detail.query.slice(0, 18)}...`;
+    activeContextText = get(t)('workspace.companionQueryTitle', { query: detail.query.slice(0, 18) });
     dispatch('refreshCacheStats');
   }
 
@@ -551,7 +553,7 @@
     const detail = 'detail' in event ? event.detail : event;
     if (detail.action === 'saveSnippet' && detail.payload && activePaper) {
       addNoteToPaper({
-        title: `伴讀精華 · ${activeContextText}`,
+        title: get(t)('workspace.companionDigestTitle', { context: activeContextText }),
         text: detail.payload,
         paperId: activePaper.id,
         paperTitle: activePaper.title,
@@ -615,14 +617,14 @@
       <div
         class="w-2.5 bg-[#1d2021] hover:bg-[#fe8019] transition-colors cursor-col-resize flex items-center justify-center z-20 group shrink-0"
         onmousedown={handleSplitMouseDown}
-        title="拖曳以自訂左右分屏比例（可使用鍵盤左右鍵微調）"
+        title={$t('workspace.splitHandleTitle')}
         role="separator"
         tabindex="0"
         aria-orientation="vertical"
         aria-valuenow={splitRatio}
         aria-valuemin="20"
         aria-valuemax="80"
-        aria-label="左右分屏調整桿"
+        aria-label={$t('workspace.splitHandleAria')}
         onkeydown={(e) => {
           if (e.key === 'ArrowLeft') splitRatio = adjustSplitRatioByStep(splitRatio, 'decrease', { minRatio: 20, maxRatio: 80, step: 5 });
           if (e.key === 'ArrowRight') splitRatio = adjustSplitRatioByStep(splitRatio, 'increase', { minRatio: 20, maxRatio: 80, step: 5 });
@@ -756,7 +758,7 @@
       onkeydown={(e) => e.key === 'Escape' && (isPdfDrawerOpen = false)}
       role="button"
       tabindex="0"
-      aria-label="點擊關閉原檔抽屜"
+      aria-label={$t('workspace.closePdfDrawerAria')}
     ></div>
 
     <!-- Right Drawer Panel -->

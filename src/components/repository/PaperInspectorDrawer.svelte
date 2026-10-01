@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { PaperDocument } from '../../stores/documentStore';
+  import { isTraditionalConverterVisible, t } from '../../stores/localeStore';
 
   interface Props {
     paper?: PaperDocument | null;
@@ -49,7 +50,7 @@
     onkeydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') close(); }}
     role="button"
     tabindex="-1"
-    aria-label="點擊關閉預覽抽屜"
+    aria-label={$t('repo.inspector.closeAria')}
   ></div>
 
   <!-- Inspector Side Panel -->
@@ -60,12 +61,12 @@
     <div class="p-4 bg-[#141617] border-b border-[#3c3836] flex items-center justify-between shrink-0">
       <div class="flex items-center gap-2">
         <span class="material-symbols-outlined text-[18px] text-[#fe8019]">manage_search</span>
-        <span class="font-bold text-xs text-[#ebdbb2]">文獻卷宗大綱預覽</span>
+        <span class="font-bold text-xs text-[#ebdbb2]">{$t('repo.inspector.title')}</span>
       </div>
       <button
         class="w-7 h-7 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828] transition-colors cursor-pointer"
         onclick={close}
-        title="關閉 (ESC)"
+        title={$t('repo.inspector.closeTooltip')}
       >
         <span class="material-symbols-outlined text-[18px]">close</span>
       </button>
@@ -78,11 +79,11 @@
         <div class="flex items-center gap-1.5 flex-wrap">
           {#if paper.type === 'web'}
             <span class="font-mono text-[9px] bg-[#83a598]/15 border border-[#83a598]/40 text-[#83a598] px-1.5 py-0.2 rounded font-semibold uppercase">
-              網頁文章
+              {$t('repo.inspector.webBadge')}
             </span>
           {:else}
             <span class="font-mono text-[9px] bg-[#fe8019]/15 border border-[#fe8019]/40 text-[#fe8019] px-1.5 py-0.2 rounded font-semibold uppercase">
-              學術論文
+              {$t('repo.inspector.paperBadge')}
             </span>
           {/if}
           <span class="font-mono text-[10px] text-[#a89984] bg-[#282828] px-1.5 py-0.5 rounded">
@@ -100,23 +101,23 @@
         </h2>
 
         <span class="text-xs text-[#a89984]">
-          {Array.isArray(paper.authors) ? paper.authors.join(', ') : (paper.authors || '未知作者')}
+          {Array.isArray(paper.authors) ? paper.authors.join(', ') : (paper.authors || $t('repo.inspector.unknownAuthor'))}
         </span>
       </div>
 
       <!-- Quick Metrics Bar -->
       <div class="grid grid-cols-3 gap-2 bg-[#282828] border border-[#3c3836] rounded-xl p-2.5 text-center font-mono text-xs">
         <div>
-          <span class="text-[10px] text-[#7c6f64] block">閱讀進度</span>
+          <span class="text-[10px] text-[#7c6f64] block">{$t('repo.inspector.progressLabel')}</span>
           <span class="text-[#fabd2f] font-bold">{progressPercent}%</span>
         </div>
         <div>
-          <span class="text-[10px] text-[#7c6f64] block">章節總數</span>
-          <span class="text-[#ebdbb2] font-bold">{paper.sections?.length || 0} 章</span>
+          <span class="text-[10px] text-[#7c6f64] block">{$t('repo.inspector.sectionsLabel')}</span>
+          <span class="text-[#ebdbb2] font-bold">{paper.sections?.length || 0} {$t('repo.inspector.sectionsUnit')}</span>
         </div>
         <div>
-          <span class="text-[10px] text-[#7c6f64] block">精讀筆記</span>
-          <span class="text-[#fe8019] font-bold">{notesCount} 則</span>
+          <span class="text-[10px] text-[#7c6f64] block">{$t('repo.inspector.notesLabel')}</span>
+          <span class="text-[#fe8019] font-bold">{notesCount} {$t('repo.inspector.notesUnit')}</span>
         </div>
       </div>
 
@@ -125,7 +126,7 @@
         <div class="flex flex-col gap-1.5 bg-[#282828] border border-[#3c3836] rounded-xl p-3">
           <span class="font-mono text-[10px] text-[#a89984] uppercase tracking-wider flex items-center gap-1">
             <span class="material-symbols-outlined text-[13px] text-[#fe8019]">auto_stories</span>
-            文獻白話核心摘要
+            {$t('repo.inspector.abstractTitle')}
           </span>
           <p class="text-xs text-[#d5c4a1] leading-relaxed">
             {typeof paper.abstract === 'object' && paper.abstract
@@ -140,7 +141,7 @@
         <div class="flex items-center justify-between">
           <span class="font-mono text-[10px] text-[#a89984] uppercase tracking-wider flex items-center gap-1">
             <span class="material-symbols-outlined text-[13px] text-[#fabd2f]">format_list_bulleted</span>
-            章節目錄大綱樹 ({paper.sections?.length || 0})
+            {$t('repo.inspector.outlineTitle')} ({paper.sections?.length || 0})
           </span>
         </div>
 
@@ -158,7 +159,7 @@
                 {:else if sec.progress && sec.progress > 0}
                   <span class="text-[#fabd2f]">{sec.progress}%</span>
                 {:else}
-                  <span class="text-[#7c6f64]">未讀</span>
+                  <span class="text-[#7c6f64]">{$t('repo.inspector.unreadBadge')}</span>
                 {/if}
               </div>
             </div>
@@ -174,22 +175,24 @@
         onclick={() => { onselect?.({ paper }); close(); }}
       >
         <span class="material-symbols-outlined text-[16px]">menu_book</span>
-        <span>立即進入研讀工作台</span>
+        <span>{$t('drawer.enterWorkspace')}</span>
       </button>
 
-      <button
-        class="px-3 py-2 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#8ec07c]/60 text-[#8ec07c] hover:text-[#b8bb26] rounded-lg text-xs font-mono flex items-center gap-1 transition-colors cursor-pointer"
-        onclick={() => { onconvertToTraditional?.({ paper }); }}
-        title="將此文獻轉換為台灣正體/繁體中文 (OpenCC S2TWP)"
-      >
-        <span class="material-symbols-outlined text-[16px]">translate</span>
-        <span class="hidden sm:inline">轉繁體</span>
-      </button>
+      {#if $isTraditionalConverterVisible}
+        <button
+          class="px-3 py-2 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#8ec07c]/60 text-[#8ec07c] hover:text-[#b8bb26] rounded-lg text-xs font-mono flex items-center gap-1 transition-colors cursor-pointer"
+          onclick={() => { onconvertToTraditional?.({ paper }); }}
+          title={$t('tools.convertTooltip')}
+        >
+          <span class="material-symbols-outlined text-[16px]">translate</span>
+          <span class="hidden sm:inline">{$t('tools.convertToTraditional')}</span>
+        </button>
+      {/if}
 
       <button
         class="px-3 py-2 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#83a598] hover:text-[#ebdbb2] rounded-lg text-xs font-mono flex items-center gap-1 transition-colors cursor-pointer"
         onclick={() => { onviewCitation?.({ paper }); close(); }}
-        title="查看文獻引文圖譜"
+        title={$t('drawer.viewCitation')}
       >
         <span class="material-symbols-outlined text-[16px]">hub</span>
       </button>
@@ -197,7 +200,7 @@
       <button
         class="px-3 py-2 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#fabd2f] hover:text-[#ebdbb2] rounded-lg text-xs font-mono flex items-center gap-1 transition-colors cursor-pointer"
         onclick={() => { onviewNotes?.({ paper }); close(); }}
-        title="查看精讀筆記"
+        title={$t('drawer.viewNotes')}
       >
         <span class="material-symbols-outlined text-[16px]">draw</span>
       </button>
@@ -206,7 +209,7 @@
         type="button"
         class="px-2.5 py-2 bg-[#282828] hover:bg-[#1d2021] border border-[#3c3836] hover:border-[#fb4934]/60 text-[#a89984] hover:text-[#fb4934] rounded-lg text-xs font-mono flex items-center gap-1 transition-colors cursor-pointer"
         onclick={() => { if (paper) { ondelete?.({ id: paper.id }); close(); } }}
-        title="自文獻庫移除此文獻"
+        title={$t('repo.inspector.deleteTooltip')}
       >
         <span class="material-symbols-outlined text-[16px]">delete</span>
       </button>

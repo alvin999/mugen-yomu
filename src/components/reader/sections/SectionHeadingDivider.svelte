@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ChapterSection, PaperDocument } from '../../../types/document';
   import { getSectionTitleParts } from '../controllers/readerScrollManager';
+  import { t } from '../../../stores/localeStore';
 
   interface Props {
     sec: ChapterSection;
@@ -49,15 +50,15 @@
           class="flex items-center gap-1 bg-[#282828] hover:bg-[#3c3836] border border-[#504945] hover:border-[#fe8019] px-2.5 py-1 rounded text-xs font-mono text-[#fabd2f] transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
           onclick={(e) => { e.stopPropagation(); onopenOriginalToPage?.({ page: sec.page || 1, sectionId: sec.id }); }}
           title={paper?.type === 'web'
-            ? (paper.pdfUrl ? `在原始抽屜開啟（第 ${sec.page || 1} 頁 / 章節）` : '在原始抽屜開啟原文網頁')
-            : `在原始 PDF 檢視第 ${sec.page || 1} 頁`}
+            ? (paper.pdfUrl ? $t('reader.sectionHeading.openInOriginalDrawer', { page: sec.page || 1 }) : $t('reader.sectionHeading.openInOriginalWeb'))
+            : $t('reader.sectionHeading.openInOriginalPage', { page: sec.page || 1 })}
         >
           <span class="material-symbols-outlined text-[13px] text-[#fe8019]">
             {paper?.type === 'web' ? 'dock_to_left' : 'find_in_page'}
           </span>
           <span>
             {paper?.type === 'web'
-              ? (paper.pdfUrl ? `原 p.${sec.page || 1}` : '原文抽屜')
+              ? (paper.pdfUrl ? $t('reader.sectionHeading.origPage', { page: sec.page || 1 }) : $t('reader.sectionHeading.origDrawer'))
               : `PDF p.${sec.page || 1}`} ↗
           </span>
         </button>
@@ -76,7 +77,7 @@
     <div class="flex items-center gap-2 text-xs text-[#a89984] font-mono mt-0.5 pl-1">
       <span class="flex items-center gap-1 text-[#fabd2f]">
         <span class="material-symbols-outlined text-[13px]">subdirectory_arrow_right</span>
-        <span>包含 {sec.children.length} 個子章節</span>
+        <span>{$t('reader.sectionHeading.subSectionsCount', { count: sec.children.length })}</span>
       </span>
       <span class="text-[#504945]">·</span>
       <span class="text-[#d5c4a1] truncate">

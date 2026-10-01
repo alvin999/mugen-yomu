@@ -15,6 +15,7 @@
   import PaperTableList from './PaperTableList.svelte';
   import PaperInspectorDrawer from './PaperInspectorDrawer.svelte';
   import DeletePaperConfirmModal from '../common/DeletePaperConfirmModal.svelte';
+  import { t } from '../../stores/localeStore';
 
   interface Props {
     library?: PaperDocument[];
@@ -250,7 +251,7 @@
     <!-- Left Category & Filter Sidebar -->
     <aside class="w-64 bg-[#1d2021] flex flex-col justify-between p-4 shrink-0 overflow-y-auto select-none gap-4">
       <div class="flex flex-col gap-1.5">
-        <span class="font-mono text-[10px] uppercase tracking-wider text-[#a89984] px-2 py-1">文獻庫分類</span>
+        <span class="font-mono text-[10px] uppercase tracking-wider text-[#a89984] px-2 py-1">{$t('repo.categoriesTitle')}</span>
 
         <button
           class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer {categoryFilter === 'all' ? 'bg-[#3c3836] text-[#fe8019] font-bold border-l-2 border-[#fe8019]' : 'text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2]'}"
@@ -258,7 +259,7 @@
         >
           <div class="flex items-center gap-2">
             <span class="material-symbols-outlined text-[16px]">folder_special</span>
-            <span>全部典藏</span>
+            <span>{$t('repo.categories.all')}</span>
           </div>
           <span class="font-mono text-[10px] text-[#7c6f64]">{library.length}</span>
         </button>
@@ -269,7 +270,7 @@
         >
           <div class="flex items-center gap-2">
             <span class="material-symbols-outlined text-[16px]">description</span>
-            <span>學術論文 (Papers)</span>
+            <span>{$t('repo.categories.paper')}</span>
           </div>
           <span class="font-mono text-[10px] text-[#7c6f64]">
             {library.filter(p => p.type !== 'web').length}
@@ -282,7 +283,7 @@
         >
           <div class="flex items-center gap-2">
             <span class="material-symbols-outlined text-[16px]">language</span>
-            <span>網頁專文 (Web)</span>
+            <span>{$t('repo.categories.web')}</span>
           </div>
           <span class="font-mono text-[10px] text-[#7c6f64]">
             {library.filter(p => p.type === 'web').length}
@@ -291,7 +292,7 @@
 
         <div class="h-px bg-[#3c3836] my-2"></div>
 
-        <span class="font-mono text-[10px] uppercase tracking-wider text-[#a89984] px-2 py-1">精讀進度</span>
+        <span class="font-mono text-[10px] uppercase tracking-wider text-[#a89984] px-2 py-1">{$t('repo.stats.progress')}</span>
 
         <button
           class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer {categoryFilter === 'in-progress' ? 'bg-[#3c3836] text-[#fe8019] font-bold border-l-2 border-[#fe8019]' : 'text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2]'}"
@@ -299,7 +300,7 @@
         >
           <div class="flex items-center gap-2">
             <span class="material-symbols-outlined text-[16px] text-[#fabd2f]">pending</span>
-            <span>研讀進行中</span>
+            <span>{$t('repo.categories.inProgress')}</span>
           </div>
           <span class="font-mono text-[10px] text-[#7c6f64]">{inProgressCount}</span>
         </button>
@@ -310,7 +311,7 @@
         >
           <div class="flex items-center gap-2">
             <span class="material-symbols-outlined text-[16px] text-[#b8bb26]">check_circle</span>
-            <span>精讀已掌握</span>
+            <span>{$t('repo.categories.completed')}</span>
           </div>
           <span class="font-mono text-[10px] text-[#7c6f64]">{completedCount}</span>
         </button>
@@ -320,10 +321,10 @@
       <div class="bg-[#282828] border border-[#3c3836] p-2.5 rounded-lg text-[11px] text-[#a89984] flex flex-col gap-1">
         <span class="font-bold text-[#ebdbb2] flex items-center gap-1">
           <span class="material-symbols-outlined text-[14px] text-[#fe8019]">lightbulb</span>
-          快速提示
+          {$t('repo.quickTip.title')}
         </span>
         <p class="leading-relaxed text-[10px]">
-          點選卡片可即時開啟全文。文獻與閱讀進度完全儲存於本機 IndexedDB，無隱私外洩風險。
+          {$t('repo.quickTip.content')}
         </p>
       </div>
     </aside>
@@ -335,16 +336,16 @@
           <div class="w-16 h-16 rounded-2xl bg-[#1d2021] border border-[#3c3836] flex items-center justify-center text-[#7c6f64] mb-3 shadow-inner">
             <span class="material-symbols-outlined text-[32px]">manage_search</span>
           </div>
-          <h3 class="text-sm font-bold text-[#ebdbb2] mb-1">找不到相符的文獻</h3>
+          <h3 class="text-sm font-bold text-[#ebdbb2] mb-1">{$t('repo.empty.title')}</h3>
           <p class="text-xs text-[#a89984] max-w-sm mb-4">
-            請嘗試調整篩選條件或搜尋關鍵字，或點擊下方按鈕匯入新的論文或專文。
+            {$t('repo.empty.desc')}
           </p>
           <button
             class="px-4 py-2 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold text-xs rounded-lg flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
             onclick={() => onopenImport?.()}
           >
             <span class="material-symbols-outlined text-[16px]">add_circle</span>
-            <span>匯入新文獻</span>
+            <span>{$t('repo.empty.importBtn')}</span>
           </button>
         </div>
       {:else if viewMode === 'grid'}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { PaperDocument } from '../../stores/documentStore';
+  import { t } from '../../stores/localeStore';
 
   interface Props {
     isOpen?: boolean;
@@ -42,7 +43,7 @@
   function handleAddNote() {
     if (!newNoteText.trim()) return;
 
-    const title = newNoteTitle.trim() || `精讀速記 · ${activePaper?.title || '論文重點'}`;
+    const title = newNoteTitle.trim() || `Note · ${activePaper?.title || 'Paper Keypoint'}`;
     const newNote = {
       title,
       text: newNoteText.trim(),
@@ -79,14 +80,14 @@
   }
 
   function handleDeleteNote(index: number) {
-    if (!confirm('確定要刪除此則精讀筆記嗎？')) return;
+    if (!confirm($t('notes.deleteConfirm'))) return;
     notes = notes.filter((_, i) => i !== index);
     if (editingIndex === index) editingIndex = null;
     onupdateNotes?.({ notes });
   }
 
   function handleClearAllNotes() {
-    if (!confirm('確定要清空當前文獻的所有精讀筆記嗎？此操作無法還原。')) return;
+    if (!confirm($t('notes.clearConfirm'))) return;
     notes = [];
     editingIndex = null;
     onupdateNotes?.({ notes });
@@ -94,8 +95,8 @@
 
   function handleAddSampleNote() {
     const sample = {
-      title: `精讀標註 · ${activePaper?.title || 'Attention Is All You Need'}`,
-      text: '自注意力機制消除了傳統循環模型中的循序依賴，點積矩陣除以 √d_k 阻斷了 Softmax 梯度消失。在論文核心架構中，Multi-Head Attention 具備並行捕捉多語意子空間之優勢。',
+      title: `Sample Note · ${activePaper?.title || 'Attention Is All You Need'}`,
+      text: 'Scaled Dot-Product Attention eliminates recurrent dependencies, and dividing by √d_k prevents Softmax vanishing gradients. Multi-Head Attention allows joint attendance across representation subspaces.',
       time: new Date().toLocaleTimeString()
     };
     notes = [sample, ...notes];
@@ -103,15 +104,15 @@
   }
 
   function generateMarkdown(): string {
-    let md = `# MUGEN YOMU 精讀筆記匯出\n\n`;
-    md += `**文獻名稱**：${activePaper?.title || '未命名文獻'}\n`;
-    md += `**出處**：${activePaper?.venue || '論文庫'} (${activePaper?.arxivId || activePaper?.sourceUrl || '本機文獻'})\n`;
-    md += `**匯出時間**：${new Date().toLocaleString()}\n`;
-    md += `**筆記總數**：${notes.length} 則\n\n---\n\n`;
+    let md = `# MUGEN YOMU Notes Export\n\n`;
+    md += `**Document**: ${activePaper?.title || 'Untitled'}\n`;
+    md += `**Venue**: ${activePaper?.venue || 'Library'} (${activePaper?.arxivId || activePaper?.sourceUrl || 'Local Document'})\n`;
+    md += `**Export Time**: ${new Date().toLocaleString()}\n`;
+    md += `**Total Notes**: ${notes.length}\n\n---\n\n`;
 
     notes.forEach((n, idx) => {
       md += `### ${idx + 1}. ${n.title}\n`;
-      md += `> 記錄時間：${n.time}\n\n`;
+      md += `> Recorded: ${n.time}\n\n`;
       md += `${n.text}\n\n`;
     });
 
@@ -123,9 +124,9 @@
     const md = generateMarkdown();
     try {
       await navigator.clipboard.writeText(md);
-      showFeedback('已複製全部 Markdown 到剪貼簿！');
+      showFeedback($t('notes.copySuccess'));
     } catch {
-      showFeedback('複製失敗，請手動匯出檔案');
+      showFeedback($t('notes.copyFail'));
     }
   }
 
@@ -133,9 +134,9 @@
     const text = `### ${note.title} (${note.time})\n${note.text}`;
     try {
       await navigator.clipboard.writeText(text);
-      showFeedback('已複製單筆筆記！');
+      showFeedback($t('notes.copySingleSuccess'));
     } catch {
-      showFeedback('複製失敗');
+      showFeedback($t('notes.copySingleFail'));
     }
   }
 
@@ -149,7 +150,7 @@
 
   function handleExportFile() {
     if (notes.length === 0) {
-      alert('目前尚無任何精讀筆記可匯出！');
+      alert($t('notes.noNotesAlert'));
       return;
     }
     const md = generateMarkdown();
@@ -162,7 +163,7 @@
     downloadAnchor.click();
     downloadAnchor.remove();
     URL.revokeObjectURL(url);
-    showFeedback('已啟動 Markdown 檔案下載');
+    showFeedback($t('notes.downloadTriggered'));
   }
 </script>
 
@@ -176,7 +177,7 @@
       onclick={close}
       role="button"
       tabindex="-1"
-      aria-label="點擊關閉筆記面板"
+      aria-label={$t('common.closeModal')}
       onkeydown={(e) => (e.key === 'Escape' || e.key === 'Enter') && close()}
     ></div>
 
@@ -195,13 +196,13 @@
           </div>
           <div class="flex flex-col">
             <div class="flex items-center gap-2">
-              <h3 class="text-sm font-bold text-[#ebdbb2] tracking-wide">Cognitive Notes · 精讀筆記管理</h3>
+              <h3 class="text-sm font-bold text-[#ebdbb2] tracking-wide">{$t('notes.manageTitle')}</h3>
               <span class="px-2 py-0.5 rounded-full font-mono text-[10px] bg-[#32302f] border border-[#504945] text-[#fabd2f]">
-                {notes.length} 則收錄
+                {$t('notes.notesCollected', { count: notes.length })}
               </span>
             </div>
             <span class="font-mono text-[11px] text-[#a89984] truncate max-w-[480px]">
-              {activePaper?.title || '當前論文'}
+              {activePaper?.title || $t('notes.currentPaper')}
             </span>
           </div>
         </div>
@@ -210,16 +211,16 @@
           <button
             class="px-2.5 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fabd2f]/50 text-[#fabd2f] rounded-lg text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer"
             onclick={() => isAddingNote = !isAddingNote}
-            title="手動新增筆記"
+            title={$t('notes.addNoteTooltip')}
           >
             <span class="material-symbols-outlined text-[15px]">{isAddingNote ? 'close' : 'add'}</span>
-            <span>{isAddingNote ? '取消新增' : '新增速記'}</span>
+            <span>{isAddingNote ? $t('notes.cancelAdd') : $t('notes.addQuickNote')}</span>
           </button>
 
           <button
             class="w-8 h-8 rounded-lg flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828] transition-colors"
             onclick={close}
-            title="關閉 (ESC)"
+            title={$t('notes.closeTooltip')}
           >
             <span class="material-symbols-outlined text-[18px]">close</span>
           </button>
@@ -231,18 +232,18 @@
         <div class="p-3.5 bg-[#282828] border-b border-[#3c3836] flex flex-col gap-2.5 animate-fade-in shrink-0">
           <div class="flex items-center gap-2">
             <span class="material-symbols-outlined text-[16px] text-[#fe8019]">edit_note</span>
-            <span class="text-xs font-semibold text-[#ebdbb2]">新增精讀觀點速記</span>
+            <span class="text-xs font-semibold text-[#ebdbb2]">{$t('notes.newNoteHeader')}</span>
           </div>
           <input
             type="text"
             bind:value={newNoteTitle}
-            placeholder="筆記標題（選填，預設：精讀速記 · 當前論文）"
+            placeholder={$t('notes.titlePlaceholder')}
             class="w-full bg-[#1d2021] border border-[#3c3836] focus:border-[#fe8019] rounded-lg px-3 py-1.5 text-xs text-[#ebdbb2] placeholder-[#7c6f64] outline-none transition-colors"
           />
           <textarea
             bind:value={newNoteText}
             rows="3"
-            placeholder="請輸入論文觀點、推導心得或文獻批判思考..."
+            placeholder={$t('notes.contentPlaceholder')}
             class="w-full bg-[#1d2021] border border-[#3c3836] focus:border-[#fe8019] rounded-lg p-3 text-xs text-[#ebdbb2] placeholder-[#7c6f64] outline-none resize-none transition-colors leading-relaxed"
           ></textarea>
           <div class="flex items-center justify-end gap-2">
@@ -250,7 +251,7 @@
               class="px-3 py-1 text-xs text-[#a89984] hover:text-[#ebdbb2] transition-colors"
               onclick={() => { isAddingNote = false; newNoteText = ''; }}
             >
-              取消
+              {$t('notes.cancel')}
             </button>
             <button
               class="px-3.5 py-1 bg-[#fe8019] hover:bg-[#d65d0e] disabled:opacity-50 disabled:cursor-not-allowed text-[#1d2021] font-semibold text-xs rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"
@@ -258,7 +259,7 @@
               onclick={handleAddNote}
             >
               <span class="material-symbols-outlined text-[14px]">save</span>
-              <span>儲存至筆記庫</span>
+              <span>{$t('notes.saveToLibrary')}</span>
             </button>
           </div>
         </div>
@@ -285,9 +286,9 @@
             <div class="w-14 h-14 rounded-2xl bg-[#282828] border border-[#3c3836] flex items-center justify-center text-[#7c6f64] mb-3 shadow-inner">
               <span class="material-symbols-outlined text-[32px]">note_alt</span>
             </div>
-            <h4 class="text-sm font-bold text-[#ebdbb2] mb-1">尚無精讀筆記</h4>
+            <h4 class="text-sm font-bold text-[#ebdbb2] mb-1">{$t('notes.emptyTitle')}</h4>
             <p class="text-xs text-[#a89984] max-w-md leading-relaxed mb-4">
-              在文獻閱讀工作區中點選各段落底部的「<span class="text-[#fabd2f]">標註精讀筆記</span>」，或在 AI 伴讀對話中點擊「<span class="text-[#fe8019]">收錄至筆記</span>」，觀點與推導即時彙整於此。
+              {$t('notes.emptyDesc')}
             </p>
             <div class="flex items-center gap-2">
               <button
@@ -295,14 +296,14 @@
                 onclick={handleAddSampleNote}
               >
                 <span class="material-symbols-outlined text-[15px]">auto_stories</span>
-                <span>載入精讀範例筆記</span>
+                <span>{$t('notes.loadDemo')}</span>
               </button>
               <button
                 class="px-3 py-1.5 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold rounded-lg text-xs flex items-center gap-1.5 transition-colors shadow-sm"
                 onclick={() => isAddingNote = true}
               >
                 <span class="material-symbols-outlined text-[15px]">add</span>
-                <span>手動新增第一筆</span>
+                <span>{$t('notes.addFirst')}</span>
               </button>
             </div>
           </div>
@@ -340,14 +341,14 @@
                     <button
                       class="w-6 h-6 rounded flex items-center justify-center text-[#b8bb26] hover:bg-[#1d2021] transition-colors"
                       onclick={() => handleSaveEdit(idx)}
-                      title="儲存修改"
+                      title={$t('notes.saveEditTooltip')}
                     >
                       <span class="material-symbols-outlined text-[15px]">done</span>
                     </button>
                     <button
                       class="w-6 h-6 rounded flex items-center justify-center text-[#a89984] hover:bg-[#1d2021] transition-colors"
                       onclick={handleCancelEdit}
-                      title="取消編輯"
+                      title={$t('notes.cancelEditTooltip')}
                     >
                       <span class="material-symbols-outlined text-[15px]">close</span>
                     </button>
@@ -355,21 +356,21 @@
                     <button
                       class="w-6 h-6 rounded flex items-center justify-center text-[#a89984] hover:text-[#fabd2f] hover:bg-[#1d2021] transition-colors"
                       onclick={() => handleCopySingle(note)}
-                      title="複製本則筆記"
+                      title={$t('notes.copyNoteTooltip')}
                     >
                       <span class="material-symbols-outlined text-[14px]">content_copy</span>
                     </button>
                     <button
                       class="w-6 h-6 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#1d2021] transition-colors"
                       onclick={() => handleStartEdit(idx)}
-                      title="編輯筆記"
+                      title={$t('notes.editNoteTooltip')}
                     >
                       <span class="material-symbols-outlined text-[14px]">edit</span>
                     </button>
                     <button
                       class="w-6 h-6 rounded flex items-center justify-center text-[#a89984] hover:text-[#fb4934] hover:bg-[#1d2021] transition-colors"
                       onclick={() => handleDeleteNote(idx)}
-                      title="刪除筆記"
+                      title={$t('notes.deleteNoteTooltip')}
                     >
                       <span class="material-symbols-outlined text-[14px]">delete</span>
                     </button>
@@ -398,17 +399,17 @@
       <div class="p-3.5 bg-[#141617] border-t border-[#3c3836] flex items-center justify-between shrink-0 select-none">
         <div class="flex items-center gap-3">
           <span class="font-mono text-[11px] text-[#7c6f64]">
-            共 {notes.length} 則精讀觀點
+            {$t('notes.totalCount', { count: notes.length })}
           </span>
 
           {#if notes.length > 0}
             <button
               class="text-[11px] text-[#7c6f64] hover:text-[#fb4934] flex items-center gap-1 transition-colors"
               onclick={handleClearAllNotes}
-              title="清空所有筆記"
+              title={$t('notes.clearAllTooltip')}
             >
               <span class="material-symbols-outlined text-[13px]">delete_sweep</span>
-              <span>清空筆記</span>
+              <span>{$t('notes.clearAll')}</span>
             </button>
           {/if}
         </div>
@@ -418,19 +419,19 @@
             <button
               class="px-3 py-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#504945] hover:border-[#fabd2f]/60 text-[#fabd2f] rounded-lg text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer"
               onclick={handleCopyMarkdown}
-              title="將所有筆記複製為 Markdown"
+              title={$t('notes.copyMarkdownTooltip')}
             >
               <span class="material-symbols-outlined text-[15px]">content_copy</span>
-              <span>複製 Markdown</span>
+              <span>{$t('notes.copyMarkdown')}</span>
             </button>
 
             <button
               class="px-3.5 py-1.5 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold rounded-lg text-xs flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
               onclick={handleExportFile}
-              title="將精讀筆記下載為 .md 檔案"
+              title={$t('notes.exportMdTooltip')}
             >
               <span class="material-symbols-outlined text-[15px]">download</span>
-              <span>匯出為 .md 檔案</span>
+              <span>{$t('notes.exportMd')}</span>
             </button>
           {/if}
 
@@ -438,7 +439,7 @@
             class="px-3 py-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] rounded-lg text-xs transition-colors"
             onclick={close}
           >
-            關閉
+            {$t('common.close')}
           </button>
         </div>
       </div>

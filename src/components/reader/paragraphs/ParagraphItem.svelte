@@ -4,6 +4,7 @@
   import { renderMath, escapeHtml } from '../../../utils/katexUtils';
   import { countWords } from '../../../stores/flowStore';
   import ThemeCodeBlock from '../../common/ThemeCodeBlock.svelte';
+  import { t } from '../../../stores/localeStore';
 
   interface Props {
     item: NormalizedParagraphItem;
@@ -88,9 +89,9 @@
       if (isCitation) {
         const displayNum = cleanAnchor.replace(/^\[|\]$/g, '');
         const probeBtn = currentMode !== 'zen'
-          ? `<button type="button" class="cite-probe-btn text-[#a89984] hover:text-[#fe8019] px-0.5 rounded cursor-pointer transition-transform hover:scale-125 text-[11px]" title="向 AI 伴讀助理探詢此引文背景與論證目的" data-citation="[${displayNum}]">🤖</button>`
+          ? `<button type="button" class="cite-probe-btn text-[#a89984] hover:text-[#fe8019] px-0.5 rounded cursor-pointer transition-transform hover:scale-125 text-[11px]" title="${$t('reader.paragraphs.citeProbeTooltip')}" data-citation="[${displayNum}]">🤖</button>`
           : '';
-        res.push(`<span class="inline-flex items-center gap-0.5 mx-0.5 align-baseline group/cite bg-[#1d2021]/80 px-1 py-0.2 rounded border border-[#504945]/60 hover:border-[#fe8019] transition-all"><a href="${url}" target="_blank" rel="noopener noreferrer" class="text-[#fabd2f] hover:text-[#fe8019] underline decoration-[#fabd2f]/40 hover:decoration-[#fe8019] font-mono text-[12px] font-bold cursor-pointer" title="查看引文來源：${url}">[${displayNum}]</a>${probeBtn}</span>`);
+        res.push(`<span class="inline-flex items-center gap-0.5 mx-0.5 align-baseline group/cite bg-[#1d2021]/80 px-1 py-0.2 rounded border border-[#504945]/60 hover:border-[#fe8019] transition-all"><a href="${url}" target="_blank" rel="noopener noreferrer" class="text-[#fabd2f] hover:text-[#fe8019] underline decoration-[#fabd2f]/40 hover:decoration-[#fe8019] font-mono text-[12px] font-bold cursor-pointer" title="${$t('reader.paragraphs.viewCiteSource')}${url}">[${displayNum}]</a>${probeBtn}</span>`);
       } else {
         res.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center text-[#8ec07c] hover:text-[#b8bb26] underline decoration-[#8ec07c]/40 hover:decoration-[#b8bb26] transition-colors font-medium px-0.5 rounded hover:bg-[#8ec07c]/10 cursor-pointer" title="${url}">${formatInlineMarkdown(anchor)}</a>`);
       }
@@ -111,7 +112,7 @@
       ...tableData.rows.map(r => `| ${r.join(' | ')} |`)
     ];
     navigator.clipboard.writeText(lines.join('\n'));
-    copyToastText = '已複製表格 Markdown';
+    copyToastText = $t('reader.paragraphs.copiedTableMd');
     setTimeout(() => { copyToastText = null; }, 2000);
   }
 
@@ -121,7 +122,7 @@
       ...tableData.rows.map(r => r.join('\t'))
     ];
     navigator.clipboard.writeText(lines.join('\n'));
-    copyToastText = '已複製 TSV (適合貼至 Excel)';
+    copyToastText = $t('reader.paragraphs.copiedTsv');
     setTimeout(() => { copyToastText = null; }, 2000);
   }
 
@@ -216,23 +217,23 @@
     <div class="w-full flex items-center justify-between text-xs font-mono text-[#fabd2f] border-b border-[#3c3836] pb-2">
       <span class="flex items-center gap-1.5 font-bold">
         <span class="material-symbols-outlined text-[15px] text-[#fe8019]">image</span>
-        {item.alt || '論文架構分析圖表'}
+        {item.alt || $t('reader.paragraphs.defaultFigureAlt')}
       </span>
       <div class="flex items-center gap-2 text-[#a89984]">
         <button
           class="hover:text-[#fe8019] flex items-center gap-1 text-[11px] cursor-pointer"
           onclick={(e) => { e.stopPropagation(); onopenLightbox?.({ url: item.url || '', caption: item.alt }); }}
-          title="放大檢視"
+          title={$t('reader.paragraphs.zoomView')}
         >
           <span class="material-symbols-outlined text-[13px]">fullscreen</span>
-          <span>放大鏡</span>
+          <span>{$t('reader.paragraphs.magnifier')}</span>
         </button>
         <a
           href={item.url}
           target="_blank"
           rel="noopener noreferrer"
           class="hover:text-[#ebdbb2] flex items-center gap-0.5 text-[11px]"
-          title="在新分頁開啟"
+          title={$t('reader.paragraphs.openNewTab')}
         >
           <span class="material-symbols-outlined text-[13px]">open_in_new</span>
         </a>
@@ -272,7 +273,7 @@
     <div class="w-full flex items-center justify-between text-xs font-mono text-[#fabd2f] border-b border-[#3c3836]/60 pb-2 mb-2">
       <span class="flex items-center gap-1.5 font-semibold">
         <span class="material-symbols-outlined text-[15px] text-[#fe8019]">functions</span>
-        <span>核心方程式 (Mathematical Equation)</span>
+        <span>{$t('reader.paragraphs.coreEquation')}</span>
         {#if item.number}
           <span class="font-mono text-[#fe8019] bg-[#fe8019]/10 border border-[#fe8019]/30 px-2 py-0.5 rounded font-bold ml-1">
             {item.number}
@@ -288,10 +289,10 @@
         <button
           class="text-[#a89984] hover:text-[#ebdbb2] text-[11px] flex items-center gap-1 cursor-pointer transition-colors bg-[#282828] border border-[#3c3836] px-2 py-0.5 rounded"
           onclick={(e) => { e.stopPropagation(); oncopyLatex?.({ latex: item.latex || '' }); }}
-          title="複製 LaTeX 程式原始碼"
+          title={$t('reader.paragraphs.copyLatexTooltip')}
         >
           <span class="material-symbols-outlined text-[13px]">content_copy</span>
-          <span>複製 LaTeX</span>
+          <span>{$t('derivations.copyLatex')}</span>
         </button>
       </div>
     </div>
@@ -313,9 +314,9 @@
     <div class="w-full flex items-center justify-between text-xs font-mono text-[#fabd2f] bg-[#282828] border-b border-[#3c3836] px-4 py-2.5">
       <div class="flex items-center gap-2 font-bold">
         <span class="material-symbols-outlined text-[16px] text-[#fe8019]">table_chart</span>
-        <span>資料圖表 / 對照表 (Academic Table)</span>
+        <span>{$t('reader.paragraphs.academicTable')}</span>
         <span class="text-[#a89984] text-[10px] font-normal">
-          ({item.tableData.rows.length} 列 × {item.tableData.headers.length} 欄)
+          {$t('reader.paragraphs.tableDimensions', { rows: item.tableData.rows.length, cols: item.tableData.headers.length })}
         </span>
       </div>
       <div class="flex items-center gap-2">
@@ -327,18 +328,18 @@
         <button
           class="text-[#a89984] hover:text-[#ebdbb2] text-[11px] flex items-center gap-1 cursor-pointer transition-colors bg-[#1d2021] hover:bg-[#32302f] border border-[#3c3836] px-2 py-0.5 rounded"
           onclick={(e) => { e.stopPropagation(); copyTableAsMarkdown(item.tableData); }}
-          title="複製 Markdown 表格語法"
+          title={$t('reader.paragraphs.copyMdTable')}
         >
           <span class="material-symbols-outlined text-[13px]">content_copy</span>
-          <span>複製 MD</span>
+          <span>{$t('reader.paragraphs.copyMdTable')}</span>
         </button>
         <button
           class="text-[#a89984] hover:text-[#ebdbb2] text-[11px] flex items-center gap-1 cursor-pointer transition-colors bg-[#1d2021] hover:bg-[#32302f] border border-[#3c3836] px-2 py-0.5 rounded"
           onclick={(e) => { e.stopPropagation(); copyTableAsTSV(item.tableData); }}
-          title="複製為 TSV 格式（可直接貼上至 Excel 或 Google 試算表）"
+          title={$t('reader.paragraphs.copyTsvTable')}
         >
           <span class="material-symbols-outlined text-[13px]">grid_on</span>
-          <span>複製 TSV</span>
+          <span>{$t('reader.paragraphs.copyTsvTable')}</span>
         </button>
       </div>
     </div>
@@ -397,7 +398,7 @@
   >
     {#if isParaFocused && isPacerActive}
       <!-- Saccadic Flow Pacer Visual Beam Guide -->
-      <div class="absolute -left-1 top-2 bottom-2 w-1 rounded-full bg-[#3c3836]/60 overflow-hidden pointer-events-none z-10" title="閱讀心流視線導引">
+      <div class="absolute -left-1 top-2 bottom-2 w-1 rounded-full bg-[#3c3836]/60 overflow-hidden pointer-events-none z-10" title={$t('reader.paragraphs.pacingTooltip')}>
         <div
           class="w-full bg-gradient-to-b from-[#fabd2f] via-[#fe8019] to-[#d65d0e] shadow-[0_0_8px_#fe8019] rounded-full animate-saccadic-scan"
           style="animation-duration: {Math.max(2.8, Math.min(25, Math.round((countWords(para) / Math.max(120, targetPacingWpm)) * 60)))}s;"
@@ -413,7 +414,7 @@
           {#if isParaFocused && isPacerActive}
             <span class="text-[10px] bg-[#fe8019]/15 text-[#fe8019] border border-[#fe8019]/40 px-1.5 py-0.2 rounded font-mono flex items-center gap-1">
               <span class="material-symbols-outlined text-[11px] animate-pulse text-[#fabd2f]">auto_read_play</span>
-              <span>{targetPacingWpm} wpm 節奏中</span>
+              <span>{$t('reader.paragraphs.pacingWpm', { wpm: targetPacingWpm })}</span>
             </span>
           {/if}
         </div>
@@ -431,16 +432,16 @@
       <div
         class="mt-1 p-4 bg-[#1d2021] border-l-4 border-[#fabd2f] rounded-r-xl flex flex-col gap-2 shadow-lg text-[#ebdbb2] animate-fade-in cursor-default"
         onclick={() => { if (isTyping) onskipTyping?.(); }}
-        title={isTyping ? "點擊可立即跳過打字動畫顯示全文" : ""}
+        title={isTyping ? $t('reader.paragraphs.skipTypewriter') : ""}
       >
         <div class="flex items-center justify-between text-[11px] font-mono text-[#a89984] border-b border-[#3c3836]/60 pb-2">
           <span class="flex items-center gap-1.5 text-[#fabd2f] font-semibold">
             {#if isTyping}
               <span class="material-symbols-outlined text-[15px] animate-spin text-[#fe8019]">sync</span>
-              <span>繁體中文對照 · 即時生成中...</span>
+              <span>{$t('reader.paragraphs.translatingBilingual')}</span>
             {:else}
               <span class="material-symbols-outlined text-[15px]">translate</span>
-              <span>繁體中文對照</span>
+              <span>{$t('reader.paragraphs.bilingualComparison')}</span>
             {/if}
           </span>
           <div class="flex items-center gap-2">
@@ -453,10 +454,10 @@
               type="button"
               class="hover:text-[#fe8019] flex items-center gap-0.5 cursor-pointer text-[#a89984] transition-colors"
               onclick={(e) => { e.stopPropagation(); oncopyTranslation?.({ text: translationText }); }}
-              title="複製繁體譯文"
+              title={$t('reader.paragraphs.copyTranslation')}
             >
               <span class="material-symbols-outlined text-[13px]">content_copy</span>
-              <span>複製</span>
+              <span>{$t('common.copy')}</span>
             </button>
             <button
               type="button"
@@ -464,23 +465,23 @@
               onclick={(e) => {
                 e.stopPropagation();
                 onsaveNote?.({
-                  title: `對照筆記 · §${sec.title.split(' ')[0]} ¶${pIndex + 1}`,
-                  text: `> ${para}\n\n**中文譯文**：\n${translationText}`
+                  title: `§${sec.title.split(' ')[0]} ¶${pIndex + 1}`,
+                  text: `> ${para}\n\n**${$t('reader.paragraphs.bilingualComparison')}**：\n${translationText}`
                 });
               }}
-              title="將本段中英對照存入筆記庫"
+              title={$t('reader.paragraphs.saveNoteTooltip')}
             >
               <span class="material-symbols-outlined text-[13px]">save</span>
-              <span>存筆記</span>
+              <span>{$t('reader.paragraphs.saveNote')}</span>
             </button>
             <button
               type="button"
               class="hover:text-[#8ec07c] flex items-center gap-0.5 cursor-pointer text-[#a89984] transition-colors"
               onclick={(e) => { e.stopPropagation(); onretranslate?.({ secId: sec.id, pIndex, text: para }); }}
-              title="重新向 AI 請求翻譯"
+              title={$t('reader.paragraphs.retranslateTooltip')}
             >
               <span class="material-symbols-outlined text-[13px]">refresh</span>
-              <span>重新翻譯</span>
+              <span>{$t('reader.paragraphs.retranslate')}</span>
             </button>
           </div>
         </div>
@@ -491,14 +492,14 @@
               <span class="material-symbols-outlined text-[14px] shrink-0 text-[#fe8019]">info</span>
               <span class="leading-tight">{translationNotice}</span>
             </div>
-            {#if translationNotice.includes('尚未設定') || translationNotice.includes('BYOK') || translationNotice.includes('金鑰')}
+            {#if translationNotice.includes('尚未設定') || translationNotice.includes('BYOK') || translationNotice.includes('金鑰') || translationNotice.includes('No') || translationNotice.includes('未設定')}
               <button
                 type="button"
                 class="font-mono text-[10px] bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold px-2 py-0.5 rounded cursor-pointer transition-colors shadow-xs ml-auto shrink-0 flex items-center gap-1"
                 onclick={(e) => { e.stopPropagation(); onopenSettings?.(); }}
               >
                 <span class="material-symbols-outlined text-[12px]">tune</span>
-                <span>前往設定金鑰</span>
+                <span>{$t('reader.paragraphs.configureKey')}</span>
               </button>
             {/if}
           </div>
@@ -508,7 +509,7 @@
           {#if isTranslating && !translationText}
             <div class="flex items-center gap-2 text-xs text-[#a89984] py-2">
               <span class="inline-block w-3.5 h-3.5 border-2 border-[#fabd2f] border-t-transparent rounded-full animate-spin"></span>
-              <span>正在向學術模型請求地道繁體中文翻譯...</span>
+              <span>{$t('reader.paragraphs.requestingModel')}</span>
             </div>
           {:else}
             <p class="leading-[29px] text-[#ebdbb2]/90">

@@ -3,6 +3,13 @@
   import type { CacheStats } from '../../services/cacheService';
   import { THEMES, currentTheme, setTheme } from '../../stores/themeStore';
   import { vimCursorState, vimConfigStore, updateVimConfig, setVimHelpOpen } from '../../stores/vimCursorStore';
+  import {
+    currentLocale,
+    setLocale,
+    AVAILABLE_LOCALES,
+    isTraditionalConverterVisible,
+    t
+  } from '../../stores/localeStore';
 
   interface Props {
     activePaper?: PaperDocument | null;
@@ -32,7 +39,7 @@
     isPdfDrawerOpen = $bindable(false),
     zoomLevel = $bindable(100),
     modelName = 'Groq (Llama 3.3 70B)',
-    cachedInfo = '$0.14 / 2.4k cached (省 82%)',
+    cachedInfo = '$0.14 / 2.4k cached',
     isRailCollapsed = false,
     cacheStats = null,
     currentMainView = 'workspace',
@@ -49,10 +56,14 @@
   }: Props = $props();
 
   let isThemeDropdownOpen: boolean = $state(false);
+  let isLocaleDropdownOpen: boolean = $state(false);
 
   function handleWindowClick() {
     if (isThemeDropdownOpen) {
       isThemeDropdownOpen = false;
+    }
+    if (isLocaleDropdownOpen) {
+      isLocaleDropdownOpen = false;
     }
     if ($vimCursorState.isHelpOpen) {
       setVimHelpOpen(false);
@@ -106,11 +117,11 @@
       type="button"
       class="flex items-center gap-2 shrink-0 cursor-pointer bg-transparent border-none p-0 text-left focus:outline-none focus:ring-1 focus:ring-[#fe8019] rounded"
       onclick={openRepository}
-      title="開啟文獻庫"
+      title={$t('header.openRepoTooltip')}
     >
       <div class="flex flex-col">
         <span class="text-sm font-bold tracking-tight text-[#fe8019] leading-none">MUGEN YOMU</span>
-        <span class="font-mono text-[9px] text-[#a89984] leading-tight mt-0.5">無限閱讀 · 伴讀工作台</span>
+        <span class="font-mono text-[9px] text-[#a89984] leading-tight mt-0.5">{$t('header.subTitle')}</span>
       </div>
     </button>
 
@@ -121,11 +132,11 @@
       <button
         class="font-mono text-xs bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] px-2.5 py-1 rounded font-semibold transition-all flex items-center gap-1 shadow-sm shrink-0 cursor-pointer"
         onclick={openImport}
-        title="匯入新論文或網頁文章"
+        title={$t('header.importTooltip')}
         id="btn-header-import"
       >
         <span class="material-symbols-outlined text-[14px]">add_circle</span>
-        <span>匯入</span>
+        <span>{$t('nav.import')}</span>
       </button>
     </div>
 
@@ -136,42 +147,42 @@
       {#if currentMainView === 'repository'}
         <span class="text-[#ebdbb2] font-semibold flex items-center gap-1.5 truncate">
           <span class="material-symbols-outlined text-[15px] text-[#fe8019]">library_books</span>
-          <span>本地文獻總庫 (Paper Repository)</span>
+          <span>{$t('header.repoMenu')}</span>
         </span>
         <button
           class="ml-2 px-2 py-0.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#fe8019] font-mono rounded text-[11px] flex items-center gap-1 transition-colors cursor-pointer shrink-0"
           onclick={backToWorkspace}
         >
           <span class="material-symbols-outlined text-[12px]">arrow_back</span>
-          <span>返回閱讀</span>
+          <span>{$t('nav.backToWorkspace')}</span>
         </button>
       {:else if currentMainView === 'notes'}
         <span class="text-[#ebdbb2] font-semibold flex items-center gap-1.5 truncate">
           <span class="material-symbols-outlined text-[15px] text-[#fabd2f]">draw</span>
-          <span>精讀筆記工作室 (Cognitive Notes)</span>
+          <span>{$t('header.notesMenu')}</span>
         </span>
         <button
           class="ml-2 px-2 py-0.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#fabd2f] font-mono rounded text-[11px] flex items-center gap-1 transition-colors cursor-pointer shrink-0"
           onclick={backToWorkspace}
         >
           <span class="material-symbols-outlined text-[12px]">arrow_back</span>
-          <span>返回閱讀</span>
+          <span>{$t('nav.backToWorkspace')}</span>
         </button>
       {:else if currentMainView === 'citation-graph'}
         <span class="text-[#ebdbb2] font-semibold flex items-center gap-1.5 truncate">
           <span class="material-symbols-outlined text-[15px] text-[#83a598]">hub</span>
-          <span>引文關聯星系 (Citation Graph)</span>
+          <span>{$t('header.citationMenu')}</span>
         </span>
         <button
           class="ml-2 px-2 py-0.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#83a598] font-mono rounded text-[11px] flex items-center gap-1 transition-colors cursor-pointer shrink-0"
           onclick={backToWorkspace}
         >
           <span class="material-symbols-outlined text-[12px]">arrow_back</span>
-          <span>返回閱讀</span>
+          <span>{$t('nav.backToWorkspace')}</span>
         </button>
       {:else}
         <span class="text-[#ebdbb2] font-medium truncate max-w-[220px]" title={activePaper?.title}>
-          {activePaper?.title || '載入中...'}
+          {activePaper?.title || $t('header.loadingPaper')}
         </span>
 
         {#if activePaper?.type === 'web'}
@@ -180,7 +191,7 @@
             target="_blank"
             rel="noopener noreferrer"
             class="font-mono text-[10px] bg-[#83a598]/15 border border-[#83a598]/40 text-[#83a598] hover:text-[#ebdbb2] px-1.5 py-0.5 rounded shrink-0 flex items-center gap-0.5 transition-colors"
-            title="開啟原文網頁"
+            title={$t('header.openWebTooltip')}
           >
             <span class="material-symbols-outlined text-[11px]">open_in_new</span>
             <span>{activePaper.venue || 'Web'}</span>
@@ -199,7 +210,7 @@
           <button
             type="button"
             class="w-6 h-6 rounded flex items-center justify-center text-[#7c6f64] hover:text-[#fb4934] hover:bg-[#282828] transition-colors cursor-pointer shrink-0"
-            title="從文獻庫移除此文獻"
+            title={$t('header.removePaperTooltip')}
             onclick={() => { if (activePaper) ondeleteCurrentPaper?.({ paperId: activePaper.id }); }}
           >
             <span class="material-symbols-outlined text-[15px]">delete</span>
@@ -218,16 +229,16 @@
           onclick={() => setMode('bilingual')}
         >
           <span class="material-symbols-outlined text-[13px]">chrome_reader_mode</span>
-          <span>雙語伴讀</span>
+          <span>{$t('nav.bilingual')}</span>
         </button>
 
         <button
           class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 cursor-pointer {readingMode === 'split' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
           onclick={() => setMode('split')}
-          title="左右 50/50 雙軌並列：左側原始論文/網頁，右側雙語伴讀"
+          title={$t('header.splitViewTooltip')}
         >
           <span class="material-symbols-outlined text-[13px]">view_column</span>
-          <span>雙軌對照</span>
+          <span>{$t('nav.split')}</span>
         </button>
 
         <button
@@ -235,17 +246,17 @@
           onclick={() => setMode('zen')}
         >
           <span class="material-symbols-outlined text-[13px]">self_improvement</span>
-          <span>純沉浸</span>
+          <span>{$t('nav.zen')}</span>
         </button>
 
         <button
           id="btn-nav-figures"
           class="px-2.5 py-1 transition-all text-xs font-medium rounded-lg whitespace-nowrap flex items-center gap-1 cursor-pointer {readingMode === 'figures' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'}"
           onclick={() => setMode('figures')}
-          title="圖表與公式推導工作室"
+          title={$t('header.formulaStudioTooltip')}
         >
           <span class="material-symbols-outlined text-[13px]">schema</span>
-          <span>圖表推導</span>
+          <span>{$t('nav.figures')}</span>
         </button>
       </nav>
     </div>
@@ -256,25 +267,27 @@
   <!-- Right BYOK & Utilities -->
   <div class="flex items-center gap-2 shrink-0">
     {#if currentMainView === 'workspace'}
-      <!-- Traditional Chinese Conversion Button -->
-      <button
-        class="px-2.5 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#8ec07c]/60 text-[#8ec07c] hover:text-[#b8bb26] rounded-lg text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
-        onclick={() => onconvertToTraditional?.()}
-        title="將當前文獻轉換為台灣正體/繁體中文 (OpenCC S2TWP)"
-        id="btn-header-traditional"
-      >
-        <span class="material-symbols-outlined text-[14px]">translate</span>
-        <span class="hidden md:inline">轉繁體</span>
-      </button>
+      <!-- Traditional Chinese Conversion Button (限定中文版) -->
+      {#if $isTraditionalConverterVisible}
+        <button
+          class="px-2.5 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#8ec07c]/60 text-[#8ec07c] hover:text-[#b8bb26] rounded-lg text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
+          onclick={() => onconvertToTraditional?.()}
+          title={$t('tools.convertTooltip')}
+          id="btn-header-traditional"
+        >
+          <span class="material-symbols-outlined text-[14px]">translate</span>
+          <span class="hidden md:inline">{$t('tools.convertToTraditional')}</span>
+        </button>
+      {/if}
 
       <!-- Slide-out PDF / Web Drawer Toggle Button -->
       <button
         class="px-2.5 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 text-[#fabd2f] hover:text-[#fe8019] rounded-lg text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm {isPdfDrawerOpen ? '!bg-[#fe8019] !text-[#1d2021] font-semibold' : ''}"
         onclick={() => ontogglePdfDrawer?.()}
-        title="開啟/收合原檔或原站側邊抽屜 (快捷鍵: Alt+P)"
+        title={$t('header.toggleDrawerTooltip')}
       >
         <span class="material-symbols-outlined text-[14px]">{activePaper?.type === 'web' ? 'web' : 'picture_as_pdf'}</span>
-        <span class="hidden md:inline">{activePaper?.type === 'web' ? '原檔抽屜' : '原檔抽屜'}</span>
+        <span class="hidden md:inline">{$t('nav.pdfDrawer')}</span>
         <span class="font-mono text-[9px] opacity-70">Alt+P</span>
       </button>
     {/if}
@@ -282,28 +295,28 @@
     <button
       class="flex items-center gap-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#504945] px-2 py-1 rounded-lg transition-colors text-left cursor-pointer"
       onclick={openSettings}
-      title="{modelName} · {cachedInfo} · 點擊設定 BYOK API 金鑰與模型"
+      title={$t('header.settingsTooltipWithModel', { model: modelName, cached: cachedInfo })}
     >
       <span class="h-2 w-2 rounded-full bg-[#fabd2f] animate-pulse"></span>
       <div class="flex flex-col">
         <span class="font-mono text-[10px] text-[#ebdbb2] font-medium leading-tight truncate max-w-[130px]">{modelName}</span>
         <span class="font-mono text-[8px] text-[#a89984] leading-tight">
-          {cacheStats && cacheStats.cachedCount > 0 ? `${cacheStats.cachedCount} 次快取命中 · 本機活躍` : '本機快取活躍'}
+          {cacheStats && cacheStats.cachedCount > 0 ? `${cacheStats.cachedCount} ${$t('header.cachedHits')}` : $t('header.cacheActive')}
         </span>
       </div>
       <span class="font-mono text-[9px] bg-[#fabd2f]/15 border border-[#d79921]/40 text-[#fabd2f] px-1 py-0.2 rounded font-semibold ml-1">
-        省 {cacheStats ? cacheStats.savingsPercent : 82}%
+        {$t('header.savedRatio')} {cacheStats ? cacheStats.savingsPercent : 82}%
       </span>
     </button>
 
     {#if currentMainView === 'workspace'}
       <!-- Zoom Controller -->
       <div class="flex items-center bg-[#282828] border border-[#3c3836] rounded-lg p-0.5 text-[#d5c4a1]">
-        <button class="w-5 h-5 flex items-center justify-center hover:bg-[#3c3836] hover:text-[#ebdbb2] rounded transition-colors cursor-pointer" onclick={() => adjustZoom(-10)}>
+        <button class="w-5 h-5 flex items-center justify-center hover:bg-[#3c3836] hover:text-[#ebdbb2] rounded transition-colors cursor-pointer" onclick={() => adjustZoom(-10)} title={$t('header.zoomOut')}>
           <span class="material-symbols-outlined text-[13px]">remove</span>
         </button>
         <span class="font-mono text-[10px] px-1 text-[#ebdbb2] select-none font-medium">{zoomLevel}%</span>
-        <button class="w-5 h-5 flex items-center justify-center hover:bg-[#3c3836] hover:text-[#ebdbb2] rounded transition-colors cursor-pointer" onclick={() => adjustZoom(10)}>
+        <button class="w-5 h-5 flex items-center justify-center hover:bg-[#3c3836] hover:text-[#ebdbb2] rounded transition-colors cursor-pointer" onclick={() => adjustZoom(10)} title={$t('header.zoomIn')}>
           <span class="material-symbols-outlined text-[13px]">add</span>
         </button>
       </div>
@@ -311,6 +324,50 @@
 
     <!-- Actions -->
     <div class="flex items-center gap-1">
+      <!-- Language Switcher Dropdown -->
+      <div class="relative" id="locale-switcher-container">
+        <button
+          class="h-7 px-2 rounded-lg flex items-center gap-1.5 text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2] transition-colors cursor-pointer text-xs font-mono border border-transparent hover:border-[#504945] {isLocaleDropdownOpen ? 'bg-[#3c3836] text-[#fe8019] border-[#fe8019]/40' : ''}"
+          onclick={(e) => {
+            e.stopPropagation();
+            if ($vimCursorState.isHelpOpen) setVimHelpOpen(false);
+            if (isThemeDropdownOpen) isThemeDropdownOpen = false;
+            isLocaleDropdownOpen = !isLocaleDropdownOpen;
+          }}
+          title={$t('locale.switchLabel')}
+          id="btn-locale-switcher"
+        >
+          <span class="text-[13px]">{AVAILABLE_LOCALES.find(l => l.id === $currentLocale)?.flag || '🌐'}</span>
+          <span class="text-[11px] font-medium hidden sm:inline">{AVAILABLE_LOCALES.find(l => l.id === $currentLocale)?.label || $currentLocale}</span>
+          <span class="material-symbols-outlined text-[13px] opacity-70">expand_more</span>
+        </button>
+
+        {#if isLocaleDropdownOpen}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <div
+            role="menu"
+            tabindex="-1"
+            class="absolute right-0 top-9 w-36 bg-[#282828] border border-[#504945] rounded-xl shadow-2xl z-50 p-1 flex flex-col gap-0.5 animate-fade-in"
+            onclick={(e) => e.stopPropagation()}
+          >
+            {#each AVAILABLE_LOCALES as loc}
+              <button
+                class="w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between transition-all text-left text-xs font-mono cursor-pointer {loc.id === $currentLocale ? 'bg-[#3c3836] text-[#fe8019] font-semibold' : 'text-[#ebdbb2] hover:bg-[#32302f] hover:text-[#fabd2f]'}"
+                onclick={() => { setLocale(loc.id); isLocaleDropdownOpen = false; }}
+              >
+                <div class="flex items-center gap-2">
+                  <span class="text-sm">{loc.flag}</span>
+                  <span>{loc.label}</span>
+                </div>
+                {#if loc.id === $currentLocale}
+                  <span class="material-symbols-outlined text-[13px] text-[#fe8019]">check</span>
+                {/if}
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+
       <!-- Theme Switcher Dropdown -->
       <div class="relative" id="theme-switcher-container">
         <button
@@ -318,9 +375,10 @@
           onclick={(e) => {
             e.stopPropagation();
             if ($vimCursorState.isHelpOpen) setVimHelpOpen(false);
+            if (isLocaleDropdownOpen) isLocaleDropdownOpen = false;
             isThemeDropdownOpen = !isThemeDropdownOpen;
           }}
-          title="切換介面主題 (當前：{$currentTheme})"
+          title={$t('header.themeTooltip')}
           id="btn-theme-switcher"
         >
           <span class="material-symbols-outlined text-[16px]">palette</span>
@@ -337,38 +395,38 @@
             <div class="px-2 py-1.5 border-b border-[#3c3836] flex items-center justify-between">
               <span class="font-mono text-[11px] text-[#ebdbb2] font-semibold flex items-center gap-1">
                 <span class="material-symbols-outlined text-[13px] text-[#fe8019]">palette</span>
-                <span>閱讀主題 (Themes)</span>
+                <span>{$t('header.theme')}</span>
               </span>
               <span class="font-mono text-[9px] text-[#a89984] bg-[#1d2021] px-1.5 py-0.5 rounded">
-                {THEMES.length} 款
+                {THEMES.length} {$t('header.themeCount')}
               </span>
             </div>
 
             <div class="flex flex-col gap-1 mt-1">
-              {#each THEMES as t}
+              {#each THEMES as thm}
                 <button
-                  class="w-full px-2 py-1.5 rounded-lg flex items-center justify-between transition-all text-left group cursor-pointer {t.id === $currentTheme ? 'bg-[#3c3836] border border-[#fe8019]/50' : 'hover:bg-[#32302f] border border-transparent'}"
-                  onclick={() => { setTheme(t.id); isThemeDropdownOpen = false; }}
+                  class="w-full px-2 py-1.5 rounded-lg flex items-center justify-between transition-all text-left group cursor-pointer {thm.id === $currentTheme ? 'bg-[#3c3836] border border-[#fe8019]/50' : 'hover:bg-[#32302f] border border-transparent'}"
+                  onclick={() => { setTheme(thm.id); isThemeDropdownOpen = false; }}
                 >
                   <div class="flex items-center gap-2 min-w-0">
                     <!-- Swatch preview -->
                     <div class="flex items-center gap-0.5 p-0.5 bg-[#141617] rounded border border-[#504945] shrink-0">
-                      {#each t.previewColors as color}
+                      {#each thm.previewColors as color}
                         <span class="w-2 h-3.5 rounded-sm" style="background-color: {color};"></span>
                       {/each}
                     </div>
 
                     <div class="flex flex-col min-w-0">
-                      <span class="font-medium text-[11px] truncate {t.id === $currentTheme ? 'text-[#fe8019]' : 'text-[#ebdbb2] group-hover:text-[#fe8019]'}">
-                        {t.zhName}
+                      <span class="font-medium text-[11px] truncate {thm.id === $currentTheme ? 'text-[#fe8019]' : 'text-[#ebdbb2] group-hover:text-[#fe8019]'}">
+                        {thm.zhName}
                       </span>
                       <span class="font-mono text-[9px] text-[#a89984] truncate">
-                        {t.name}
+                        {thm.name}
                       </span>
                     </div>
                   </div>
 
-                  {#if t.id === $currentTheme}
+                  {#if thm.id === $currentTheme}
                     <span class="material-symbols-outlined text-[14px] text-[#fe8019] shrink-0">check</span>
                   {/if}
                 </button>
@@ -381,11 +439,11 @@
       <button
         class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer {currentMainView === 'notes' ? 'bg-[#3c3836] text-[#fabd2f]' : 'text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2]'}"
         onclick={exportNotes}
-        title="開啟精讀筆記工作室"
+        title={$t('header.notesTooltip')}
       >
         <span class="material-symbols-outlined text-[16px]">draw</span>
       </button>
-      <button class="w-7 h-7 rounded-lg flex items-center justify-center text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2] transition-colors cursor-pointer" onclick={openSettings} title="BYOK 與系統設定">
+      <button class="w-7 h-7 rounded-lg flex items-center justify-center text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2] transition-colors cursor-pointer" onclick={openSettings} title={$t('header.settingsTooltip')}>
         <span class="material-symbols-outlined text-[16px]">settings</span>
       </button>
     </div>
@@ -396,7 +454,7 @@
         type="button"
         class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer {$vimCursorState.isHelpOpen ? 'bg-[#3c3836] text-[#fe8019]' : 'text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2]'}"
         onclick={toggleHelp}
-        title="按 ? 或點擊查看 Vim 導引與操作說明"
+        title={$t('header.vimHelpTooltip')}
         id="btn-vim-help"
       >
         <span class="material-symbols-outlined text-[18px]">help_outline</span>
@@ -414,59 +472,59 @@
           <div class="flex items-center justify-between border-b border-[#3c3836] pb-2 mb-2.5">
             <div class="flex items-center gap-1.5 font-bold text-[#fe8019]">
               <span class="material-symbols-outlined text-[16px]">terminal</span>
-              <span>Vim 游標導引快捷鍵</span>
+              <span>{$t('vim.title')}</span>
             </div>
             <button
               type="button"
               class="text-[#a89984] hover:text-[#ebdbb2] text-[14px] px-1 cursor-pointer"
               onclick={() => setVimHelpOpen(false)}
-              title="關閉速查卡"
+              title={$t('vim.close')}
             >✕</button>
           </div>
 
           <div class="space-y-2 text-[#d5c4a1]">
             <div class="flex justify-between items-center py-0.5">
               <span class="text-[#fabd2f] font-bold">h / l</span>
-              <span class="text-[#a89984]">左 / 右移動字元（或跨詞）</span>
+              <span class="text-[#a89984]">{$t('vim.moveChar')}</span>
             </div>
             <div class="flex justify-between items-center py-0.5">
               <span class="text-[#fabd2f] font-bold">j / k</span>
-              <span class="text-[#a89984]">下 / 上換行或跨段落閱讀</span>
+              <span class="text-[#a89984]">{$t('vim.moveLine')}</span>
             </div>
             <div class="flex justify-between items-center py-0.5">
               <span class="text-[#fabd2f] font-bold">w / b</span>
-              <span class="text-[#a89984]">跳至下一詞 / 上一詞</span>
+              <span class="text-[#a89984]">{$t('vim.moveWord')}</span>
             </div>
             <div class="flex justify-between items-center py-0.5">
               <span class="text-[#fabd2f] font-bold">0 / $</span>
-              <span class="text-[#a89984]">跳至行首 / 行末</span>
+              <span class="text-[#a89984]">{$t('vim.moveLineEdge')}</span>
             </div>
             <div class="flex justify-between items-center py-0.5">
               <span class="text-[#fabd2f] font-bold">gg / G</span>
-              <span class="text-[#a89984]">跳至章節首段 / 文末</span>
+              <span class="text-[#a89984]">{$t('vim.moveDocEdge')}</span>
             </div>
             <div class="flex justify-between items-center py-0.5">
               <span class="text-[#8ec07c] font-bold">t</span>
-              <span class="text-[#a89984]">展開 / 收合當前段落繁中譯文</span>
+              <span class="text-[#a89984]">{$t('vim.toggleTranslation')}</span>
             </div>
             <div class="flex justify-between items-center py-0.5">
               <span class="text-[#8ec07c] font-bold">a</span>
-              <span class="text-[#a89984]">向 AI 伴讀助理探詢當前焦點段落</span>
+              <span class="text-[#a89984]">{$t('vim.askAi')}</span>
             </div>
             <div class="flex justify-between items-center py-0.5">
               <span class="text-[#8ec07c] font-bold">y</span>
-              <span class="text-[#a89984]">複製當前段落原文或 LaTeX 公式</span>
+              <span class="text-[#a89984]">{$t('vim.copyContent')}</span>
             </div>
             <div class="flex justify-between items-center py-0.5">
               <span class="text-[#fe8019] font-bold">?</span>
-              <span class="text-[#a89984]">切換顯示此快速指南</span>
+              <span class="text-[#a89984]">{$t('vim.toggleHelp')}</span>
             </div>
           </div>
 
           <div class="mt-3 pt-2.5 border-t border-[#3c3836] flex flex-col gap-1.5 text-[10px] text-[#a89984]">
             <div class="flex items-center justify-between">
               <span class="text-[#fabd2f]">
-                彈跳強度: {($vimConfigStore.bounceStrength ?? 60) === 0 ? '關閉' : `${$vimConfigStore.bounceStrength ?? 60}%`}
+                {$t('vim.bounceStrength')}: {($vimConfigStore.bounceStrength ?? 60) === 0 ? $t('vim.bounceOff') : `${$vimConfigStore.bounceStrength ?? 60}%`}
               </span>
               <label class="flex items-center gap-1.5 cursor-pointer hover:text-[#ebdbb2]">
                 <input
@@ -475,11 +533,11 @@
                   onchange={() => updateVimConfig({ isBlinkEnabled: !$vimConfigStore.isBlinkEnabled })}
                   class="accent-[#fe8019]"
                 />
-                <span>閃爍游標</span>
+                <span>{$t('vim.cursorBlink')}</span>
               </label>
             </div>
             <div class="flex items-center justify-between border-t border-[#3c3836]/40 pt-1.5">
-              <span>跨段視線引導</span>
+              <span>{$t('vim.lineGuide')}</span>
               <label class="flex items-center gap-1.5 cursor-pointer hover:text-[#ebdbb2]">
                 <input
                   type="checkbox"
@@ -487,7 +545,7 @@
                   onchange={() => updateVimConfig({ isSmoothScrollEnabled: !$vimConfigStore.isSmoothScrollEnabled })}
                   class="accent-[#fe8019]"
                 />
-                <span class={$vimConfigStore.isSmoothScrollEnabled ? 'text-[#fe8019] font-medium' : ''}>平滑捲動</span>
+                <span class={$vimConfigStore.isSmoothScrollEnabled ? 'text-[#fe8019] font-medium' : ''}>{$t('vim.smoothScroll')}</span>
               </label>
             </div>
           </div>

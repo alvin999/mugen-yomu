@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t } from '../../stores/localeStore';
+
   interface Props {
     currentPath?: string;
     memoryUsageMb?: number;
@@ -14,20 +16,22 @@
     currentPath = $bindable('reading-workspace'),
     memoryUsageMb = 0.8,
     memoryPercent = 1,
-    memoryTooltip = '本機 IndexedDB 快取與文獻庫',
+    memoryTooltip = '',
     paperCount = 3,
     isCollapsed = $bindable(false),
     ontoggleCollapse,
     onnavigate
   }: Props = $props();
 
-  const navItems = [
-    { id: 'reading-workspace', label: 'Reading Workspace', icon: 'menu_book' },
-    { id: 'paper-repository', label: 'Paper Repository', icon: 'library_books', badge: true },
-    { id: 'citation-graph', label: 'Citation Graph', icon: 'hub' },
-    { id: 'cognitive-notes', label: 'Cognitive Notes', icon: 'draw' },
-    { id: 'prompt-formula-lab', label: 'Formula Lab', icon: 'functions' }
-  ];
+  let resolvedMemoryTooltip = $derived(memoryTooltip || $t('header.localIndexedDbTooltip'));
+
+  let navItems = $derived([
+    { id: 'reading-workspace', label: $t('rail.workspace'), icon: 'menu_book' },
+    { id: 'paper-repository', label: $t('rail.repo'), icon: 'library_books', badge: true },
+    { id: 'citation-graph', label: $t('rail.citation'), icon: 'hub' },
+    { id: 'cognitive-notes', label: $t('rail.notes'), icon: 'draw' },
+    { id: 'prompt-formula-lab', label: $t('rail.formula'), icon: 'functions' }
+  ]);
 
   function toggleCollapse() {
     isCollapsed = !isCollapsed;
@@ -53,7 +57,7 @@
           <button
             class="w-6 h-6 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828] transition-colors cursor-pointer"
             onclick={toggleCollapse}
-            title="收合成 64px 緊湊導航條"
+            title={$t('rail.collapseTooltip')}
           >
             <span class="material-symbols-outlined text-[16px]">menu_open</span>
           </button>
@@ -62,7 +66,7 @@
         <button
           class="w-10 h-10 rounded-lg flex items-center justify-center text-[#fe8019] bg-[#282828] border border-[#3c3836] hover:bg-[#32302f] transition-colors shadow-sm cursor-pointer"
           onclick={toggleCollapse}
-          title="展開導航欄 (240px)"
+          title={$t('rail.expandTooltip')}
         >
           <span class="material-symbols-outlined text-[20px]">menu</span>
         </button>
@@ -108,9 +112,9 @@
   <!-- Bottom Memory Bank & Sync Engine -->
   <div class="{isCollapsed ? 'px-2' : 'px-3'} flex flex-col gap-2">
     {#if !isCollapsed}
-      <div class="bg-[#282828] border border-[#3c3836] p-2.5 rounded-lg flex flex-col gap-1.5 shadow-sm" title={memoryTooltip}>
+      <div class="bg-[#282828] border border-[#3c3836] p-2.5 rounded-lg flex flex-col gap-1.5 shadow-sm" title={resolvedMemoryTooltip}>
         <div class="flex items-center justify-between text-[#a89984]">
-          <span class="font-mono text-[10px] truncate">Local Memory</span>
+          <span class="font-mono text-[10px] truncate">{$t('rail.localMemory')}</span>
           <span class="font-mono text-[10px] text-[#fabd2f] font-medium">{memoryUsageMb} MB</span>
         </div>
         <div class="w-full bg-[#1d2021] h-1.5 rounded-full overflow-hidden">
@@ -119,11 +123,11 @@
       </div>
 
       <div class="flex items-center justify-between text-[#a89984] text-[10px] font-mono pt-1">
-        <span class="hover:text-[#ebdbb2] cursor-pointer">Sync · Idle</span>
+        <span class="hover:text-[#ebdbb2] cursor-pointer">{$t('rail.syncIdle')}</span>
         <span class="material-symbols-outlined text-[13px] text-[#b8bb26]">cloud_done</span>
       </div>
     {:else}
-      <div class="flex flex-col items-center justify-center gap-1 p-2 rounded-lg bg-[#282828] border border-[#3c3836]" title={memoryTooltip}>
+      <div class="flex flex-col items-center justify-center gap-1 p-2 rounded-lg bg-[#282828] border border-[#3c3836]" title={resolvedMemoryTooltip}>
         <span class="material-symbols-outlined text-[16px] text-[#fabd2f]">database</span>
         <span class="font-mono text-[8px] text-[#a89984]">{memoryUsageMb}M</span>
       </div>

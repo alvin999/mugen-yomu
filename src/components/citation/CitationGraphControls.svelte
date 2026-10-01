@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { CitationCategory } from '../../services/citationService';
   import type { CitationAnalysisStatus } from '../../services/citationAnalysisService';
+  import { t } from '../../stores/localeStore';
 
   interface Props {
     paperTitle?: string;
@@ -47,10 +48,10 @@
     <button
       class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#282828] hover:bg-[#32302f] text-[#ebdbb2] border border-[#3c3836] hover:border-[#fe8019] text-xs font-medium transition-colors shadow-sm cursor-pointer"
       onclick={() => onbackToWorkspace?.()}
-      title="返回閱讀工作台 (Alt + ←)"
+      title={$t('citation.backTooltip')}
     >
       <span class="material-symbols-outlined text-[16px] text-[#fe8019]">arrow_back</span>
-      <span>返回雙語研讀</span>
+      <span>{$t('citation.backToWorkspace')}</span>
     </button>
 
     <div class="h-4 w-px bg-[#3c3836]"></div>
@@ -62,14 +63,14 @@
       <div class="flex flex-col">
         <div class="flex items-center gap-2">
           <h2 class="text-xs font-bold text-[#ebdbb2] tracking-wide font-mono">
-            Citation Topology & Intellectual Lineage
+            {$t('citation.title')}
           </h2>
           <span class="font-mono text-[9px] bg-[#fabd2f]/15 border border-[#fabd2f]/40 text-[#fabd2f] px-1.5 py-0.2 rounded">
-            {visibleNodesCount} 篇關聯文獻 · {visibleEdgesCount} 條引證傳承
+            {visibleNodesCount} {$t('citation.papersCount')} · {visibleEdgesCount} {$t('citation.lineageCount')}
           </span>
         </div>
         <span class="text-[10px] text-[#a89984] truncate max-w-md">
-          當前研讀標的：{paperTitle}
+          {$t('citation.targetLabel')}：{paperTitle}
         </span>
       </div>
     </div>
@@ -82,18 +83,18 @@
       <button
         class="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-mono transition-colors cursor-pointer {layoutMode === 'galaxy' ? 'bg-[#3c3836] text-[#fe8019] font-bold shadow-inner' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
         onclick={() => onswitchLayout?.('galaxy')}
-        title="力導向星系圖：以核心論文為引力中心放射展開"
+        title={$t('citation.galaxyTooltip')}
       >
         <span class="material-symbols-outlined text-[14px]">bubble_chart</span>
-        <span>星系拓撲</span>
+        <span>{$t('citation.galaxy')}</span>
       </button>
       <button
         class="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-mono transition-colors cursor-pointer {layoutMode === 'timeline' ? 'bg-[#3c3836] text-[#fe8019] font-bold shadow-inner' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
         onclick={() => onswitchLayout?.('timeline')}
-        title="時序演進譜系：依年代水平均勻展開學術傳承鏈"
+        title={$t('citation.timelineTooltip')}
       >
         <span class="material-symbols-outlined text-[14px]">timeline</span>
-        <span>演進譜系</span>
+        <span>{$t('citation.timeline')}</span>
       </button>
     </div>
 
@@ -103,28 +104,28 @@
         class="px-2 py-1 rounded font-mono text-[11px] transition-colors cursor-pointer {filterCategory === 'all' ? 'bg-[#fe8019]/20 text-[#fe8019] border border-[#fe8019]/50 font-semibold' : 'text-[#a89984] hover:bg-[#282828]'}"
         onclick={() => filterCategory = 'all'}
       >
-        全部
+        {$t('citation.filterAll')}
       </button>
       <button
         class="px-2 py-1 rounded font-mono text-[11px] transition-colors flex items-center gap-1 cursor-pointer {filterCategory === 'foundational' ? 'bg-[#b8bb26]/20 text-[#b8bb26] border border-[#b8bb26]/50 font-semibold' : 'text-[#a89984] hover:bg-[#282828]'}"
         onclick={() => filterCategory = 'foundational'}
       >
         <span class="w-1.5 h-1.5 rounded-full bg-[#b8bb26]"></span>
-        奠基基石
+        {$t('citation.filterFoundational')}
       </button>
       <button
         class="px-2 py-1 rounded font-mono text-[11px] transition-colors flex items-center gap-1 cursor-pointer {filterCategory === 'derivative' ? 'bg-[#83a598]/20 text-[#83a598] border border-[#83a598]/50 font-semibold' : 'text-[#a89984] hover:bg-[#282828]'}"
         onclick={() => filterCategory = 'derivative'}
       >
         <span class="w-1.5 h-1.5 rounded-full bg-[#83a598]"></span>
-        衍生突破
+        {$t('citation.filterDerivative')}
       </button>
       <button
         class="px-2 py-1 rounded font-mono text-[11px] transition-colors flex items-center gap-1 cursor-pointer {filterCategory === 'methodological' ? 'bg-[#d3869b]/20 text-[#d3869b] border border-[#d3869b]/50 font-semibold' : 'text-[#a89984] hover:bg-[#282828]'}"
         onclick={() => filterCategory = 'methodological'}
       >
         <span class="w-1.5 h-1.5 rounded-full bg-[#d3869b]"></span>
-        方法親緣
+        {$t('citation.filterMethodological')}
       </button>
     </div>
   </div>
@@ -135,31 +136,31 @@
     {#if isAnalyzing}
       <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#fabd2f]/15 border border-[#fabd2f]/50 text-[#fabd2f] text-xs font-mono shadow-sm animate-pulse">
         <span class="material-symbols-outlined text-[14px] animate-spin">sync</span>
-        <span class="truncate max-w-[150px]">{analysisStatus?.message || 'AI 拓撲剖析中...'}</span>
+        <span class="truncate max-w-[150px]">{analysisStatus?.message || $t('citation.analyzing')}</span>
       </div>
     {:else if isAnalyzed}
       <div class="flex items-center gap-1 bg-[#282828] border border-[#3c3836] p-0.5 rounded-lg">
         <span class="flex items-center gap-1 px-2 py-1 text-[11px] font-mono text-[#b8bb26] font-semibold">
           <span class="material-symbols-outlined text-[13px]">verified</span>
-          <span>已由 AI 深度分析</span>
+          <span>{$t('citation.aiAnalyzed')}</span>
         </span>
         <button
           class="flex items-center gap-1 px-2 py-1 rounded text-xs font-mono text-[#a89984] hover:text-[#fe8019] hover:bg-[#32302f] transition-colors cursor-pointer"
           onclick={() => onstartAnalysis?.({ forceRefresh: true })}
-          title="重新調用 OpenAlex 與 AI 伴讀推導最新拓撲"
+          title={$t('citation.rerunTooltip')}
         >
           <span class="material-symbols-outlined text-[13px]">refresh</span>
-          <span>重跑</span>
+          <span>{$t('citation.rerun')}</span>
         </button>
       </div>
     {:else}
       <button
         class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#fe8019] hover:bg-[#d65d0e] text-[#141617] font-bold text-xs font-mono transition-all shadow-md hover:shadow-lg cursor-pointer"
         onclick={() => onstartAnalysis?.({ forceRefresh: false })}
-        title="透過 OpenAlex 學術檢索與 AI 伴讀推導真實星系圖譜"
+        title={$t('citation.controlsTooltip')}
       >
         <span class="material-symbols-outlined text-[15px]">psychology</span>
-        <span>⚡ AI 引文動態剖析</span>
+        <span>{$t('citation.aiAnalysis')}</span>
       </button>
     {/if}
 
@@ -171,7 +172,7 @@
       <input
         class="w-36 focus:w-48 bg-[#282828] border border-[#3c3836] text-[#ebdbb2] pl-7 pr-2 py-1 rounded-lg text-xs font-mono focus:outline-none focus:border-[#fe8019] placeholder:text-[#a89984]/50 transition-all"
         type="text"
-        placeholder="搜尋作者或標題..."
+        placeholder={$t('citation.searchPlaceholder')}
         bind:value={searchQuery}
       />
       {#if searchQuery}
@@ -189,7 +190,7 @@
       <button
         class="px-2 py-1 text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f] rounded-l transition-colors cursor-pointer"
         onclick={() => onzoomOut?.()}
-        title="縮小"
+        title={$t('citation.zoomOut')}
       >
         -
       </button>
@@ -197,14 +198,14 @@
       <button
         class="px-2 py-1 text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f] transition-colors cursor-pointer"
         onclick={() => onzoomIn?.()}
-        title="放大"
+        title={$t('citation.zoomIn')}
       >
         +
       </button>
       <button
         class="px-2 py-1 text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f] rounded-r border-l border-[#3c3836] transition-colors cursor-pointer"
         onclick={() => onresetViewport?.()}
-        title="重設視角與置中"
+        title={$t('citation.resetViewport')}
       >
         <span class="material-symbols-outlined text-[13px] mt-0.5">center_focus_strong</span>
       </button>

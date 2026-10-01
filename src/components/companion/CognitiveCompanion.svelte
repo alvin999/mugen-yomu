@@ -5,6 +5,8 @@
   import { retrieveRelevantContextForAI } from '../../services/embedding/hybridEmbeddingService';
   import { getApiKey, getStoredApiKeySync } from '../../services/crypto/keyVaultService';
   import { renderNoteMarkdown } from '../../utils/markdownNoteRenderer';
+  import { t } from '../../stores/localeStore';
+  import { get } from 'svelte/store';
 
   interface Props {
     activeContextText?: string;
@@ -107,10 +109,10 @@
     {
       id: 'init_1',
       sender: 'ai',
-      text: '伴讀認知助理已就緒！我已同步感知當前研讀章節與焦點。您可以直接點選下方的蘇格拉底啟發問題，或對論文推導細節展開深入提問。',
-      time: '剛剛',
+      text: get(t)('companion.welcomeMessage'),
+      time: get(t)('companion.justNow'),
       cached: true,
-      tag: '本機認知核心'
+      tag: get(t)('companion.localCognitiveCore')
     }
   ]);
 
@@ -136,15 +138,15 @@
       id: 'default_1',
       icon: 'help_outline',
       color: 'text-[#fabd2f]',
-      text: '本節的核心創新點與先前研究相比有哪些根本差異？',
-      answerSummary: '本節主要聚焦於解決前人架構面臨的效率瓶頸，以更緊湊的計算拓撲達到更高的並行度。'
+      text: get(t)('companion.socraticQ1'),
+      answerSummary: get(t)('companion.socraticA1')
     },
     {
       id: 'default_2',
       icon: 'functions',
       color: 'text-[#8ec07c]',
-      text: '文中所列之數學變數與超參數設定有何理論直覺？',
-      answerSummary: '超參數通常基於方差歸一化考量，旨在確保正向傳播時數值穩定，避免推入非線性函數的飽和區。'
+      text: get(t)('companion.socraticQ2'),
+      answerSummary: get(t)('companion.socraticA2')
     }
   ]);
 
@@ -248,10 +250,10 @@
         const maxParaLen = activeProvider === 'groq' ? 850 : 1600;
         const maxSelLen = activeProvider === 'groq' ? 300 : 600;
         const safePara = activeParagraphText && activeParagraphText.trim().length > maxParaLen
-          ? activeParagraphText.trim().slice(0, maxParaLen) + '... (已自動精簡原文長度)'
+          ? activeParagraphText.trim().slice(0, maxParaLen) + get(t)('companion.truncatedOriginal')
           : activeParagraphText?.trim();
         const safeSel = selectedText && selectedText.trim().length > maxSelLen
-          ? selectedText.trim().slice(0, maxSelLen) + '... (已自動精簡反白)'
+          ? selectedText.trim().slice(0, maxSelLen) + get(t)('companion.truncatedSelection')
           : selectedText?.trim();
 
         let contextualPrompt = '';
@@ -282,7 +284,7 @@
 
         contextualPrompt += `\n【讀者提問】：${qText}\n` +
           `【回答指示】：\n` +
-          `1. 請以「繁體中文（台灣習慣）」深入專業地剖析回答，語氣嚴謹且深具學術直覺。\n` +
+          `${get(t)('companion.promptInstruction')}\n` +
           `2. 必須嚴格依據上方讀者研讀的原文段落與文獻脈絡進行論證。\n` +
           `3. 數學推導請使用精確之 LaTeX 格式包覆（例如 $W_Q, W_K$ 或 $$...$$）。\n` +
           `4. 若有跨概念銜接，請一併點出此設計在科研工程實務上的核心優勢。`;
@@ -306,7 +308,7 @@
 
         let displayTag = `${result.model} · ${result.latencyMs}ms`;
         if (hasRagEvidence) {
-          displayTag = `RAG 語意增強 · ${displayTag}`;
+          displayTag = `${get(t)('companion.ragEnhancedTag')} · ${displayTag}`;
         }
         if (result.fallbackNotice) {
           displayTag = `${displayTag} · ${result.fallbackNotice}`;
@@ -330,7 +332,7 @@
         const friendlyError = rawMsg.includes('unexpected EOF') || rawMsg.includes('stream reading')
           ? 'Groq 雲端佇列繁忙 (unexpected EOF)'
           : (rawMsg || '連線異常');
-        fallbackLocalResponse(qText, presetAnswer, `${activeProvider.toUpperCase()} 連線受阻 (${friendlyError}) · 已啟用備用`);
+        fallbackLocalResponse(qText, presetAnswer, `${activeProvider.toUpperCase()} ${get(t)('companion.connectionBlocked', { error: friendlyError })}`);
       } finally {
         isThinking = false;
       }
@@ -365,7 +367,7 @@
       text: responseText,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       cached: true,
-      tag: customTag || '本機專家智庫 · 16ms'
+      tag: customTag || get(t)('companion.localExpertCoreTag')
     };
     messages = [...messages, aiMsg];
     scrollToBottom(true, false);
@@ -414,10 +416,10 @@
       {
         id: `init_${Date.now()}`,
         sender: 'ai',
-        text: `已重設對話紀錄。我正在感知章節「${activeContextText}」，隨時為您解答學術推導與概念疑問。`,
+        text: get(t)('companion.resetConversationMessage', { chapter: activeContextText }),
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         cached: true,
-        tag: '本機認知核心'
+        tag: get(t)('companion.localCognitiveCore')
       }
     ];
     scrollToBottom(false, true);
@@ -425,21 +427,21 @@
 
   function handleSaveMessageToNotes(text: string) {
     onquickAction?.({ action: 'saveSnippet', payload: text });
-    alert('已將伴讀解答收錄至本機精讀筆記！');
+    alert(get(t)('companion.savedToNotesToast'));
   }
 
   function handleSendFocusContext(type: 'selected' | 'paragraph') {
     if (type === 'selected' && selectedText) {
-      sendQuestion(`請深入剖析讀者聚焦反白字句「${selectedText.trim()}」：其核心論點、背後科研直覺是什麼？在上下文推導中扮演何種角色？`);
+      sendQuestion(get(t)('companion.askSelectionAnalysis', { text: selectedText.trim() }));
     } else if (type === 'paragraph' && activeParagraphText) {
-      sendQuestion(`請針對當前研讀段落原文展開深度剖析：作者的核心論證是什麼？關鍵推導變數為何？有何潛在假設？`);
+      sendQuestion(get(t)('companion.askParagraphAnalysis'));
     }
   }
 
   function handleQuoteToInput(text: string) {
     const snippet = text.trim();
     const shortSnippet = snippet.length > 50 ? snippet.slice(0, 50) + '...' : snippet;
-    promptInput = `請深入解析此處：「${shortSnippet}」— `;
+    promptInput = get(t)('companion.askSelectionPromptPrefix', { text: shortSnippet });
     activeTab = 'chat';
     if (textareaEl) {
       textareaEl.focus();
@@ -458,7 +460,7 @@
     <div class="flex items-center gap-2">
       <div class="w-2.5 h-2.5 rounded-full bg-[#fe8019] animate-pulse"></div>
       <span class="text-xs font-bold text-[#ebdbb2] flex items-center gap-1 font-sans">
-        伴讀認知助理 <span class="font-mono text-[10px] text-[#fabd2f] font-normal">Active</span>
+        {$t('companion.title')} <span class="font-mono text-[10px] text-[#fabd2f] font-normal">Active</span>
       </span>
     </div>
 
@@ -479,7 +481,7 @@
         onclick={() => activeTab = 'insights'}
       >
         <span class="material-symbols-outlined text-[13px]">psychology</span>
-        <span>結構解析</span>
+        <span>{$t('companion.insights')}</span>
       </button>
       <button
         type="button"
@@ -487,7 +489,7 @@
         onclick={() => { activeTab = 'chat'; scrollToBottom(true, true); }}
       >
         <span class="material-symbols-outlined text-[13px]">forum</span>
-        <span>伴讀對話</span>
+        <span>{$t('companion.tabChat')}</span>
         {#if hasUnseenMessages && activeTab !== 'chat'}
           <span class="w-1.5 h-1.5 rounded-full bg-[#fe8019] absolute top-1 right-1"></span>
         {/if}
@@ -500,10 +502,10 @@
           type="button"
           class="text-[#a89984] hover:text-[#fabd2f] text-[10px] flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-[#282828] transition-colors cursor-pointer"
           onclick={handleClearChat}
-          title="重設對話紀錄並開啟新話題"
+          title={$t('companion.newChatTooltip')}
         >
           <span class="material-symbols-outlined text-[12px]">restart_alt</span>
-          <span>新話題</span>
+          <span>{$t('companion.newChat')}</span>
         </button>
       {/if}
     </div>
@@ -521,22 +523,22 @@
         <div class="flex items-center justify-between">
           <span class="font-mono text-[10px] text-[#fabd2f] font-bold uppercase tracking-wider flex items-center gap-1">
             <span class="material-symbols-outlined text-[14px] text-[#fabd2f]">psychology</span>
-            白話科研直覺 (Intuition)
+            {$t('companion.intuitionTitle')}
           </span>
           <div class="flex items-center gap-2">
             {#if companionData?.intuition?.tag}
               <span class="font-mono text-[9px] bg-[#fabd2f]/15 border border-[#fabd2f]/30 text-[#fabd2f] px-1.5 py-0.5 rounded font-medium">
-                {isPlaceholderIntuition ? '待 AI 推導' : companionData.intuition.tag}
+                {isPlaceholderIntuition ? $t('companion.startAi') : companionData.intuition.tag}
               </span>
             {/if}
             <button
               class="text-[#a89984] hover:text-[#fabd2f] text-[11px] flex items-center gap-0.5 cursor-pointer disabled:opacity-50 transition-colors"
               disabled={isGeneratingIntuition}
               onclick={() => ontriggerGenerate?.({ type: 'intuition' })}
-              title="以 AI 深度推導本節物理/工程科研直覺"
+              title={$t('companion.tabIntuition')}
             >
               <span class="material-symbols-outlined text-[13px] {isGeneratingIntuition ? 'animate-spin text-[#fabd2f]' : ''}">refresh</span>
-              <span class="text-[10px]">{isGeneratingIntuition ? '推導中...' : (isPlaceholderIntuition ? '啟動 AI' : '重新剖析')}</span>
+              <span class="text-[10px]">{isGeneratingIntuition ? $t('companion.generatingPhysics') : (isPlaceholderIntuition ? $t('companion.startAi') : $t('companion.reanalyze'))}</span>
             </button>
           </div>
         </div>
@@ -551,10 +553,7 @@
             <div class="flex items-start gap-2">
               <span class="material-symbols-outlined text-[16px] text-[#fabd2f] shrink-0 mt-0.5">auto_awesome</span>
               <div class="flex flex-col gap-0.5">
-                <h4 class="text-xs font-semibold text-[#ebdbb2]">本節尚未生成深度科研直覺</h4>
-                <p class="text-[11px] text-[#d5c4a1] leading-relaxed">
-                  目前僅為大綱預覽。點擊下方按鈕，由 AI 深入論證本節「為什麼要這樣設計、解決了傳統架構的何種瓶頸與物理直覺」。
-                </p>
+                <h4 class="text-xs font-semibold text-[#ebdbb2]">{$t('companion.noIntuitionTitle')}</h4>
               </div>
             </div>
             <button
@@ -563,7 +562,7 @@
               onclick={() => ontriggerGenerate?.({ type: 'intuition' })}
             >
               <span class="material-symbols-outlined text-[14px]">psychology</span>
-              <span>✨ 點擊由 AI 生成白話科研直覺</span>
+              <span>{$t('companion.btnGenerateIntuition')}</span>
             </button>
           </div>
         {:else if companionData?.intuition}
@@ -578,14 +577,14 @@
           </div>
         {:else}
           <div class="bg-[#1d2021] border border-[#fabd2f]/30 rounded-lg p-2.5 flex flex-col gap-2">
-            <p class="text-xs text-[#a89984]">本節尚未生成白話科研直覺卡片。</p>
+            <p class="text-xs text-[#a89984]">{$t('companion.noIntuitionCard')}</p>
             <button
               class="flex items-center justify-center gap-1.5 bg-[#fabd2f] hover:bg-[#fe8019] text-[#1d2021] font-semibold px-3 py-1.5 rounded-lg text-xs transition-colors shadow-sm cursor-pointer"
               disabled={isGeneratingIntuition}
               onclick={() => ontriggerGenerate?.({ type: 'intuition' })}
             >
               <span class="material-symbols-outlined text-[14px]">lightbulb</span>
-              <span>✨ 點擊由 AI 生成本節科研直覺</span>
+              <span>{$t('companion.generateSectionIntuition')}</span>
             </button>
           </div>
         {/if}
@@ -600,7 +599,7 @@
         <div class="flex items-center justify-between">
           <span class="font-mono text-[10px] text-[#8ec07c] font-bold uppercase tracking-wider flex items-center gap-1">
             <span class="material-symbols-outlined text-[14px] text-[#8ec07c]">account_tree</span>
-            長難句語法拆解 (Syntax Tree)
+            {$t('companion.syntaxTreeTitle')}
           </span>
           <div class="flex items-center gap-2">
             {#if companionData?.syntaxTree?.line}
@@ -610,10 +609,10 @@
               class="text-[#a89984] hover:text-[#8ec07c] text-[11px] flex items-center gap-0.5 cursor-pointer disabled:opacity-50 transition-colors"
               disabled={isGeneratingSyntax}
               onclick={() => ontriggerGenerate?.({ type: 'syntax' })}
-              title="以 AI 重新拆解本節代表性長難句"
+              title="SVO Syntax Tree"
             >
               <span class="material-symbols-outlined text-[13px] {isGeneratingSyntax ? 'animate-spin text-[#8ec07c]' : ''}">refresh</span>
-              <span class="text-[10px]">{isGeneratingSyntax ? '拆解中...' : '重新拆解'}</span>
+              <span class="text-[10px]">{isGeneratingSyntax ? $t('companion.dissectingSyntax') : $t('companion.reanalyze')}</span>
             </button>
           </div>
         </div>
@@ -641,14 +640,13 @@
             {/each}
           </div>
         {:else}
-          <p class="text-xs text-[#a89984]">本節長難句尚未剖析。您可反白選取內文中的長難句，或點選下方按鈕自動拆解。</p>
           <button
             class="flex items-center justify-center gap-1.5 bg-[#32302f] hover:bg-[#3c3836] text-[#8ec07c] border border-[#8ec07c]/30 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
             disabled={isGeneratingSyntax}
             onclick={() => ontriggerGenerate?.({ type: 'syntax' })}
           >
             <span class="material-symbols-outlined text-[14px]">psychology</span>
-            <span>✨ 點擊由 AI 拆解本節長難句 (SVO)</span>
+            <span>{$t('companion.btnDissectSyntax')}</span>
           </button>
         {/if}
       </div>
@@ -662,16 +660,16 @@
         <div class="flex items-center justify-between">
           <span class="font-mono text-[10px] text-[#a89984] uppercase tracking-wider flex items-center gap-1 font-bold">
             <span class="material-symbols-outlined text-[14px] text-[#83a598]">translate</span>
-            學術術語精準對齊 (Terminology)
+            {$t('companion.tabTerminology')} (Terminology)
           </span>
           <button
             class="text-[#a89984] hover:text-[#83a598] text-[11px] flex items-center gap-0.5 cursor-pointer disabled:opacity-50 transition-colors"
             disabled={isGeneratingTerminology}
             onclick={() => ontriggerGenerate?.({ type: 'terminology' })}
-            title="以 AI 重新掃描並萃取本節前沿學術專有名詞"
+            title={$t('companion.tabTerminology')}
           >
             <span class="material-symbols-outlined text-[13px] {isGeneratingTerminology ? 'animate-spin text-[#83a598]' : ''}">refresh</span>
-            <span class="text-[10px]">{isGeneratingTerminology ? '對齊中...' : (isPlaceholderTerminology ? '啟動對齊' : '重新對齊')}</span>
+            <span class="text-[10px]">{isGeneratingTerminology ? $t('companion.aligningTerms') : (isPlaceholderTerminology ? $t('companion.startAlignTerms') : $t('companion.realignTerms'))}</span>
           </button>
         </div>
 
@@ -682,22 +680,13 @@
           </div>
         {:else if isPlaceholderTerminology}
           <div class="bg-[#1d2021] border border-[#83a598]/30 rounded-lg p-2.5 flex flex-col gap-2">
-            <div class="flex items-start gap-2">
-              <span class="material-symbols-outlined text-[16px] text-[#83a598] shrink-0 mt-0.5">menu_book</span>
-              <div class="flex flex-col gap-0.5">
-                <h4 class="text-xs font-semibold text-[#ebdbb2]">尚未建立本節專有名詞對照</h4>
-                <p class="text-[11px] text-[#d5c4a1] leading-relaxed">
-                  點擊下方按鈕，由 AI 自動掃描段落，萃取關鍵學術專有名詞並嚴格對齊台灣繁體標準釋義。
-                </p>
-              </div>
-            </div>
             <button
               class="w-full flex items-center justify-center gap-1.5 bg-[#32302f] hover:bg-[#3c3836] text-[#83a598] hover:text-[#83a598] border border-[#83a598]/40 hover:border-[#83a598]/70 px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer shadow-sm"
               disabled={isGeneratingTerminology}
               onclick={() => ontriggerGenerate?.({ type: 'terminology' })}
             >
               <span class="material-symbols-outlined text-[14px]">translate</span>
-              <span>✨ 點擊由 AI 萃取並對齊學術術語</span>
+              <span>{$t('companion.btnGenerateTerms')}</span>
             </button>
           </div>
         {:else if companionData?.terminology && companionData.terminology.length > 0}
@@ -723,7 +712,7 @@
                     class="font-mono text-[9px] px-1.5 py-0.5 rounded border shrink-0 font-medium"
                     style="color: {termColor}; border-color: {termColor}40; background-color: {termColor}15;"
                   >
-                    原文對照
+                    {$t('companion.originalCompare')}
                   </span>
                 </div>
                 {#if cleanExp}
@@ -738,14 +727,14 @@
             {/each}
           </div>
         {:else}
-          <p class="text-xs text-[#a89984]">尚未萃取本節專有名詞字典。</p>
+          <p class="text-xs text-[#a89984]">{$t('companion.noTermsCard')}</p>
           <button
             class="flex items-center justify-center gap-1.5 bg-[#32302f] hover:bg-[#3c3836] text-[#83a598] hover:text-[#83a598] border border-[#83a598]/30 hover:border-[#83a598]/60 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer"
             disabled={isGeneratingTerminology}
             onclick={() => ontriggerGenerate?.({ type: 'terminology' })}
           >
             <span class="material-symbols-outlined text-[14px]">menu_book</span>
-            <span>✨ 點擊萃取本節關鍵學術術語</span>
+            <span>{$t('companion.extractSectionTerms')}</span>
           </button>
         {/if}
       </div>
@@ -764,7 +753,7 @@
           <div class="flex items-center justify-between font-mono text-[10px]">
             <span class="flex items-center gap-1 text-[#fe8019] font-bold">
               <span class="material-symbols-outlined text-[13px] text-[#fe8019] animate-pulse">radar</span>
-              <span>伴讀即時感知焦點 (Live Context)</span>
+              <span>{$t('companion.liveContext')}</span>
             </span>
             <span class="text-[#a89984] text-[9px] truncate max-w-[140px]">{activeContextText}</span>
           </div>
@@ -774,26 +763,26 @@
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-1">
                   <span class="material-symbols-outlined text-[13px] text-[#fe8019]">highlight</span>
-                  <span class="text-[9px] font-mono text-[#fe8019] font-bold uppercase tracking-wider">反白語句錨定中</span>
+                  <span class="text-[9px] font-mono text-[#fe8019] font-bold uppercase tracking-wider">{$t('companion.selectionAnchored')}</span>
                 </div>
                 <div class="flex items-center gap-1.5">
                   <button
                     type="button"
                     class="text-[10px] text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828] px-1.5 py-0.5 rounded cursor-pointer transition-colors flex items-center gap-0.5"
                     onclick={() => handleQuoteToInput(selectedText)}
-                    title="將此反白引用至下方輸入框"
+                    title={$t('companion.quoteSelection')}
                   >
                     <span class="material-symbols-outlined text-[11px]">edit_note</span>
-                    <span>引用</span>
+                    <span>{$t('companion.quoteSelection')}</span>
                   </button>
                   <button
                     type="button"
                     class="bg-[#fe8019] hover:bg-[#fabd2f] text-[#1d2021] font-bold text-[10px] px-2 py-0.5 rounded shadow-sm cursor-pointer transition-all flex items-center gap-1 hover:scale-105"
                     onclick={() => handleSendFocusContext('selected')}
-                    title="立即向 AI 發問深度剖析此反白字句"
+                    title={$t('companion.sendSelectionForAnalysis')}
                   >
                     <span class="material-symbols-outlined text-[11px]">send</span>
-                    <span>發送解析此句</span>
+                    <span>{$t('companion.sendSelectionForAnalysis')}</span>
                   </button>
                 </div>
               </div>
@@ -806,7 +795,7 @@
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-1">
                   <span class="material-symbols-outlined text-[13px] text-[#fabd2f]">description</span>
-                  <span class="text-[9px] font-mono text-[#fabd2f] font-bold">當前研讀段落 (Evidence Grounding)</span>
+                  <span class="text-[9px] font-mono text-[#fabd2f] font-bold">{$t('companion.activeSectionGrounding')}</span>
                 </div>
                 <div class="flex items-center gap-1.5">
                   {#if focusedParagraphKey}
@@ -814,9 +803,9 @@
                       type="button"
                       class="text-[9px] text-[#8ec07c] hover:underline cursor-pointer flex items-center gap-0.5 mr-0.5"
                       onclick={() => onlocateSource?.({ paragraphKey: focusedParagraphKey })}
-                      title="在閱讀畫布高亮定位此段落"
+                      title={$t('companion.locateSection')}
                     >
-                      <span>定位原段</span>
+                      <span>{$t('companion.locateSection')}</span>
                       <span class="material-symbols-outlined text-[10px]">my_location</span>
                     </button>
                   {/if}
@@ -824,19 +813,19 @@
                     type="button"
                     class="text-[10px] text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f] px-1.5 py-0.5 rounded cursor-pointer transition-colors flex items-center gap-0.5"
                     onclick={() => handleQuoteToInput(activeParagraphText)}
-                    title="將此段落引用至下方輸入框"
+                    title={$t('companion.quoteParagraphTooltip')}
                   >
                     <span class="material-symbols-outlined text-[11px]">edit_note</span>
-                    <span>引用</span>
+                    <span>{$t('companion.quoteSelection')}</span>
                   </button>
                   <button
                     type="button"
                     class="bg-[#fabd2f] hover:bg-[#fe8019] text-[#1d2021] font-bold text-[10px] px-2 py-0.5 rounded shadow-sm cursor-pointer transition-all flex items-center gap-1 hover:scale-105"
                     onclick={() => handleSendFocusContext('paragraph')}
-                    title="立即向 AI 發問深度剖析此段落核心論證"
+                    title={$t('companion.sendParagraphForAnalysisTooltip')}
                   >
                     <span class="material-symbols-outlined text-[11px]">send</span>
-                    <span>發送解析此段</span>
+                    <span>{$t('companion.sendSelectionForAnalysis')}</span>
                   </button>
                 </div>
               </div>
@@ -848,16 +837,16 @@
             <div class="flex items-center justify-between text-[10px] text-[#7c6f64] font-mono italic px-0.5">
               <span class="flex items-center gap-1">
                 <span class="material-symbols-outlined text-[11px]">info</span>
-                <span>點選段落或反白文字注入焦點</span>
+                <span>{$t('companion.clickParagraphHint')}</span>
               </span>
               <button
                 type="button"
                 class="text-[10px] text-[#fabd2f] hover:underline not-italic cursor-pointer flex items-center gap-0.5"
-                onclick={() => sendQuestion(`請針對當前章節「${activeContextText}」展開核心問題論證與科研直覺分析`)}
-                title="傳送目前感知章節進行分析"
+                onclick={() => sendQuestion(get(t)('companion.askSectionInquiry', { chapter: activeContextText }))}
+                title={$t('companion.analyzeSectionTooltip')}
               >
                 <span class="material-symbols-outlined text-[11px]">send</span>
-                <span>剖析章節</span>
+                <span>{$t('companion.analyzeSectionBtn')}</span>
               </button>
             </div>
           {/if}
@@ -867,9 +856,9 @@
         <div class="flex flex-col gap-1.5 shrink-0 bg-[#282828]/50 border border-[#3c3836] p-2.5 rounded-xl">
           <div class="flex items-center justify-between font-mono text-[10px] text-[#d3869b] uppercase tracking-wider font-bold">
             <span class="flex items-center gap-1">
-              <span class="material-symbols-outlined text-[14px]">tips_and_updates</span> 主動引導探索 (Socratic Inquiries)
+              <span class="material-symbols-outlined text-[14px]">tips_and_updates</span> {$t('companion.socraticInquiries')}
             </span>
-            <span class="text-[9px] text-[#a89984] normal-case font-normal">點選一鍵提問</span>
+            <span class="text-[9px] text-[#a89984] normal-case font-normal">{$t('companion.clickToAsk')}</span>
           </div>
 
           <div class="flex flex-col gap-1.5 mt-0.5">
@@ -888,13 +877,13 @@
         <!-- Section Divider for Chat Stream -->
         <div class="flex items-center gap-2 pt-1 font-mono text-[9px] text-[#a89984] uppercase tracking-wider font-semibold">
           <div class="h-px bg-[#3c3836] flex-1"></div>
-          <span>伴讀對話流 (Dialogue Stream)</span>
+          <span>{$t('companion.dialogueStream')}</span>
           <div class="h-px bg-[#3c3836] flex-1"></div>
         </div>
         {#each messages as msg}
           <div class="flex flex-col gap-1 {msg.sender === 'user' ? 'items-end' : 'items-start'}">
             <div class="flex items-center gap-1.5 px-1 font-mono text-[9px] text-[#a89984]">
-              <span>{msg.sender === 'user' ? '讀者' : 'AI 伴讀智庫'}</span>
+              <span>{msg.sender === 'user' ? $t('companion.userSender') : $t('companion.aiSender')}</span>
               <span>· {msg.time}</span>
               {#if msg.tag}
                 <span class="{msg.cached ? 'text-[#b8bb26]' : 'text-[#fe8019]'} font-semibold">[{msg.tag}]</span>
@@ -913,10 +902,10 @@
                       type="button"
                       class="text-[10px] text-[#8ec07c] hover:underline flex items-center gap-0.5 cursor-pointer"
                       onclick={() => onlocateSource?.({ paragraphKey: focusedParagraphKey })}
-                      title="在閱讀畫布高亮定位此解答對應之段落"
+                      title={$t('companion.locateAnchorTooltip')}
                     >
                       <span class="material-symbols-outlined text-[12px]">my_location</span>
-                      <span>定位原段</span>
+                      <span>{$t('companion.locateSection')}</span>
                     </button>
                   {:else}
                     <span></span>
@@ -927,20 +916,20 @@
                       type="button"
                       class="text-[10px] text-[#a89984] hover:text-[#fabd2f] flex items-center gap-0.5 cursor-pointer transition-colors"
                       onclick={() => handleCopyMessage(msg.id, msg.text)}
-                      title="複製解答至剪貼簿"
+                      title={$t('companion.copyAnswerTooltip')}
                     >
                       <span class="material-symbols-outlined text-[12px]">{copiedId === msg.id ? 'check' : 'content_copy'}</span>
-                      <span>{copiedId === msg.id ? '已複製' : '複製'}</span>
+                      <span>{copiedId === msg.id ? $t('common.copied') : $t('common.copy')}</span>
                     </button>
 
                     <button
                       type="button"
                       class="text-[10px] text-[#a89984] hover:text-[#fabd2f] flex items-center gap-0.5 cursor-pointer transition-colors"
                       onclick={() => handleSaveMessageToNotes(msg.text)}
-                      title="將此解答收錄至精讀筆記"
+                      title={$t('companion.saveToNotesTooltip')}
                     >
                       <span class="material-symbols-outlined text-[12px]">note_add</span>
-                      <span>收錄至筆記</span>
+                      <span>{$t('derivations.saveToNotes')}</span>
                     </button>
                   </div>
                 </div>
@@ -955,8 +944,8 @@
           <div class="flex items-center gap-2 p-2.5 bg-[#282828] border border-[#fe8019]/40 rounded-xl text-xs text-[#fabd2f] font-mono animate-pulse shadow-sm">
             <span class="material-symbols-outlined text-[16px] animate-spin text-[#fe8019]">bolt</span>
             <div class="flex flex-col gap-0.5">
-              <span class="font-bold">{activeProvider === 'groq' ? 'Groq LPU' : activeProvider.toUpperCase()} 正在展開學術推理...</span>
-              <span class="text-[10px] text-[#a89984]">解析文中數學推導與因果論證結構</span>
+              <span class="font-bold">{$t('companion.reasoningModel', { provider: activeProvider === 'groq' ? 'Groq LPU' : activeProvider.toUpperCase() })}</span>
+              <span class="text-[10px] text-[#a89984]">{$t('companion.reasoningDesc')}</span>
             </div>
           </div>
         {/if}
@@ -970,7 +959,7 @@
           onclick={() => scrollToBottom(true, true)}
         >
           <span class="material-symbols-outlined text-[14px]">arrow_downward</span>
-          <span>最新回覆</span>
+          <span>{$t('companion.latestReply')}</span>
         </button>
       {/if}
     </div>
@@ -982,15 +971,15 @@
     <div class="flex items-center gap-1.5">
       <button
         class="flex-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] px-2 py-1 rounded font-mono text-[10px] flex items-center justify-center gap-1 transition-colors cursor-pointer"
-        onclick={() => sendQuestion(`請針對「${activeContextText}」展開最詳盡的數學推導證明與極限分析`)}
+        onclick={() => sendQuestion(get(t)('companion.askDerivationDetailed', { chapter: activeContextText }))}
       >
-        <span class="material-symbols-outlined text-[12px] text-[#fabd2f]">calculate</span> 追問推導細節
+        <span class="material-symbols-outlined text-[12px] text-[#fabd2f]">calculate</span> {$t('companion.askDerivationDetails')}
       </button>
       <button
         class="flex-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] px-2 py-1 rounded font-mono text-[10px] flex items-center justify-center gap-1 transition-colors cursor-pointer"
         onclick={() => onquickAction?.({ action: 'exportNotes' })}
       >
-        <span class="material-symbols-outlined text-[12px] text-[#fe8019]">note_add</span> 輸出精讀筆記
+        <span class="material-symbols-outlined text-[12px] text-[#fe8019]">note_add</span> {$t('companion.exportToNotes')}
       </button>
     </div>
 
@@ -1001,7 +990,7 @@
         bind:value={promptInput}
         rows="1"
         class="w-full bg-transparent text-[#ebdbb2] placeholder:text-[#a89984]/70 text-xs px-2 py-1 focus:outline-none transition-all resize-none max-h-32 min-h-[30px] leading-relaxed"
-        placeholder={(apiKey || activeProvider === 'ollama') ? `${activeProvider.toUpperCase()} 伴讀推論中... (Enter 發送，Shift+Enter 換行)` : "提問或追問推導... (Enter 發送，Shift+Enter 換行)"}
+        placeholder={(apiKey || activeProvider === 'ollama') ? $t('companion.inputPlaceholderWithKey', { provider: activeProvider.toUpperCase() }) : $t('companion.inputPlaceholderWithoutKey')}
         oninput={handleInput}
         onkeydown={handleKeydown}
       ></textarea>
@@ -1010,7 +999,7 @@
         class="w-7 h-7 rounded bg-[#fe8019] text-[#1d2021] flex items-center justify-center hover:opacity-90 transition-opacity font-bold cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed mb-0.5"
         disabled={!promptInput.trim()}
         onclick={handleSubmit}
-        title="發送提問 (Enter)"
+        title={$t('companion.sendTooltip')}
       >
         <span class="material-symbols-outlined text-[15px]">arrow_upward</span>
       </button>
@@ -1018,9 +1007,9 @@
 
     <div class="flex items-center justify-between text-[#a89984] font-mono text-[9px] px-0.5">
       <span class="text-[#fabd2f]">
-        {(apiKey || activeProvider === 'ollama') ? `${activeProvider.toUpperCase()} (${activeModel.slice(0, 16)})` : '本地知識庫感知中'}
+        {(apiKey || activeProvider === 'ollama') ? `${activeProvider.toUpperCase()} (${activeModel.slice(0, 16)})` : $t('companion.localKnowledgeSensing')}
       </span>
-      <span class="text-[#7c6f64]">Enter 發送 · Shift+Enter 換行 · Esc 退出</span>
+      <span class="text-[#7c6f64]">{$t('companion.inputKeyboardShortcuts')}</span>
     </div>
   </div>
 </aside>

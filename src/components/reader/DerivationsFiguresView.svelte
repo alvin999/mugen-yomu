@@ -23,6 +23,8 @@
   import FigureDeconstructionPanel from './derivations/FigureDeconstructionPanel.svelte';
   import FormulaDerivationPanel from './derivations/FormulaDerivationPanel.svelte';
   import DerivationScratchpadPanel from './derivations/DerivationScratchpadPanel.svelte';
+  import { get } from 'svelte/store';
+  import { t } from '../../stores/localeStore';
 
   interface Props {
     paper?: PaperDocument | null;
@@ -74,7 +76,7 @@
 
   // 互動演算沙盒狀態 (CHECKLIST Item 8)
   let scratchpadLatex = $state<string>('\\mathrm{Attention}(Q, K, V) = \\mathrm{softmax}\\left(\\frac{QK^T}{\\sqrt{d_k}}\\right) V');
-  let scratchpadNotes = $state<string>('驗證將維度 d_k 縮放除數代入後，能否將方差從 d_k 壓回單位 1');
+  let scratchpadNotes = $state<string>(get(t)('derivations.scratchpadDefaultNotes'));
   let scratchpadDk = $state<number>(64);
   let scratchpadDotProduct = $state<number>(16);
   let batchSize = $state<number>(2);
@@ -158,10 +160,10 @@
 
       paper = { ...paper };
       onupdatePaper?.({ paper });
-      showToast('✨ 程式初篩 + 輕量 AI 提煉完成！已為本篇建立專屬圖表推導');
+      showToast($t('derivations.scanSuccessToast'));
     } catch (err: any) {
-      scanError = err.message || '分析失敗';
-      showToast('❌ 提煉失敗：' + (err.message || '未知錯誤'));
+      scanError = err.message || 'Scan error';
+      showToast($t('derivations.scanFailToast', { msg: err.message || 'Error' }));
     } finally {
       isScanningHeuristically = false;
     }
@@ -223,9 +225,9 @@
 
         const res = await fetchFigureDeconstruction(fig, paper, p, k, m, o);
         currentFigureDeconstruction = res;
-        showToast('✨ AI 圖表深層解構完成！已儲存至本機快取');
+        showToast($t('derivations.figureAiSuccessToast'));
       } catch (err: any) {
-        figureAnalysisError = err.message || 'AI 分析失敗';
+        figureAnalysisError = err.message || 'AI error';
       } finally {
         isAnalyzingFigure = false;
       }
@@ -270,9 +272,9 @@
 
         const res = await fetchFormulaDerivation(formula, paper, p, k, m, o);
         currentFormulaDerivation = res;
-        showToast('✨ AI 步驟推導完成！已儲存至本機快取');
+        showToast($t('derivations.formulaAiSuccessToast'));
       } catch (err: any) {
-        formulaDerivationError = err.message || 'AI 推導演算失敗';
+        formulaDerivationError = get(t)('derivations.scanFailToast', { msg: err.message || 'AI' });
       } finally {
         isDerivingFormula = false;
       }
@@ -333,74 +335,83 @@
   // 收錄推導至精讀筆記
   function handleCaptureDerivationToNotes() {
     if (!currentFormulaDerivation) return;
-    const title = `數學推導 · ${currentFormulaDerivation.formulaNumber ? currentFormulaDerivation.formulaNumber + ' ' : ''}${currentFormulaDerivation.formulaName}`;
+    const nameStr = `${currentFormulaDerivation.formulaNumber ? currentFormulaDerivation.formulaNumber + ' ' : ''}${currentFormulaDerivation.formulaName}`;
+    const title = $t('derivations.mathProofTitle', { name: nameStr });
     const stepsMarkdown = currentFormulaDerivation.steps.map(s => 
-      `### Step ${s.stepNumber}: ${s.title}\n$$${s.latexFormula}$$\n${s.explanation}\n> 💡 **直覺**：${s.intuition || '保持維度相容與數值穩定'}`
+      $t('derivations.stepFormat', {
+        step: s.stepNumber,
+        title: s.title,
+        formula: s.latexFormula,
+        explanation: s.explanation,
+        intuitionLabel: $t('derivations.intuitionLabel'),
+        intuition: s.intuition || $t('derivations.defaultIntuitionText')
+      })
     ).join('\n\n');
 
     const content = `## ${title}
-> 論文出處：《${paper?.title || '學術文獻'}》
+${$t('derivations.derivationPaperSource', { title: paper?.title || $t('derivations.academicLiterature') })}
 
-### 核心公式
+${$t('derivations.coreFormulaHeader')}
 $$${currentFormulaDerivation.latexText}$$
 
-### 初始假設與條件
+${$t('derivations.assumptionsHeader')}
 ${currentFormulaDerivation.assumptions.map(a => `- ${a}`).join('\n')}
 
 ${stepsMarkdown}
 
-### 物理/工程科研直覺
+${$t('derivations.intuitionHeader')}
 ${currentFormulaDerivation.physicalIntuition}
 `;
 
     onsaveNote?.({ title, text: content });
-    showToast('📝 推導證明已成功收錄至精讀筆記！', true);
+    showToast($t('derivations.proofSavedToast'), true);
   }
 
   // 收錄圖表解構至筆記
   function handleCaptureFigureToNotes() {
     if (!currentFigureDeconstruction) return;
-    const title = `圖表解構 · ${currentFigureDeconstruction.figureNumber ? currentFigureDeconstruction.figureNumber + ' ' : ''}${currentFigureDeconstruction.name}`;
+    const nameStr = `${currentFigureDeconstruction.figureNumber ? currentFigureDeconstruction.figureNumber + ' ' : ''}${currentFigureDeconstruction.name}`;
+    const title = $t('derivations.figureDeconTitle', { name: nameStr });
     const content = `## ${title}
-> 論文出處：《${paper?.title || '學術文獻'}》
+${$t('derivations.derivationPaperSource', { title: paper?.title || $t('derivations.academicLiterature') })}
 
-### 概念總覽
+${$t('derivations.conceptOverviewHeader')}
 ${currentFigureDeconstruction.conceptOverview}
 
-### 資料流轉與模組轉換
+${$t('derivations.dataFlowHeader')}
 ${currentFigureDeconstruction.dataFlowSteps.map(s => `${s.step}. **${s.component}**：${s.action} ${s.tensorTransformation ? `($$${s.tensorTransformation}$$)` : ''}`).join('\n')}
 
-### 關鍵工程設計決策
+${$t('derivations.designDecisionsHeader')}
 ${currentFigureDeconstruction.designDecisions.map(d => `- **${d.decision}**：${d.rationale}`).join('\n')}
 
-### 核心結論
+${$t('derivations.coreTakeawayHeader')}
 ${currentFigureDeconstruction.keyTakeaway}
 `;
 
     onsaveNote?.({ title, text: content });
-    showToast('📝 圖表架構解構已收錄至精讀筆記！', true);
+    showToast($t('derivations.figureSavedToast'), true);
   }
 
   // 收錄沙盒推導至筆記
   function handleCaptureScratchpadToNotes() {
-    const title = `自訂推導沙盒筆記 · ${new Date().toLocaleTimeString()}`;
+    const title = $t('derivations.sandboxNoteTitle', { time: new Date().toLocaleTimeString() });
     const content = `## ${title}
-### 自訂 LaTeX 方程式
+${$t('derivations.customLatexHeader')}
 $$${scratchpadLatex}$$
 
-### 研讀推導備註
+${$t('derivations.notesHeader')}
 ${scratchpadNotes}
 
-### 數值代入檢驗 ($d_k=${scratchpadDk}$, $q \\cdot k=${scratchpadDotProduct}$)
-- 縮放除數 $\\sqrt{d_k}$: ${sanityResult.sqrtDk}
-- 縮放後點積數值: ${sanityResult.scaledValue}
-- Softmax 梯度敏感狀態: ${sanityResult.isSaturated ? '⚠️ 飽和鈍化 (梯度接近 0)' : '✅ 梯度健康流動'}
+${$t('derivations.numericInspectionHeader', { dk: scratchpadDk, dotProduct: scratchpadDotProduct })}
+${$t('derivations.scaleDivisorPrefix', { val: sanityResult.sqrtDk })}
+${$t('derivations.scaledValuePrefix', { val: sanityResult.scaledValue })}
+${$t('derivations.softmaxStatusPrefix', { status: sanityResult.isSaturated ? $t('derivations.saturatedStatus') : $t('derivations.healthyStatus') })}
 
-${scratchpadAiResult ? `### AI 導師審查講評\n**${scratchpadAiResult.verdictTitle}**\n${scratchpadAiResult.critique}` : ''}
+${scratchpadAiResult ? $t('derivations.aiMentorCritiqueHeader', { verdict: scratchpadAiResult.verdictTitle, critique: scratchpadAiResult.critique }) : ''}
 `;
 
     onsaveNote?.({ title, text: content });
-    showToast('📝 沙盒推導驗證已收錄至精讀筆記！', true);
+    showToast($t('derivations.sandboxSavedToast'), true);
   }
 
   // 觸發 AI 驗證沙盒公式
@@ -413,7 +424,7 @@ ${scratchpadAiResult ? `### AI 導師審查講評\n**${scratchpadAiResult.verdic
       const o = (typeof window !== 'undefined' ? localStorage.getItem('mugen_ollama_url') : null) || 'http://localhost:11434';
 
       scratchpadAiResult = await verifyScratchpadDerivation(scratchpadLatex, scratchpadNotes, p, k, m, o);
-      showToast('✨ AI 伴讀推導審核完成！');
+      showToast($t('derivations.scratchpadAuditToast'));
     } catch (err: any) {
       console.warn('Scratchpad verification failed:', err);
     } finally {
@@ -440,25 +451,25 @@ ${scratchpadAiResult ? `### AI 導師審查講評\n**${scratchpadAiResult.verdic
       <button
         class="font-mono text-xs px-2.5 py-1 rounded bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 text-[#ebdbb2] hover:text-[#fe8019] flex items-center gap-1 transition-colors cursor-pointer shadow-sm"
         onclick={() => onbackToReader?.()}
-        title="返回雙語伴讀工作區"
+        title={$t('formula.backTooltip')}
       >
         <span class="material-symbols-outlined text-[15px]">arrow_back</span>
-        <span class="font-medium">返回閱讀</span>
+        <span class="font-medium">{$t('formula.backToReader')}</span>
       </button>
 
       <span class="text-[#504945]">/</span>
 
       <span class="font-mono text-xs font-semibold text-[#fabd2f] flex items-center gap-1.5">
         <span class="material-symbols-outlined text-[17px] text-[#fe8019]">schema</span>
-        圖表與數學推導對照工作台 (Derivations & Figures Studio)
+        {$t('formula.title')}
       </span>
       {#if dynamicFormulas.length === 0 && dynamicFigures.length === 0}
         <span class="font-mono text-[10px] bg-[#fabd2f]/15 text-[#fabd2f] border border-[#fabd2f]/40 px-2 py-0.5 rounded font-bold">
-          範例預覽模式 · PREVIEW
+          {$t('formula.previewMode')}
         </span>
       {:else}
         <span class="font-mono text-[10px] bg-[#32302f] text-[#a89984] px-2 py-0.5 rounded border border-[#504945]">
-          左右雙軌認知聯動
+          {$t('formula.dualTrack')}
         </span>
       {/if}
       {#if copyToastText || noteToastText}
@@ -476,14 +487,14 @@ ${scratchpadAiResult ? `### AI 導師審查講評\n**${scratchpadAiResult.verdic
         class="font-mono text-xs px-2.5 py-1 rounded bg-[#fe8019]/15 hover:bg-[#fe8019]/25 border border-[#fe8019]/50 text-[#fe8019] hover:text-[#fabd2f] flex items-center gap-1.5 transition-colors font-semibold shadow-sm"
         onclick={handleHeuristicScan}
         disabled={isScanningHeuristically}
-        title="使用本機程式演算法初篩，再以輕量微量 Prompt 交由 AI 提煉核心公式與圖表（極致節省 Token，免費方案友善）"
+        title={$t('formula.scanTooltip')}
       >
         {#if isScanningHeuristically}
           <span class="inline-block w-3 h-3 border-2 border-[#fe8019] border-t-transparent rounded-full animate-spin"></span>
-          <span>程式初篩與 AI 提煉中...</span>
+          <span>{$t('formula.scanning')}</span>
         {:else}
           <span class="material-symbols-outlined text-[14px]">auto_fix_high</span>
-          <span>⚡ 程式初篩 + 提煉推導</span>
+          <span>{$t('formula.heuristicScan')}</span>
         {/if}
       </button>
 
@@ -492,23 +503,23 @@ ${scratchpadAiResult ? `### AI 導師審查講評\n**${scratchpadAiResult.verdic
         <button
           class="font-mono text-xs px-3 py-1 rounded-md font-medium transition-all flex items-center gap-1.5 {studioRightMode === 'derivation' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
           onclick={() => studioRightMode = 'derivation'}
-          title="檢視論文核心公式的分步嚴謹數學推導、證明與張量維度"
+          title={$t('derivations.formulaTabBtn')}
         >
           <span class="material-symbols-outlined text-[14px]">functions</span>
-          <span>📐 論文公式分步推導</span>
+          <span>{$t('derivations.formulaTabBtn')}</span>
         </button>
         <button
           class="font-mono text-xs px-3 py-1 rounded-md font-medium transition-all flex items-center gap-1.5 {studioRightMode === 'scratchpad' ? 'bg-[#fe8019] text-[#1d2021] font-semibold shadow-sm' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
           onclick={() => studioRightMode = 'scratchpad'}
-          title="開啟互動式 LaTeX 演算沙盒，代入數值試算與張量維度檢驗"
+          title={$t('derivations.sandboxTabBtn')}
         >
           <span class="material-symbols-outlined text-[14px]">science</span>
-          <span>🧪 互動推導演算沙盒</span>
+          <span>{$t('derivations.sandboxTabBtn')}</span>
         </button>
       </div>
 
       <div class="font-mono text-[11px] text-[#a89984] truncate max-w-[200px] hidden md:block" title={paper?.title}>
-        {paper?.title || '文獻圖表與推導演算'}
+        {paper?.title || $t('rail.formula')}
       </div>
     </div>
   </div>

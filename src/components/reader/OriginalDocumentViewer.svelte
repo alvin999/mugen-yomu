@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { get } from 'svelte/store';
   import type { PaperDocument, ChapterSection } from '../../types/document';
   import { flattenSections } from '../../stores/readingStore';
   import {
@@ -16,6 +17,7 @@
   import OriginalViewerToolbar from './original/OriginalViewerToolbar.svelte';
   import PdfCanvasRenderer from './original/PdfCanvasRenderer.svelte';
   import ImageLightboxModal from '../common/ImageLightboxModal.svelte';
+  import { t } from '../../stores/localeStore';
 
   interface Props {
     paper?: PaperDocument | null;
@@ -73,7 +75,7 @@
   function openLightbox(imgUrl: string, caption?: string) {
     if (!imgUrl) return;
     activeLightboxImg = imgUrl;
-    activeLightboxCaption = caption || '學術圖表預覽';
+    activeLightboxCaption = caption || $t('reader.lightboxCaption');
   }
 
   function closeLightbox() {
@@ -199,7 +201,7 @@
       }
     } catch (err: any) {
       console.warn('PDF.js 載入失敗:', err);
-      renderError = err?.message || 'PDF 載入失敗';
+      renderError = err?.message || get(t)('viewer.pdfLoadFailed');
     } finally {
       isLoadingPdf = false;
     }
@@ -275,7 +277,7 @@
     } catch (err: any) {
       if (err?.name !== 'RenderingCancelledException') {
         console.warn('Canvas 繪圖異常:', err);
-        renderError = `Canvas 繪圖異常: ${err?.message || err}`;
+        renderError = get(t)('viewer.canvasRenderError', { error: err?.message || err });
       }
     } finally {
       isRenderingPage = false;
@@ -384,7 +386,7 @@
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
         loadLocalFile(file);
       } else {
-        alert('請拖入標準 PDF 格式檔案 (.pdf)！');
+        alert($t('reader.original.dropPdfAlert'));
       }
     }
   }
@@ -408,7 +410,7 @@
 
     try {
       const source = localPdfFile || localPdfArrayBuffer!;
-      const name = localPdfFile ? localPdfFile.name : (paper?.title || '本機文獻');
+      const name = localPdfFile ? localPdfFile.name : (paper?.title || $t('reader.original.localDoc'));
       const doc = await parsePdfToDocument(source, name, (pct) => {
         convertProgress = pct;
       });
@@ -419,7 +421,7 @@
 
       onimportPaper?.({ paper: doc });
     } catch (err: any) {
-      alert(`解析本機 PDF 失敗：${err?.message || err}`);
+      alert($t('reader.original.parseLocalPdfFail', { msg: err?.message || err }));
     } finally {
       isConvertingToPaper = false;
     }
@@ -485,8 +487,8 @@
   {#if isDraggingOver}
     <div class="absolute inset-0 z-50 bg-[#1d2021]/90 border-2 border-dashed border-[#fe8019] flex flex-col items-center justify-center gap-2 text-[#fabd2f] backdrop-blur-sm pointer-events-none">
       <span class="material-symbols-outlined text-4xl animate-bounce text-[#fe8019]">upload_file</span>
-      <span class="font-mono text-sm font-bold">放開滑鼠以在此開啟本機 PDF 原檔</span>
-      <span class="text-xs text-[#a89984]">零資料上傳 · 100% 瀏覽器本機安全渲染</span>
+      <span class="font-mono text-sm font-bold">{$t('reader.original.dropPdfPrompt')}</span>
+      <span class="text-xs text-[#a89984]">{$t('reader.original.localRenderHint')}</span>
     </div>
   {/if}
 
@@ -509,16 +511,16 @@
         <div class="px-3 py-1.5 bg-[#282828] border-b border-[#3c3836] flex items-center justify-between text-xs font-mono shrink-0">
           <div class="flex items-center gap-2 truncate">
             <span class="material-symbols-outlined text-[16px] text-[#fe8019] shrink-0">info</span>
-            <span class="text-[#fabd2f] font-semibold">原始網頁對照</span>
-            <span class="text-[#a89984] text-[11px] truncate hidden sm:inline">受瀏覽器同源安全限制，無法與右側章節連動</span>
+            <span class="text-[#fabd2f] font-semibold">{$t('reader.original.originalWebCompare')}</span>
+            <span class="text-[#a89984] text-[11px] truncate hidden sm:inline">{$t('reader.original.browserSameOriginHint')}</span>
           </div>
           <button
             class="px-2 py-0.5 bg-[#32302f] hover:bg-[#3c3836] text-[#8ec07c] hover:text-[#b8bb26] border border-[#3c3836] rounded text-[11px] flex items-center gap-1 cursor-pointer transition-colors shrink-0 ml-2"
             onclick={handleOpenExternal}
-            title="在獨立分頁中開啟原始網頁"
+            title={$t('reader.original.openOriginalWebTab')}
           >
             <span class="material-symbols-outlined text-[13px]">open_in_new</span>
-            <span>另開新分頁</span>
+            <span>{$t('reader.original.openInNewTab')}</span>
           </button>
         </div>
 
@@ -526,7 +528,7 @@
         <div class="flex-1 w-full relative bg-white">
           <iframe
             src={webUrl}
-            title={paper?.title || '原始網頁'}
+            title={paper?.title || $t('reader.original.originalWebCompare')}
             class="w-full h-full border-none"
             sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
           ></iframe>
@@ -535,7 +537,7 @@
     {:else}
       <div class="w-full h-full flex flex-col items-center justify-center p-6 text-center gap-3">
         <span class="material-symbols-outlined text-4xl text-[#a89984]">picture_as_pdf</span>
-        <span class="text-xs text-[#a89984] font-mono">請選取或拖入 PDF 文獻以開啟原版對照</span>
+        <span class="text-xs text-[#a89984] font-mono">{$t('reader.original.dragPdfHint')}</span>
       </div>
     {/if}
   </div>
@@ -545,20 +547,20 @@
     <div class="flex items-center gap-2 truncate">
       <span class="flex items-center gap-1 {isPdf && isSyncEnabled ? 'text-[#b8bb26]' : 'text-[#a89984]'}">
         <span class="w-1.5 h-1.5 rounded-full {isPdf && isSyncEnabled ? 'bg-[#b8bb26] animate-pulse' : 'bg-[#a89984]'}"></span>
-        <span>{isPdf ? (isSyncEnabled ? '已連線閱讀器' : '獨立瀏覽中') : '網頁獨立瀏覽 (無法連動)'}</span>
+        <span>{isPdf ? (isSyncEnabled ? $t('reader.original.readingCanvas') : $t('reader.original.independentBrowsing')) : $t('reader.original.webIndependentBrowsing')}</span>
       </span>
       <span>·</span>
-      <span class="text-[#ebdbb2] truncate max-w-[200px]" title={activeSection?.title || '未選定章節'}>
-        {activeSection ? `§ ${activeSection.id} ${activeSection.title}` : '文獻初始狀態'}
+      <span class="text-[#ebdbb2] truncate max-w-[200px]" title={activeSection?.title || ''}>
+        {activeSection ? `§ ${activeSection.id} ${activeSection.title}` : $t('reader.original.docInitialState')}
       </span>
     </div>
 
     <div class="flex items-center gap-2 shrink-0">
       {#if isStringMatchActive}
-        <span class="text-[#8ec07c]">精確頁碼校正</span>
+        <span class="text-[#8ec07c]">{$t('reader.original.exactPageCalibration')}</span>
       {/if}
       <span class="text-[#fabd2f]">
-        {isPdf ? (viewerMode === 'canvas' ? '畫布視圖' : '擬真排版') : '原生網頁'}
+        {isPdf ? (viewerMode === 'canvas' ? $t('reader.original.canvasView') : $t('reader.original.realisticLayout')) : $t('reader.original.nativeWeb')}
       </span>
     </div>
   </footer>

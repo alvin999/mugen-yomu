@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { ChapterSection, PaperDocument, FigureItem, FormulaItem } from '../../stores/documentStore';
   import { calculateReadingStats } from '../../stores/readingStore';
+  import { get } from 'svelte/store';
+  import { t } from '../../stores/localeStore';
 
   export interface DashboardFormulaItem {
     formula: FormulaItem;
@@ -120,7 +122,7 @@
   }
 
   function resetProgress() {
-    if (confirm('確定要重設本篇論文的閱讀進度嗎？')) {
+    if (confirm($t('readingMap.resetConfirm'))) {
       onresetProgress?.();
     }
   }
@@ -162,7 +164,7 @@
             if (!seenLatex.has(norm)) {
               seenLatex.add(norm);
               const resolvedSecId = f.sectionId || sec.id || 'sec_root';
-              const resolvedSecTitle = f.sectionTitle || sec.title || (paper?.title ? `§ ${paper.title.slice(0, 16)}...` : '文獻主體章節');
+              const resolvedSecTitle = f.sectionTitle || sec.title || (paper?.title ? `§ ${paper.title.slice(0, 16)}...` : get(t)('readingMap.mainSection'));
               const resolvedPage = f.page || (sec.page ? `p. ${sec.page}` : undefined);
               list.push({
                 formula: f,
@@ -199,7 +201,9 @@
                 if (!formulaNum) formulaNum = `(${list.length + 1})`;
 
                 const nameNum = formulaNum.replace(/[()]/g, '');
-                const formulaName = secPrefix ? `§ ${secPrefix} 方程式 ${nameNum}` : `核心方程式 ${nameNum}`;
+                const formulaName = secPrefix
+                  ? get(t)('readingMap.sectionFormula', { prefix: secPrefix, num: nameNum })
+                  : get(t)('readingMap.coreFormula', { num: nameNum });
                 const lhs = rawLatex.split(/[\s=:]+/)[0]?.replace(/[\\{}]/g, '').trim() || 'y';
 
                 list.push({
@@ -213,8 +217,8 @@
                     sectionTitle: sec.title,
                     sourceContextSnippet: p.replace(/\$\$/g, '').slice(0, 160),
                     variables: [
-                      { symbol: lhs, meaning: '核心目標物理量 / 狀態指標', color: '#fe8019' },
-                      { symbol: 'm_\\Sigma / t', meaning: '控制變因 / 累積質量與時間', color: '#fabd2f' }
+                      { symbol: lhs, meaning: $t('readingMap.defaultStateIndicator'), color: '#fe8019' },
+                      { symbol: 'm_\\Sigma / t', meaning: $t('readingMap.defaultControlVar'), color: '#fabd2f' }
                     ]
                   },
                   sectionId: sec.id,
@@ -274,7 +278,7 @@
       <span class="material-symbols-outlined absolute left-2 text-[15px] text-[#a89984]">search</span>
       <input
         class="w-full bg-[#282828] border border-[#3c3836] text-[#ebdbb2] placeholder:text-[#a89984]/70 text-xs pl-7 pr-7 py-1.5 rounded-lg focus:outline-none focus:border-[#fe8019] focus:bg-[#32302f] transition-colors"
-        placeholder="搜尋段落、定理、公式或名詞..."
+        placeholder={$t('readingMap.searchPlaceholder')}
         type="text"
         bind:value={searchQuery}
       />
@@ -295,35 +299,35 @@
     <div class="bg-[#282828] border border-[#3c3836] p-2.5 rounded-lg flex flex-col gap-1.5 shadow-sm">
       <div class="flex items-center justify-between text-[#a89984]">
         <div class="flex items-center gap-1.5">
-          <span class="font-mono text-[10px] uppercase tracking-wider text-[#ebdbb2] font-semibold">精讀覆蓋率</span>
-          <span class="text-[10px] font-mono text-[#b8bb26] font-bold" title="已精讀研讀比例">{deepCoveragePercent}%</span>
+          <span class="font-mono text-[10px] uppercase tracking-wider text-[#ebdbb2] font-semibold">{$t('readingMap.coverage')}</span>
+          <span class="text-[10px] font-mono text-[#b8bb26] font-bold" title={$t('readingMap.deepCoverage')}>{deepCoveragePercent}%</span>
           {#if skimCoveragePercent > 0}
-            <span class="text-[9px] font-mono text-[#fabd2f]/90" title="已瀏覽掃讀比例">(+{skimCoveragePercent}% 掃讀)</span>
+            <span class="text-[9px] font-mono text-[#fabd2f]/90" title={$t('readingMap.skimCoverage')}>{$t('readingMap.skimCoverageAdd').replace('{percent}', String(skimCoveragePercent))}</span>
           {/if}
         </div>
         <div class="flex items-center gap-1.5">
           <span class="font-mono text-[11px] text-[#fabd2f] font-semibold">
-            {deepWords.toLocaleString()} / {totalWords.toLocaleString()} 字
+            {deepWords.toLocaleString()} / {totalWords.toLocaleString()}
           </span>
           <button
             class="text-[#a89984] hover:text-[#fe8019] transition-colors p-0.5 rounded cursor-pointer"
             onclick={resetProgress}
-            title="重設此篇閱讀進度"
+            title={$t('readingMap.resetProgress')}
           >
             <span class="material-symbols-outlined text-[13px]">restart_alt</span>
           </button>
         </div>
       </div>
       <!-- Dual-Track Real Progress Bar -->
-      <div class="w-full h-2 bg-[#141617] rounded-full overflow-hidden flex border border-[#3c3836]/80" title="綠色: 精讀掌握度 {deepCoveragePercent}% / 黃色: 瀏覽掃讀度 {skimCoveragePercent}%">
+      <div class="w-full h-2 bg-[#141617] rounded-full overflow-hidden flex border border-[#3c3836]/80">
         <div class="bg-[#b8bb26] h-full transition-all duration-300" style="width: {deepCoveragePercent}%"></div>
         <div class="bg-[#fabd2f]/50 h-full transition-all duration-300" style="width: {skimCoveragePercent}%"></div>
       </div>
       <div class="flex items-center justify-between font-mono text-[10px] text-[#a89984] leading-tight">
-        <span>視線停留於 <strong class="text-[#fe8019]">§{activeSectionId}</strong></span>
+        <span>{$t('readingMap.dwellAt')} <strong class="text-[#fe8019]">§{activeSectionId}</strong></span>
         <span class="text-[#b8bb26] flex items-center gap-0.5">
           <span class="h-1.5 w-1.5 rounded-full bg-[#b8bb26] inline-block"></span>
-          即時動態追蹤
+          LIVE
         </span>
       </div>
     </div>
@@ -331,15 +335,15 @@
     <!-- Outline Structure Tree -->
     <div class="flex flex-col gap-0.5">
       <span class="font-mono text-[10px] uppercase tracking-wider text-[#a89984] px-2 mb-1 flex items-center justify-between">
-        <span>目錄樹 (Structure)</span>
+        <span>{$t('readingMap.structure')}</span>
         {#if searchQuery}
-          <span class="text-[#fabd2f]">過濾中</span>
+          <span class="text-[#fabd2f]">{$t('readingMap.filtering')}</span>
         {/if}
       </span>
 
       {#if filteredSections.length === 0}
         <div class="p-3 text-center text-[#a89984] text-xs font-mono">
-          未找到匹配「{searchQuery}」之章節
+          <span>{$t('search.noResultsTitle')}</span>
         </div>
       {/if}
 
@@ -360,12 +364,12 @@
                 type="button"
                 class="hover:scale-125 transition-transform flex items-center shrink-0 cursor-pointer bg-transparent border-0 p-0 text-inherit"
                 onclick={(e) => toggleSectionRead(section.id, e)}
-                title={section.isRead ? "點擊標記為未讀" : "點擊標記為已讀"}
+                title={section.isRead ? $t('readingMap.markUnread') : $t('readingMap.markRead')}
               >
                 {#if isAct}
-                  <span class="material-symbols-outlined text-[16px] text-[#fe8019]" title="正在閱讀中">center_focus_strong</span>
+                  <span class="material-symbols-outlined text-[16px] text-[#fe8019]" title={$t('readingMap.readingNow')}>center_focus_strong</span>
                 {:else if section.isRead}
-                  <span class="material-symbols-outlined text-[16px] text-[#b8bb26]" title="已精讀">check_circle</span>
+                  <span class="material-symbols-outlined text-[16px] text-[#b8bb26]" title={$t('readingMap.deepReadDone')}>check_circle</span>
                 {:else if section.progress >= 70}
                   <span class="material-symbols-outlined text-[16px] text-[#fabd2f]">timelapse</span>
                 {:else if section.progress > 0}
@@ -394,7 +398,7 @@
                 <button
                   class="w-5 h-5 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#504945]/40 transition-colors"
                   onclick={(e) => toggleSectionCollapse(section.id, e)}
-                  title={collapsedSections[section.id] ? "展開子章節" : "收合子章節"}
+                  title={collapsedSections[section.id] ? $t('readingMap.expandSub') : $t('readingMap.collapseSub')}
                 >
                   <span class="material-symbols-outlined text-[16px]">
                     {collapsedSections[section.id] ? 'chevron_right' : 'expand_more'}
@@ -421,7 +425,7 @@
                       type="button"
                       class="hover:scale-125 transition-transform flex items-center shrink-0 cursor-pointer bg-transparent border-0 p-0 text-inherit"
                       onclick={(e) => toggleSectionRead(sub.id, e)}
-                      title={sub.isRead ? "點擊標記為未讀" : "點擊標記為已讀"}
+                      title={sub.isRead ? $t('readingMap.markUnread') : $t('readingMap.markRead')}
                     >
                       {#if isSubAct}
                         <span class="material-symbols-outlined text-[14px] text-[#fe8019]">center_focus_strong</span>
@@ -487,7 +491,7 @@
       <div class="flex items-center justify-between px-1">
         <span class="font-mono text-[10px] uppercase tracking-wider text-[#a89984] flex items-center gap-1">
           <span class="material-symbols-outlined text-[12px] text-[#fe8019]">photo_library</span>
-          <span>文獻圖表看板</span>
+          <span>{$t('readingMap.dashboardFigures')}</span>
           {#if allPaperFigures.length > 0}
             <span class="text-[#b8bb26] font-bold font-mono">({allPaperFigures.length})</span>
           {/if}
@@ -496,7 +500,7 @@
           type="button"
           class="font-mono text-[10px] text-[#fabd2f] hover:text-[#fe8019] hover:underline cursor-pointer flex items-center gap-0.5 bg-transparent border-0 p-0"
           onclick={() => onopenFiguresStudio?.()}
-          title="切換至全景圖表推導工作室"
+          title={$t('readingMap.studioTooltip')}
         >
           <span>Studio ➜</span>
         </button>
@@ -556,8 +560,8 @@
             </span>
           </div>
           <div class="flex flex-col justify-center min-w-0">
-            <span class="text-xs text-[#ebdbb2] font-medium truncate">{firstFigure?.name || '文獻圖表載入中'}</span>
-            <span class="font-mono text-[10px] text-[#a89984] truncate">{firstFigure?.caption || '學術文獻結構圖表'}</span>
+            <span class="text-xs text-[#ebdbb2] font-medium truncate">{firstFigure?.name || $t('readingMap.loadingFigure')}</span>
+            <span class="font-mono text-[10px] text-[#a89984] truncate">{firstFigure?.caption || $t('readingMap.academicFigure')}</span>
           </div>
         </button>
       {/if}
@@ -579,7 +583,7 @@
                   activeFormulaIndex = fIdx;
                   selectEquation(item.formula.id, item.sectionId, item.formula.number);
                 }}
-                title={`${item.formula.number || `Eq ${fIdx + 1}`}: ${item.formula.name} (出處: § ${item.sectionTitle})`}
+                title={$t('readingMap.formulaTooltip', { num: item.formula.number || `Eq ${fIdx + 1}`, name: item.formula.name, section: item.sectionTitle })}
               >
                 <span class="material-symbols-outlined text-[10px] text-[#fe8019]">functions</span>
                 <span>{item.formula.number || `Eq ${fIdx + 1}`}</span>
@@ -606,7 +610,7 @@
                   type="button"
                   class="text-[#a89984] hover:text-[#fe8019] p-0.5 rounded hover:bg-[#3c3836] transition-colors"
                   onclick={prevFormula}
-                  title="上一條公式"
+                  title={$t('readingMap.prevFormula')}
                 >
                   <span class="material-symbols-outlined text-[12px]">chevron_left</span>
                 </button>
@@ -614,7 +618,7 @@
                   type="button"
                   class="text-[#a89984] hover:text-[#fe8019] p-0.5 rounded hover:bg-[#3c3836] transition-colors"
                   onclick={nextFormula}
-                  title="下一條公式"
+                  title={$t('readingMap.nextFormula')}
                 >
                   <span class="material-symbols-outlined text-[12px]">chevron_right</span>
                 </button>
@@ -624,9 +628,9 @@
 
           <!-- Provenance Badge: 清楚標註函數是從哪裡來的 (章節出處與頁碼) -->
           <div class="flex items-center justify-between gap-1 text-[9px] font-mono bg-[#141617] border border-[#3c3836] px-2 py-1 rounded text-[#8ec07c]">
-            <div class="flex items-center gap-1.5 truncate max-w-[190px]" title="文獻出處：§ {currentDashboardFormula.sectionTitle} {currentDashboardFormula.page ? `(${currentDashboardFormula.page})` : ''}">
+            <div class="flex items-center gap-1.5 truncate max-w-[190px]" title="§ {currentDashboardFormula.sectionTitle} {currentDashboardFormula.page ? `(${currentDashboardFormula.page})` : ''}">
               <span class="material-symbols-outlined text-[12px] text-[#fe8019] shrink-0">pin_drop</span>
-              <span class="text-[#fe8019] font-bold shrink-0">出處:</span>
+              <span class="text-[#fe8019] font-bold shrink-0">{$t('readingMap.sourceLabel')}</span>
               <span class="text-[#ebdbb2] font-medium truncate">§ {currentDashboardFormula.sectionTitle.replace(/^§\s*/, '')}</span>
             </div>
             {#if currentDashboardFormula.page}
@@ -643,15 +647,15 @@
                 selectEquation(currentDashboardFormula.formula.id, currentDashboardFormula.sectionId, currentDashboardFormula.formula.number);
               }
             }}
-            title="點擊定位跳轉至原文對應公式"
+            title={$t('readingMap.locateSource')}
           >
             {currentDashboardFormula.formula.latexText}
           </button>
 
           <!-- Source Context Snippet (原文引述脈絡線索) -->
           {#if currentDashboardFormula.sourceContextSnippet}
-            <div class="text-[9px] text-[#a89984] italic truncate px-1 border-l-2 border-[#fe8019]/70 bg-[#1d2021]/50 py-0.5 rounded-r" title="原文引述：{currentDashboardFormula.sourceContextSnippet}">
-              <span class="text-[#fe8019] font-normal mr-1">[引述]:</span>“{currentDashboardFormula.sourceContextSnippet}”
+            <div class="text-[9px] text-[#a89984] italic truncate px-1 border-l-2 border-[#fe8019]/70 bg-[#1d2021]/50 py-0.5 rounded-r">
+              <span class="text-[#fe8019] font-normal mr-1">“</span>{currentDashboardFormula.sourceContextSnippet}”
             </div>
           {/if}
 
@@ -661,10 +665,10 @@
               type="button"
               class="font-mono text-[9px] text-[#a89984] hover:text-[#fabd2f] flex items-center gap-0.5 transition-colors cursor-pointer"
               onclick={() => onopenFiguresStudio?.()}
-              title="前往 Formula Lab 深入推導與證明"
+              title={$t('readingMap.studioTooltip')}
             >
               <span class="material-symbols-outlined text-[11px]">schema</span>
-              <span>推導工作室</span>
+              <span>{$t('readingMap.formulaStudio')}</span>
             </button>
             <button
               type="button"
@@ -675,10 +679,10 @@
                   selectEquation(currentDashboardFormula.formula.id, currentDashboardFormula.sectionId, currentDashboardFormula.formula.number);
                 }
               }}
-              title="跳轉並在原文中精確定位此公式"
+              title={$t('readingMap.locateSource')}
             >
               <span class="material-symbols-outlined text-[11px]">my_location</span>
-              <span>定位原文出處 ➜</span>
+              <span>{$t('readingMap.locateSource')}</span>
             </button>
           </div>
         </div>
@@ -694,12 +698,12 @@
               <span class="font-mono text-[9px] bg-[#fabd2f]/15 border border-[#fabd2f]/40 text-[#fabd2f] px-1 py-0.2 rounded font-bold">PREVIEW</span>
               <span class="font-mono text-[10px] text-[#fabd2f] font-semibold">Eq. (1)</span>
             </div>
-            <span class="font-mono text-[10px] truncate max-w-[120px]">核心推導公式</span>
+            <span class="font-mono text-[10px] truncate max-w-[120px]">{$t('readingMap.coreFormula')}</span>
           </div>
           <div class="font-mono text-[#ebdbb2] bg-[#1d2021] border border-[#3c3836] px-1.5 py-1 rounded tracking-tight text-[10px] truncate">
             η = (C · (1 + γ)) / (ln(τ + 1) · √Ω)
           </div>
-          <span class="font-mono text-[9px] text-[#8ec07c]">出處: 範例展示 (Attention § 3.2.1)</span>
+          <span class="font-mono text-[9px] text-[#8ec07c]">{$t('readingMap.exampleExhibit')} (Attention § 3.2.1)</span>
         </button>
       {/if}
     </div>

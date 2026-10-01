@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { PaperDocument } from '../../stores/documentStore';
+  import { t } from '../../stores/localeStore';
 
   interface Props {
     paper: PaperDocument;
@@ -39,16 +40,16 @@
     <div class="flex flex-wrap items-center gap-1.5">
       {#if paper.type === 'web'}
         <span class="font-mono text-[10px] bg-[#83a598]/15 border border-[#83a598]/40 text-[#83a598] px-2 py-0.5 rounded font-semibold uppercase flex items-center gap-1">
-          <span class="material-symbols-outlined text-[11px]">language</span> 網頁專文
+          <span class="material-symbols-outlined text-[11px]">language</span> {$t('repo.grid.webBadge')}
         </span>
       {:else}
         <span class="font-mono text-[10px] bg-[#fe8019]/15 border border-[#fe8019]/40 text-[#fe8019] px-2 py-0.5 rounded font-semibold uppercase flex items-center gap-1">
-          <span class="material-symbols-outlined text-[11px]">description</span> 學術論文
+          <span class="material-symbols-outlined text-[11px]">description</span> {$t('repo.grid.paperBadge')}
         </span>
       {/if}
 
       <span class="font-mono text-[11px] text-[#a89984] bg-[#1d2021] border border-[#3c3836] px-1.5 py-0.5 rounded truncate max-w-[140px]">
-        {paper.venue || '學術專刊'}
+        {paper.venue || $t('repo.grid.defaultVenue')}
       </span>
 
       {#if paper.arxivId}
@@ -63,13 +64,13 @@
       {#if isActive}
         <span class="font-mono text-[11px] text-[#fe8019] bg-[#fe8019]/10 border border-[#fe8019]/40 px-2 py-0.5 rounded-full flex items-center gap-1.5 font-semibold">
           <span class="h-1.5 w-1.5 rounded-full bg-[#fe8019] animate-pulse"></span>
-          研讀中
+          {$t('repo.grid.inProgress')}
         </span>
       {/if}
       <button
         type="button"
         class="w-6 h-6 rounded flex items-center justify-center text-[#7c6f64] hover:text-[#fb4934] hover:bg-[#1d2021] transition-colors cursor-pointer {isActive ? 'opacity-80 hover:opacity-100 text-[#a89984]' : 'opacity-0 group-hover:opacity-100'}"
-        title="自文獻庫移除"
+        title={$t('repo.grid.deleteTooltip')}
         onclick={(e) => { e.stopPropagation(); ondelete?.({ id: paper.id }); }}
       >
         <span class="material-symbols-outlined text-[15px]">delete</span>
@@ -93,7 +94,7 @@
     </h3>
 
     <span class="text-xs text-[#a89984] truncate select-text">
-      {Array.isArray(paper.authors) ? paper.authors.join(', ') : (paper.authors || '未知作者')}
+      {Array.isArray(paper.authors) ? paper.authors.join(', ') : (paper.authors || $t('repo.grid.unknownAuthor'))}
     </span>
 
     <!-- Abstract Snippet (if available) -->
@@ -109,7 +110,7 @@
   <!-- Reading Progress Bar -->
   <div class="flex flex-col gap-1 pt-1 border-t border-[#3c3836]/60">
     <div class="flex items-center justify-between text-[11px] font-mono">
-      <span class="text-[#a89984]">精讀掌握度</span>
+      <span class="text-[#a89984]">{$t('repo.grid.mastery')}</span>
       <span class={progressPercent >= 100 ? 'text-[#b8bb26] font-semibold' : 'text-[#fabd2f]'}>
         {progressPercent}%
       </span>
@@ -124,21 +125,21 @@
 
   <!-- Footer Stats: Sections, Formulas, Figures, Notes -->
   <div class="grid grid-cols-4 gap-1 py-1.5 px-2 bg-[#1d2021]/80 rounded-lg text-center font-mono text-[10px] text-[#a89984] border border-[#32302f]">
-    <div title="章節數量">
+    <div title={$t('repo.grid.sectionsTitle')}>
       <span class="text-[#ebdbb2] font-semibold block">{sectionCount}</span>
-      <span>章節</span>
+      <span>{$t('repo.grid.sections')}</span>
     </div>
-    <div title="LaTeX 公式數量">
+    <div title={$t('repo.grid.formulasTitle')}>
       <span class="text-[#fabd2f] font-semibold block">{formulaCount}</span>
-      <span>公式</span>
+      <span>{$t('repo.grid.formulas')}</span>
     </div>
-    <div title="學術圖表數量">
+    <div title={$t('repo.grid.figuresTitle')}>
       <span class="text-[#8ec07c] font-semibold block">{figureCount}</span>
-      <span>圖表</span>
+      <span>{$t('repo.grid.figures')}</span>
     </div>
-    <div title="精讀筆記數量">
+    <div title={$t('repo.grid.notesTitle')}>
       <span class="text-[#fe8019] font-semibold block">{notesCount}</span>
-      <span>筆記</span>
+      <span>{$t('repo.grid.notes')}</span>
     </div>
   </div>
 
@@ -147,16 +148,16 @@
     <button
       class="flex-1 py-1.5 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold text-xs rounded-lg flex items-center justify-center gap-1 transition-colors shadow-sm cursor-pointer"
       onclick={() => onselect?.({ paper })}
-      title="進入閱讀工作台開始研讀"
+      title={$t('repo.grid.startStudyTooltip')}
     >
       <span class="material-symbols-outlined text-[15px]">menu_book</span>
-      <span>進入研讀</span>
+      <span>{$t('repo.grid.startStudy')}</span>
     </button>
 
     <button
       class="px-2.5 py-1.5 bg-[#1d2021] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#83a598] text-[#a89984] hover:text-[#83a598] rounded-lg text-xs font-mono flex items-center gap-1 transition-colors cursor-pointer"
       onclick={() => onviewCitation?.({ paper })}
-      title="查看引文星系圖譜"
+      title={$t('repo.grid.citationTooltip')}
     >
       <span class="material-symbols-outlined text-[15px]">hub</span>
     </button>
@@ -164,7 +165,7 @@
     <button
       class="px-2.5 py-1.5 bg-[#1d2021] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fabd2f] text-[#a89984] hover:text-[#fabd2f] rounded-lg text-xs font-mono flex items-center gap-1 transition-colors cursor-pointer"
       onclick={() => onviewNotes?.({ paper })}
-      title="查閱本篇精讀筆記"
+      title={$t('repo.grid.notesTooltip')}
     >
       <span class="material-symbols-outlined text-[15px]">draw</span>
     </button>
@@ -172,7 +173,7 @@
     <button
       class="px-2.5 py-1.5 bg-[#1d2021] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#a89984] text-[#a89984] hover:text-[#ebdbb2] rounded-lg text-xs font-mono flex items-center gap-1 transition-colors cursor-pointer"
       onclick={() => onpreview?.({ paper })}
-      title="預覽大綱與摘要"
+      title={$t('repo.grid.previewTooltip')}
     >
       <span class="material-symbols-outlined text-[15px]">visibility</span>
     </button>

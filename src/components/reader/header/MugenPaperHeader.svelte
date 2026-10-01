@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { PaperDocument } from '../../../types/document';
   import AuthorInfoModal from './AuthorInfoModal.svelte';
+  import { t } from '../../../stores/localeStore';
 
   interface Props {
     paper?: PaperDocument | null;
@@ -44,7 +45,7 @@
         {#if paper.type === 'web'}
           <span class="font-mono text-[10px] bg-[#83a598]/15 border border-[#83a598]/40 text-[#83a598] px-2.5 py-1 rounded-md font-semibold flex items-center gap-1.5 shadow-xs">
             <span class="material-symbols-outlined text-[13px]">language</span>
-            <span>網頁論文 Web Article</span>
+            <span>{$t('reader.paperHeader.webArticle')}</span>
           </span>
         {:else}
           <span class="font-mono text-[10px] bg-[#fe8019]/15 border border-[#fe8019]/40 text-[#fe8019] px-2.5 py-1 rounded-md font-semibold shadow-xs flex items-center">
@@ -70,7 +71,7 @@
           rel="noopener noreferrer"
           class="font-mono text-[11px] text-[#8ec07c] hover:text-[#b8bb26] hover:underline flex items-center gap-1 transition-colors px-2 py-0.5 rounded hover:bg-[#8ec07c]/10 cursor-pointer ml-auto"
         >
-          <span>查看原文</span>
+          <span>{$t('reader.paperHeader.viewOriginal')}</span>
           <span class="material-symbols-outlined text-[13px]">open_in_new</span>
         </a>
       {/if}
@@ -93,11 +94,11 @@
       <div class="flex items-center justify-between gap-2 flex-wrap">
         <div class="flex items-center gap-2">
           <span class="font-mono text-[11px] text-[#fabd2f] font-semibold uppercase tracking-wider flex items-center gap-1.5">
-            <span class="material-symbols-outlined text-[15px] text-[#fe8019]">auto_stories</span> 雙語論文核心摘要 (Bilingual Abstract Core)
+            <span class="material-symbols-outlined text-[15px] text-[#fe8019]">auto_stories</span> {$t('reader.paperHeader.abstractCore')}
           </span>
           {#if hasValidChineseSummary}
             <span class="font-mono text-[9px] bg-[#8ec07c]/15 text-[#8ec07c] border border-[#8ec07c]/30 px-1.5 py-0.2 rounded font-medium">
-              已提煉
+              {$t('reader.paperHeader.extractedBadge')}
             </span>
           {/if}
         </div>
@@ -106,25 +107,25 @@
           {#if isGeneratingAbstract}
             <span class="font-mono text-[10px] text-[#fe8019] flex items-center gap-1 animate-pulse">
               <span class="material-symbols-outlined text-[13px] animate-spin">progress_activity</span>
-              <span>AI 提煉中...</span>
+              <span>{$t('reader.paperHeader.extracting')}</span>
             </span>
           {:else if !hasValidChineseSummary}
             <button
               class="font-mono text-[10px] bg-[#fe8019]/20 hover:bg-[#fe8019]/30 border border-[#fe8019]/50 hover:border-[#fe8019] text-[#fabd2f] px-2.5 py-0.5 rounded flex items-center gap-1 transition-all cursor-pointer shadow-sm active:scale-95"
               onclick={() => ongenerateAbstract?.()}
-              title="由 AI 提煉論文核心導讀"
+              title={$t('reader.paperHeader.genSummaryTooltip')}
             >
               <span class="material-symbols-outlined text-[12px]">auto_awesome</span>
-              <span>生成導讀</span>
+              <span>{$t('reader.paperHeader.genSummary')}</span>
             </button>
           {:else}
             <button
               class="font-mono text-[10px] text-[#a89984] hover:text-[#fabd2f] flex items-center gap-0.5 transition-colors cursor-pointer"
               onclick={() => ongenerateAbstract?.()}
-              title="重新調用 AI 精煉核心導讀"
+              title={$t('reader.paperHeader.refreshSummaryTooltip')}
             >
               <span class="material-symbols-outlined text-[12px]">refresh</span>
-              <span>重刷</span>
+              <span>{$t('reader.paperHeader.refresh')}</span>
             </button>
           {/if}
 
@@ -132,7 +133,7 @@
             class="font-mono text-[10px] text-[#a89984] hover:text-[#ebdbb2] flex items-center gap-0.5 transition-colors cursor-pointer ml-1"
             onclick={() => ontoggleAbstract?.()}
           >
-            <span>{isAbstractCollapsed ? '展開' : '收起'}</span>
+            <span>{isAbstractCollapsed ? $t('reader.paperHeader.expand') : $t('reader.paperHeader.collapse')}</span>
             <span class="material-symbols-outlined text-[13px]">{isAbstractCollapsed ? 'expand_more' : 'expand_less'}</span>
           </button>
         </div>
@@ -147,7 +148,7 @@
                 class="underline hover:text-[#ebdbb2] cursor-pointer text-[10px]"
                 onclick={() => ongenerateAbstract?.()}
               >
-                重試
+                {$t('reader.paperHeader.retry')}
               </button>
             </div>
           {/if}
@@ -164,7 +165,7 @@
           {:else}
             <div class="bg-[#32302f]/60 border border-[#504945]/40 rounded-lg p-2.5 flex items-center gap-2 text-[#a89984] text-[11px]">
               <span class="material-symbols-outlined text-[#fe8019] text-[16px] shrink-0">psychology</span>
-              <span>尚未建立繁體中文核心導讀。可點擊右上角「生成導讀」由 AI 提煉論文核心精華。</span>
+              <span>{$t('reader.paperHeader.noAbstractNotice')}</span>
             </div>
 
             {#if cleanEnglishAbstract}

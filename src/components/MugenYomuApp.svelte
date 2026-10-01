@@ -31,6 +31,7 @@
   import { getCacheStats, getStorageEstimate, type CacheStats } from '../services/cacheService';
   import { formatModelDisplayName } from '../services/aiService';
   import { deactivateCursor, activateCursor } from '../stores/vimCursorStore';
+  import { t } from '../stores/localeStore';
 
   import { isRailCollapsedStore, setRailCollapsed } from '../stores/layoutStore';
 
@@ -47,23 +48,23 @@
 
   // --- Model, Memory & Cache Telemetry ---
   let modelName: string = 'Groq (Llama 3.3 70B)';
-  let cachedInfo: string = '$0.14 / 2.4k cached (省 82%)';
   let cacheStats: CacheStats | null = null;
   let localMemoryMb: number = 0.8;
   let localMemoryPercent: number = 1;
-  let localMemoryTooltip: string = '本機 IndexedDB 快取與文獻庫';
+  let storageQuotaText: string = '1 GB';
+
+  // 依據本機快取即時數據動態計算節省成本與 Token
+  $: cachedInfo = cacheStats
+    ? `$${cacheStats.costSavedUsd.toFixed(2)} / ${(cacheStats.totalTokensSaved / 1000).toFixed(1)}k cached (${$t('header.savedRatio')} ${cacheStats.savingsPercent}%)`
+    : `$0.14 / 2.4k cached (${$t('header.savedRatio')} 82%)`;
+
+  $: localMemoryTooltip = $t('header.localUsedQuota', { usage: localMemoryMb, quota: storageQuotaText });
 
   // --- Paper Library & Active Document ---
   let paperLibrary: PaperDocument[] = [];
   let activePaperId: string = 'mugen_yomu_user_manual';
   let activePaper: PaperDocument | null = null;
   let workspaceRef: any = null;
-
-  // 依據本機快取即時數據動態計算節省成本與 Token
-  $: if (cacheStats) {
-    const tokensK = (cacheStats.totalTokensSaved / 1000).toFixed(1);
-    cachedInfo = `$${cacheStats.costSavedUsd.toFixed(2)} / ${tokensK}k cached (省 ${cacheStats.savingsPercent}%)`;
-  }
 
   let modalObserver: MutationObserver | null = null;
   let hadModalOpen = false;
@@ -133,7 +134,7 @@
     const storage = await getStorageEstimate();
     localMemoryMb = storage.usageMb;
     localMemoryPercent = storage.percent;
-    localMemoryTooltip = `本機已使用 ${storage.usageMb} MB / 總配額 ${storage.displayText.split('/')[1]?.trim() || '1 GB'}`;
+    storageQuotaText = storage.displayText.split('/')[1]?.trim() || '1 GB';
   }
 
   function setPaper(paper: PaperDocument) {

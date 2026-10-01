@@ -13,6 +13,8 @@
 </script>
 
 <script lang="ts">
+  import { t } from '../../stores/localeStore';
+
   interface Props {
     notes?: NoteEntry[];
     selectedIndex?: number;
@@ -26,7 +28,7 @@
   let {
     notes = [],
     selectedIndex = $bindable(0),
-    currentPaperTitle = '全部文獻',
+    currentPaperTitle = '',
     onselectNote,
     onaddNote,
     ondeleteNote,
@@ -34,6 +36,8 @@
   }: Props = $props();
 
   let searchQuery = $state('');
+
+  let resolvedTitle = $derived(currentPaperTitle || $t('notes.allLibrary'));
 
   let filteredNotes = $derived(
     notes.map((note, index) => ({ note, index })).filter(({ note }) => {
@@ -49,7 +53,7 @@
   <div class="p-3 border-b border-[#3c3836] flex flex-col gap-2.5 shrink-0">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-1.5 min-w-0">
-        <h3 class="font-bold text-xs text-[#ebdbb2] truncate">{currentPaperTitle}</h3>
+        <h3 class="font-bold text-xs text-[#ebdbb2] truncate">{resolvedTitle}</h3>
         <span class="font-mono text-[10px] bg-[#282828] text-[#fabd2f] px-1.5 py-0.2 rounded border border-[#3c3836] shrink-0">
           {notes.length}
         </span>
@@ -58,10 +62,10 @@
       <button
         class="px-2 py-1 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-bold text-xs rounded-lg flex items-center gap-1 transition-colors shadow-sm cursor-pointer shrink-0"
         onclick={() => onaddNote?.()}
-        title="手動新增一筆精讀觀點"
+        title={$t('notes.newNote')}
       >
         <span class="material-symbols-outlined text-[15px]">add</span>
-        <span>新增筆記</span>
+        <span>{$t('notes.newNote')}</span>
       </button>
     </div>
 
@@ -71,7 +75,7 @@
       <input
         type="text"
         bind:value={searchQuery}
-        placeholder="搜尋筆記標題、概念、內文..."
+        placeholder={$t('notes.searchPlaceholder')}
         class="w-full bg-[#282828] border border-[#3c3836] focus:border-[#fe8019] text-[#ebdbb2] placeholder-[#7c6f64] rounded-lg pl-8 pr-7 py-1 text-xs outline-none transition-colors"
       />
       {#if searchQuery}
@@ -90,8 +94,8 @@
     {#if filteredNotes.length === 0}
       <div class="flex-1 flex flex-col items-center justify-center text-center p-6 text-[#7c6f64]">
         <span class="material-symbols-outlined text-[28px] mb-2 opacity-60">edit_note</span>
-        <span class="text-xs font-medium text-[#a89984]">目前無相關精讀筆記</span>
-        <span class="text-[10px] mt-1">點擊上方「新增筆記」或於閱讀器中標註</span>
+        <span class="text-xs font-medium text-[#a89984]">{$t('notes.noNotesTitle')}</span>
+        <span class="text-[10px] mt-1">{$t('notes.noNotesHint')}</span>
       </div>
     {:else}
       {#each filteredNotes as { note, index } (index)}
@@ -113,14 +117,14 @@
               <button
                 class="w-5 h-5 rounded flex items-center justify-center transition-colors {note.isPinned ? 'text-[#fabd2f]' : 'text-[#504945] opacity-0 group-hover:opacity-100 hover:text-[#fabd2f]'}"
                 onclick={(e) => { e.stopPropagation(); ontogglePin?.({ index }); }}
-                title={note.isPinned ? '取消釘選' : '釘選此筆記'}
+                title={note.isPinned ? $t('notes.unpinNote') : $t('notes.pinNote')}
               >
                 <span class="material-symbols-outlined text-[13px]">{note.isPinned ? 'star' : 'star_border'}</span>
               </button>
               <button
                 class="w-5 h-5 rounded flex items-center justify-center text-[#504945] hover:text-[#fb4934] transition-colors opacity-0 group-hover:opacity-100"
                 onclick={(e) => { e.stopPropagation(); ondeleteNote?.({ index }); }}
-                title="刪除筆記"
+                title={$t('notes.deleteNote')}
               >
                 <span class="material-symbols-outlined text-[13px]">delete</span>
               </button>
@@ -129,13 +133,13 @@
 
           <!-- Snippet preview -->
           <p class="text-[11px] text-[#a89984] line-clamp-2 leading-relaxed font-sans">
-            {note.text || '無內文'}
+            {note.text || '...'}
           </p>
 
           <!-- Card Footer: Section/Paper badge & Time -->
           <div class="flex items-center justify-between pt-1 border-t border-[#3c3836]/40 text-[10px] font-mono text-[#7c6f64]">
             <span class="truncate max-w-[150px] text-[#fabd2f]/90 bg-[#141617] px-1 py-0.2 rounded border border-[#32302f]">
-              {note.sectionTitle || note.paperTitle || '精讀心得'}
+              {note.sectionTitle || note.paperTitle || resolvedTitle}
             </span>
             <span>{note.time}</span>
           </div>

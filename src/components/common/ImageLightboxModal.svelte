@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t } from '../../stores/localeStore';
+
   interface Props {
     isOpen?: boolean;
     imageUrl?: string;
@@ -9,7 +11,7 @@
   let {
     isOpen = false,
     imageUrl = '',
-    caption = '學術圖表預覽',
+    caption = '',
     onclose
   }: Props = $props();
 
@@ -52,7 +54,7 @@
       <div class="flex items-center gap-3 overflow-hidden">
         <span class="material-symbols-outlined text-[#fe8019] text-[20px]">image</span>
         <span class="font-mono text-sm font-bold text-[#fabd2f] truncate max-w-xl">
-          {caption}
+          {caption || $t('formula.previewMode')}
         </span>
       </div>
 
@@ -61,7 +63,7 @@
           type="button"
           class="text-[#a89984] hover:text-[#ebdbb2] flex items-center gap-1 font-mono text-xs bg-[#282828] px-3 py-1.5 rounded border border-[#3c3836] transition-colors"
           onclick={toggleZoom}
-          title={zoom === 1 ? '放大圖表 (160%)' : '還原大小 (100%)'}
+          title={zoom === 1 ? $t('lightbox.zoomIn') : $t('lightbox.zoomReset')}
         >
           <span class="material-symbols-outlined text-[15px]">
             {zoom === 1 ? 'zoom_in' : 'zoom_out'}
@@ -73,9 +75,9 @@
           type="button"
           class="text-[#a89984] hover:text-[#fe8019] flex items-center gap-1 font-mono text-xs bg-[#282828] px-3 py-1.5 rounded border border-[#3c3836] transition-colors hover:border-[#fe8019]/50"
           onclick={handleClose}
-          title="關閉 (ESC)"
+          title="{$t('lightbox.close')} (ESC)"
         >
-          <span>關閉</span>
+          <span>{$t('lightbox.close')}</span>
           <span class="material-symbols-outlined text-[15px]">close</span>
         </button>
       </div>
@@ -99,7 +101,7 @@
 
     <!-- Caption / Hint -->
     <div class="pt-2 text-center text-xs text-[#a89984] font-mono">
-      <span>點擊背景或按 ESC 鍵關閉 · 點擊圖片可縮放檢視</span>
+      <span>{$t('lightbox.closeHint')}</span>
     </div>
   </div>
 {/if}

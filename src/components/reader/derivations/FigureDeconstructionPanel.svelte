@@ -5,6 +5,7 @@
   import { renderMath } from '../../../utils/katexUtils';
   import { normalizeAcademicImageUrl } from '../../../utils/academicImageUtils';
   import { getDomainAdaptedFigurePipeline } from '../../../services/derivationService';
+  import { t } from '../../../stores/localeStore';
 
   interface Props {
     paper?: PaperDocument | null;
@@ -93,7 +94,7 @@
             }}
           >
             <span class="material-symbols-outlined text-[13px]">image</span>
-            <span>{item.figure.figureNumber || `圖表 ${idx + 1}`}</span>
+            <span>{item.figure.figureNumber || $t('derivations.figureTab', { num: idx + 1 })}</span>
           </button>
         {/each}
       </div>
@@ -103,7 +104,7 @@
         <button
           class="w-6 h-6 rounded flex items-center justify-center bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] text-xs font-mono"
           onclick={() => figureZoom = Math.max(50, figureZoom - 20)}
-          title="縮小圖片"
+          title={$t('derivations.zoomOut')}
         >
           -
         </button>
@@ -111,14 +112,14 @@
         <button
           class="w-6 h-6 rounded flex items-center justify-center bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] text-xs font-mono"
           onclick={() => figureZoom = Math.min(250, figureZoom + 20)}
-          title="放大圖片"
+          title={$t('derivations.zoomIn')}
         >
           +
         </button>
         <button
           class="w-6 h-6 rounded flex items-center justify-center bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#fe8019] text-xs"
           onclick={() => figureZoom = 100}
-          title="重設縮放 (100%)"
+          title={$t('derivations.zoomReset')}
         >
           <span class="material-symbols-outlined text-[13px]">restart_alt</span>
         </button>
@@ -136,14 +137,14 @@
           onclick={() => onselectFallbackTab?.({ tab: 'fig1' })}
         >
           <span class="material-symbols-outlined text-[14px]">account_tree</span>
-          <span>Fig 1: Transformer 全景拓撲</span>
+          <span>{$t('derivations.fallbackFig1')}</span>
         </button>
         <button
           class="font-mono text-xs px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 {activeFigureTab === 'fig2' ? 'bg-[#3c3836] text-[#fe8019] font-semibold border border-[#fe8019]/40' : 'text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2]'}"
           onclick={() => onselectFallbackTab?.({ tab: 'fig2' })}
         >
           <span class="material-symbols-outlined text-[14px]">device_hub</span>
-          <span>Fig 2: 點積注意力電路</span>
+          <span>{$t('derivations.fallbackFig2')}</span>
         </button>
       </div>
     </div>
@@ -157,8 +158,8 @@
         <div class="flex items-center gap-2 text-[#fabd2f]">
           <span class="material-symbols-outlined text-[18px]">info</span>
           <div class="flex flex-col">
-            <span class="font-bold">範例預覽 (Preview Mode)</span>
-            <span class="text-[11px] text-[#d5c4a1]">當前論文尚未萃取出專屬圖表，此處為展示模板。點擊右側以程式初篩提煉。</span>
+            <span class="font-bold">{$t('derivations.previewMode')}</span>
+            <span class="text-[11px] text-[#d5c4a1]">{$t('derivations.noFiguresExtracted')}</span>
           </div>
         </div>
         <button
@@ -168,10 +169,10 @@
         >
           {#if isScanningHeuristically}
             <span class="inline-block w-2.5 h-2.5 border-2 border-[#1d2021] border-t-transparent rounded-full animate-spin"></span>
-            <span>提煉中...</span>
+            <span>{$t('derivations.extractingFigures')}</span>
           {:else}
             <span class="material-symbols-outlined text-[13px]">auto_fix_high</span>
-            <span>程式初篩 + 提煉圖表</span>
+            <span>{$t('derivations.extractFiguresBtn')}</span>
           {/if}
         </button>
       </div>
@@ -187,11 +188,11 @@
             </span>
             {#if showTopology}
               <span class="font-mono text-[9px] bg-[#fe8019]/15 border border-[#fe8019]/40 text-[#fe8019] px-1.5 py-0.5 rounded font-semibold shrink-0">
-                系統資料流拓撲
+                {$t('derivations.systemDataflow')}
               </span>
             {:else}
               <span class="font-mono text-[9px] bg-[#8ec07c]/15 border border-[#8ec07c]/40 text-[#8ec07c] px-1.5 py-0.5 rounded font-semibold shrink-0">
-                論文原圖視圖
+                {$t('derivations.paperOriginalFigure')}
               </span>
             {/if}
           </div>
@@ -202,16 +203,16 @@
                 <button
                   class="px-1.5 py-0.5 rounded transition-colors {figureCanvasViewMode !== 'topology' ? 'bg-[#3c3836] text-[#fabd2f] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
                   onclick={() => figureCanvasViewMode = 'image'}
-                  title="顯示論文原始圖片"
+                  title={$t('derivations.showOriginalFigureTooltip')}
                 >
-                  原圖
+                  {$t('derivations.originalFigure')}
                 </button>
                 <button
                   class="px-1.5 py-0.5 rounded transition-colors {figureCanvasViewMode === 'topology' ? 'bg-[#3c3836] text-[#fe8019] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
                   onclick={() => figureCanvasViewMode = 'topology'}
-                  title="切換為資料流拓撲向量視圖"
+                  title={$t('derivations.dataflowTopology')}
                 >
-                  拓撲
+                  {$t('derivations.dataflowTopology')}
                 </button>
               </div>
             {/if}
@@ -222,7 +223,7 @@
                 onclick={() => activeItem && onopenLightbox?.({ url: normalizeAcademicImageUrl(rawImg), title: activeItem.figure.name })}
               >
                 <span class="material-symbols-outlined text-[12px]">fullscreen</span>
-                <span>全螢幕</span>
+                <span>{$t('derivations.fullscreen')}</span>
               </button>
             {/if}
 
@@ -231,7 +232,7 @@
                 class="font-mono text-[10px] text-[#8ec07c] hover:underline flex items-center gap-0.5 cursor-pointer shrink-0"
                 onclick={() => onjumpToSection?.({ sectionId: activeItem.sectionId || '' })}
               >
-                <span>跳轉章節</span>
+                <span>{$t('derivations.jumpSection')}</span>
                 <span class="material-symbols-outlined text-[12px]">arrow_forward</span>
               </button>
             {/if}
@@ -245,10 +246,10 @@
             <div class="w-full flex items-center justify-between pb-2 mb-2 border-b border-[#282828] text-xs font-mono">
               <div class="flex items-center gap-1.5 text-[#fe8019]">
                 <span class="material-symbols-outlined text-[15px]">account_tree</span>
-                <span class="font-bold text-[11px]">方法論資料流拓撲管線 (Data Flow Architecture Pipeline)</span>
+                <span class="font-bold text-[11px]">{$t('derivations.pipelineTitle')}</span>
               </div>
               <span class="text-[10px] text-[#a89984]">
-                {currentFigureDeconstruction?.dataFlowSteps?.length || 3} 個連續運算階段
+                {$t('derivations.stagesCount', { count: currentFigureDeconstruction?.dataFlowSteps?.length || 3 })}
               </span>
             </div>
 
@@ -292,14 +293,14 @@
                 <circle cx="16" cy="14" r="7" fill="#fe8019" />
                 <text x="16" y="17" fill="#1d2021" font-family="JetBrains Mono" font-size="9" font-weight="bold" text-anchor="middle">1</text>
                 <text x="30" y="18" fill="#fabd2f" font-family="JetBrains Mono" font-size="10" font-weight="bold">
-                  {topologySteps[0]?.component || '輸入/控制變因'}
+                  {topologySteps[0]?.component || $t('derivations.inputControlVar')}
                 </text>
                 <text x="12" y="52" fill="#ebdbb2" font-family="Noto Serif TC, serif" font-size="10" font-weight="bold">
-                  {(topologySteps[0]?.component || '輸入特徵層').slice(0, 10)}
+                  {(topologySteps[0]?.component || $t('derivations.inputFeatureLayer')).slice(0, 10)}
                 </text>
                 <foreignObject x="10" y="58" width="135" height="42">
                   <div xmlns="http://www.w3.org/1999/xhtml" style="font-size: 9px; color: #a89984; font-family: sans-serif; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
-                    {topologySteps[0]?.action || '特徵資料載入與正規化'}
+                    {topologySteps[0]?.action || $t('derivations.inputFeatureAction')}
                   </div>
                 </foreignObject>
                 <foreignObject x="8" y="104" width="139" height="24">
@@ -321,14 +322,14 @@
                 <circle cx="16" cy="14" r="7" fill="#fe8019" />
                 <text x="16" y="17" fill="#1d2021" font-family="JetBrains Mono" font-size="9" font-weight="bold" text-anchor="middle">2</text>
                 <text x="30" y="18" fill="#fe8019" font-family="JetBrains Mono" font-size="10" font-weight="bold">
-                  {topologySteps[1]?.component || '核心表徵轉換'}
+                  {topologySteps[1]?.component || $t('derivations.coreRepresentation')}
                 </text>
                 <text x="12" y="52" fill="#ebdbb2" font-family="Noto Serif TC, serif" font-size="10" font-weight="bold">
-                  {(topologySteps[1]?.component || '核心動力學層').slice(0, 10)}
+                  {(topologySteps[1]?.component || $t('derivations.coreDynamicLayer')).slice(0, 10)}
                 </text>
                 <foreignObject x="10" y="58" width="135" height="46">
                   <div xmlns="http://www.w3.org/1999/xhtml" style="font-size: 9px; color: #d5c4a1; font-family: sans-serif; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
-                    {topologySteps[1]?.action || '特徵提取與連續動力學演進'}
+                    {topologySteps[1]?.action || $t('derivations.coreDynamicAction')}
                   </div>
                 </foreignObject>
                 <foreignObject x="8" y="112" width="139" height="26">
@@ -350,14 +351,14 @@
                 <circle cx="16" cy="14" r="7" fill="#8ec07c" />
                 <text x="16" y="17" fill="#1d2021" font-family="JetBrains Mono" font-size="9" font-weight="bold" text-anchor="middle">3</text>
                 <text x="30" y="18" fill="#8ec07c" font-family="JetBrains Mono" font-size="10" font-weight="bold">
-                  {topologySteps[2]?.component || '輸出/指標預測'}
+                  {topologySteps[2]?.component || $t('derivations.outputPredict')}
                 </text>
                 <text x="12" y="52" fill="#ebdbb2" font-family="Noto Serif TC, serif" font-size="10" font-weight="bold">
-                  {(topologySteps[2]?.component || '目標響應層').slice(0, 10)}
+                  {(topologySteps[2]?.component || $t('derivations.targetResponseLayer')).slice(0, 10)}
                 </text>
                 <foreignObject x="10" y="58" width="135" height="42">
                   <div xmlns="http://www.w3.org/1999/xhtml" style="font-size: 9px; color: #a89984; font-family: sans-serif; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
-                    {topologySteps[2]?.action || '目標物理量評估與收斂驗證'}
+                    {topologySteps[2]?.action || $t('derivations.targetResponseAction')}
                   </div>
                 </foreignObject>
                 <foreignObject x="8" y="104" width="139" height="24">
@@ -372,7 +373,7 @@
 
               <!-- 底部全域資料流標註 -->
               <text x="270" y="205" fill="#a89984" font-family="JetBrains Mono" font-size="9" text-anchor="middle">
-                ⟵ 系統狀態連續演進與邊界收斂管線 ⟶
+                {$t('derivations.systemEvolution')}
               </text>
             </svg>
           </div>
@@ -406,9 +407,9 @@
       <div class="bg-[#282828] border border-[#3c3836] p-4 rounded-xl flex flex-col gap-3 shadow-md">
         <div class="flex items-center justify-between border-b border-[#3c3836] pb-2">
           <span class="font-mono text-xs text-[#fabd2f] font-bold">
-            {activeFigureTab === 'fig1' ? 'Figure 1: The Transformer Architecture (全景拓撲)' : 'Figure 2: Scaled Dot-Product Attention Circuit (運算電路)'}
+            {activeFigureTab === 'fig1' ? $t('derivations.fallbackFig1') : $t('derivations.fallbackFig2')}
           </span>
-          <span class="font-mono text-[10px] text-[#8ec07c]">經典文獻架構模型</span>
+          <span class="font-mono text-[10px] text-[#8ec07c]">{$t('derivations.classicArchitecture')}</span>
         </div>
 
         <div class="w-full bg-[#141617] border border-[#504945] rounded-lg p-4 flex items-center justify-center">
@@ -432,11 +433,11 @@
               <rect x="185" y="65" width="100" height="26" rx="4" fill="#32302f" stroke="#fe8019" stroke-width="1.5" />
               <text x="235" y="81" fill="#fe8019" font-family="Geist" font-size="9" font-weight="bold" text-anchor="middle">Self-Attention</text>
               <rect x="185" y="100" width="100" height="22" rx="4" fill="#282828" stroke="#504945" />
-              <text x="235" y="115" fill="#b8bb26" font-family="Geist" font-size="9" text-anchor="middle">Add & Norm (殘差)</text>
+              <text x="235" y="115" fill="#b8bb26" font-family="Geist" font-size="9" text-anchor="middle">Add & Norm</text>
               <rect x="185" y="130" width="100" height="26" rx="4" fill="#282828" stroke="#504945" />
               <text x="235" y="146" fill="#8ec07c" font-family="Geist" font-size="9" text-anchor="middle">Feed Forward (2048)</text>
               <rect x="185" y="165" width="100" height="22" rx="4" fill="#282828" stroke="#504945" />
-              <text x="235" y="180" fill="#b8bb26" font-family="Geist" font-size="9" text-anchor="middle">Add & Norm (殘差)</text>
+              <text x="235" y="180" fill="#b8bb26" font-family="Geist" font-size="9" text-anchor="middle">Add & Norm</text>
 
               <path d="M 295 130 L 325 130" stroke="#8ec07c" stroke-width="2" stroke-dasharray="4,2" />
 
@@ -488,7 +489,7 @@
         <div class="flex items-center justify-between border-b border-[#3c3836] pb-2">
           <div class="flex items-center gap-2">
             <span class="material-symbols-outlined text-[16px] text-[#fe8019]">account_tree</span>
-            <h3 class="font-mono text-xs font-bold text-[#fe8019]">圖表架構深度解構 (Architectural Deconstruction)</h3>
+            <h3 class="font-mono text-xs font-bold text-[#fe8019]">{$t('derivations.deconstructionTitle')}</h3>
           </div>
           <div class="flex items-center gap-2">
             {#if activeItem}
@@ -499,20 +500,20 @@
               >
                 {#if isAnalyzingFigure}
                   <span class="inline-block w-2.5 h-2.5 border-2 border-[#fe8019] border-t-transparent rounded-full animate-spin"></span>
-                  <span>解構中...</span>
+                  <span>{$t('derivations.deconstructing')}</span>
                 {:else}
                   <span class="material-symbols-outlined text-[12px]">psychology</span>
-                  <span>⚡ AI 圖表深層解構</span>
+                  <span>{$t('derivations.aiDeconstructBtn')}</span>
                 {/if}
               </button>
             {/if}
             <button
               class="font-mono text-[10px] bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#fabd2f] hover:text-[#fe8019] px-2 py-0.5 rounded flex items-center gap-1 transition-colors"
               onclick={() => oncaptureToNotes?.()}
-              title="將此圖表架構與資料流解構收錄至精讀筆記"
+              title={$t('derivations.saveToNotesTooltip')}
             >
               <span class="material-symbols-outlined text-[12px]">edit_note</span>
-              <span>收錄至筆記</span>
+              <span>{$t('derivations.saveToNotes')}</span>
             </button>
           </div>
         </div>
@@ -526,7 +527,7 @@
         <div class="flex flex-col gap-2">
           <h4 class="font-mono text-[11px] font-bold text-[#fabd2f] flex items-center gap-1">
             <span class="material-symbols-outlined text-[13px]">alt_route</span>
-            資料流動與算子轉換路徑 (Data Flow Pipeline)
+            {$t('derivations.dataflowPipeline')}
           </h4>
           <div class="flex flex-col gap-2">
             {#each displaySteps as step}
@@ -557,7 +558,7 @@
           <div class="flex flex-col gap-2">
             <h4 class="font-mono text-[11px] font-bold text-[#83a598] flex items-center gap-1">
               <span class="material-symbols-outlined text-[13px]">lightbulb</span>
-              關鍵工程設計決策與權衡 (Design Decisions & Trade-offs)
+              {$t('derivations.designDecisions')}
             </h4>
             <div class="flex flex-col gap-2">
               {#each currentFigureDeconstruction.designDecisions as item}
@@ -580,14 +581,14 @@
             <div class="flex items-center gap-2">
               <span class="material-symbols-outlined text-[15px] text-[#fabd2f]">sync_alt</span>
               <span class="font-mono text-[11px] text-[#ebdbb2]">
-                此架構對應右側數學公式：<strong class="text-[#fabd2f]">{currentFigureDeconstruction.relatedFormulaId}</strong>
+                {$t('derivations.relatedFormula')}<strong class="text-[#fabd2f]">{currentFigureDeconstruction.relatedFormulaId}</strong>
               </span>
             </div>
             <button
               class="font-mono text-[10px] text-[#fabd2f] hover:underline flex items-center gap-0.5 cursor-pointer"
               onclick={() => onswitchRightMode?.({ mode: 'derivation' })}
             >
-              <span>檢視對應推導</span>
+              <span>{$t('derivations.viewRelatedDerivation')}</span>
               <span class="material-symbols-outlined text-[12px]">arrow_forward</span>
             </button>
           </div>
@@ -595,7 +596,7 @@
 
         <!-- Key Takeaway -->
         <div class="border-t border-[#3c3836] pt-2 text-[11px] text-[#a89984] italic">
-          💡 核心總結：{currentFigureDeconstruction.keyTakeaway}
+          {$t('derivations.keyTakeaway')}{currentFigureDeconstruction.keyTakeaway}
         </div>
       </div>
     {/if}

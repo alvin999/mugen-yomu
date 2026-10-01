@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ChapterSection, FormulaItem } from '../../../types/document';
   import { renderMath } from '../../../utils/katexUtils';
+  import { t } from '../../../stores/localeStore';
 
   interface Props {
     sec?: ChapterSection;
@@ -21,7 +22,7 @@
   <div class="flex flex-col gap-3 my-2">
     <div class="flex items-center gap-2 text-xs font-mono text-[#fabd2f] border-b border-[#3c3836]/60 pb-1.5">
       <span class="material-symbols-outlined text-[15px] text-[#fe8019]">functions</span>
-      <span class="font-bold">本節核心數學模型與算子定義 ({formulas.length})</span>
+      <span class="font-bold">{$t('reader.formulaChips.coreFormulasTitle', { count: formulas.length })}</span>
     </div>
 
     {#each formulas as formula}
@@ -35,18 +36,18 @@
             <button
               class="font-mono text-[11px] text-[#fe8019] hover:text-[#fabd2f] bg-[#282828] hover:bg-[#32302f] border border-[#fe8019]/40 px-2 py-0.5 rounded flex items-center gap-1 transition-colors cursor-pointer"
               onclick={(e) => { e.stopPropagation(); onjumpToFormulaStudio?.({ formula }); }}
-              title="前往推導對照工作台，檢視嚴謹分步數學證明與張量維度"
+              title={$t('reader.formulaChips.studioTooltip')}
             >
               <span class="material-symbols-outlined text-[13px]">schema</span>
-              <span>推導工作室</span>
+              <span>{$t('reader.formulaChips.studio')}</span>
             </button>
             <button
               class="font-mono text-[11px] text-[#8ec07c] hover:text-[#b8bb26] bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] px-2 py-0.5 rounded flex items-center gap-1 transition-colors cursor-pointer"
               onclick={(e) => { e.stopPropagation(); onlocateFormula?.({ formulaId: formula.id }); }}
-              title="在當前文獻中定位對應段落"
+              title={$t('reader.formulaChips.locateTooltip')}
             >
               <span class="material-symbols-outlined text-[13px]">my_location</span>
-              <span>定位原文</span>
+              <span>{$t('reader.formulaChips.locateSource')}</span>
             </button>
           </div>
         </div>

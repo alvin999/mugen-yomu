@@ -4,6 +4,7 @@
   import NotesLibraryNav from './NotesLibraryNav.svelte';
   import NotesExplorerList, { type NoteEntry } from './NotesExplorerList.svelte';
   import NotesEditorCanvas from './NotesEditorCanvas.svelte';
+  import { t } from '../../stores/localeStore';
 
   interface Props {
     paperLibrary?: PaperDocument[];
@@ -62,7 +63,7 @@
             parsed.forEach((n: any) => {
               loaded.push({
                 id: n.id || `${p.id}_${Date.now()}_${Math.random()}`,
-                title: n.title || '精讀速記',
+                title: n.title || $t('notes.defaultNoteTitle'),
                 text: n.text || '',
                 time: n.time || new Date().toLocaleTimeString(),
                 paperId: p.id,
@@ -115,16 +116,16 @@
   // 當前過濾欄的文獻標題
   let currentFilterPaperTitle = $derived(
     activePaperFilterId === 'all'
-      ? '全部文獻筆記'
-      : (paperLibrary.find(p => p.id === activePaperFilterId)?.title || '精選文獻')
+      ? $t('notes.allPapers')
+      : (paperLibrary.find(p => p.id === activePaperFilterId)?.title || 'Selected Paper')
   );
 
   function handleAddNote() {
     const targetPaper = (activePaperFilterId !== 'all' ? paperLibrary.find(p => p.id === activePaperFilterId) : activePaper) || paperLibrary[0];
     const newNote: NoteEntry = {
       id: `${targetPaper.id}_${Date.now()}`,
-      title: `精讀觀點 · ${new Date().toLocaleDateString()}`,
-      text: '在此輸入論文推導筆記、白話概念思考或問題記錄...\n\n- 核心發現：\n- 關鍵公式：$E = mc^2$\n',
+      title: `Note · ${new Date().toLocaleDateString()}`,
+      text: 'Enter notes, scientific intuition, or inquiries here...\n\n- Key finding:\n- Important formula: $E = mc^2$\n',
       time: new Date().toLocaleTimeString(),
       paperId: targetPaper.id,
       paperTitle: targetPaper.title,
@@ -136,7 +137,7 @@
     allNotes = [newNote, ...allNotes];
     selectedNoteIndex = 0;
     saveNotesForPaper(targetPaper.id);
-    showToast('已新增一筆精讀筆記');
+    showToast($t('notes.copySingleSuccess'));
   }
 
   function handleUpdateNote(updated: NoteEntry) {
@@ -149,7 +150,7 @@
   function handleDeleteNote(indexInFiltered: number) {
     const target = filteredNotes[indexInFiltered];
     if (!target) return;
-    if (!confirm(`確定要刪除「${target.title}」這則筆記嗎？`)) return;
+    if (!confirm($t('notes.deleteConfirm'))) return;
 
     allNotes = allNotes.filter(n => n.id !== target.id);
     if (selectedNoteIndex >= filteredNotes.length - 1) {
@@ -158,7 +159,7 @@
     if (target.paperId) {
       saveNotesForPaper(target.paperId);
     }
-    showToast('已刪除筆記');
+    showToast($t('notes.deleteNoteTooltip'));
   }
 
   function handleTogglePin(indexInFiltered: number) {
@@ -182,18 +183,18 @@
   function handleCopyMarkdown(singleNote?: NoteEntry) {
     let md = '';
     if (singleNote) {
-      md = `# ${singleNote.title}\n> 來源：${singleNote.paperTitle} (${singleNote.time})\n\n${singleNote.text}`;
+      md = `# ${singleNote.title}\n> ${$t('notes.singleExportSource')}${singleNote.paperTitle} (${singleNote.time})\n\n${singleNote.text}`;
     } else {
-      md = `# MUGEN YOMU 精讀筆記彙整庫\n匯出時間：${new Date().toLocaleString()}\n總筆記量：${filteredNotes.length} 則\n\n---\n\n`;
+      md = `# MUGEN YOMU Notes Export\nExport Time：${new Date().toLocaleString()}\nTotal Notes：${filteredNotes.length}\n\n---\n\n`;
       filteredNotes.forEach((n, i) => {
-        md += `## ${i + 1}. ${n.title}\n> 文獻：${n.paperTitle} · 記錄時間：${n.time}\n\n${n.text}\n\n---\n\n`;
+        md += `## ${i + 1}. ${n.title}\n> Paper：${n.paperTitle} · Time：${n.time}\n\n${n.text}\n\n---\n\n`;
       });
     }
 
     navigator.clipboard.writeText(md).then(() => {
-      showToast(singleNote ? '已複製單筆筆記 Markdown' : '已複製全部筆記 Markdown 至剪貼簿');
+      showToast(singleNote ? $t('notes.copiedSingleToast') : $t('notes.copiedAllToast'));
     }).catch(() => {
-      showToast('複製失敗，請手動匯出');
+      showToast($t('notes.copyFail'));
     });
   }
 
@@ -201,12 +202,12 @@
     let md = '';
     let filename = '';
     if (singleNote) {
-      md = `# ${singleNote.title}\n> 來源：${singleNote.paperTitle} (${singleNote.time})\n\n${singleNote.text}`;
+      md = `# ${singleNote.title}\n> ${$t('notes.singleExportSource')}${singleNote.paperTitle} (${singleNote.time})\n\n${singleNote.text}`;
       filename = `Note_${singleNote.title.replace(/[^\w\u4e00-\u9fa5]/g, '_').slice(0, 25)}.md`;
     } else {
-      md = `# MUGEN YOMU 精讀筆記彙整庫\n匯出時間：${new Date().toLocaleString()}\n總筆記量：${filteredNotes.length} 則\n\n---\n\n`;
+      md = `# MUGEN YOMU Notes Export\nExport Time：${new Date().toLocaleString()}\nTotal Notes：${filteredNotes.length}\n\n---\n\n`;
       filteredNotes.forEach((n, i) => {
-        md += `## ${i + 1}. ${n.title}\n> 文獻：${n.paperTitle} · 記錄時間：${n.time}\n\n${n.text}\n\n---\n\n`;
+        md += `## ${i + 1}. ${n.title}\n> Paper：${n.paperTitle} · Time：${n.time}\n\n${n.text}\n\n---\n\n`;
       });
       filename = `MugenYomu_Notes_Export_${Date.now()}.md`;
     }
@@ -220,7 +221,7 @@
     downloadAnchor.click();
     downloadAnchor.remove();
     URL.revokeObjectURL(url);
-    showToast('已下載 Markdown 檔案');
+    showToast($t('notes.downloadTriggered'));
   }
 
   function showToast(msg: string) {
@@ -248,9 +249,9 @@
         <span class="material-symbols-outlined text-[16px]">draw</span>
       </div>
       <div class="flex items-center gap-2">
-        <h2 class="text-xs font-bold text-[#ebdbb2]">Cognitive Notes · 精讀筆記工作室</h2>
+        <h2 class="text-xs font-bold text-[#ebdbb2]">{$t('notes.title')}</h2>
         <span class="font-mono text-[10px] bg-[#282828] text-[#fabd2f] px-1.5 py-0.2 rounded border border-[#3c3836]">
-          全庫收錄 {allNotes.length} 則
+          {$t('notes.totalPrefix')} {allNotes.length} {$t('notes.totalSuffix')}
         </span>
       </div>
     </div>
@@ -260,19 +261,19 @@
       <button
         class="px-2.5 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#504945] hover:border-[#fabd2f] text-[#fabd2f] rounded-lg text-xs font-mono flex items-center gap-1.5 transition-colors cursor-pointer"
         onclick={() => handleCopyMarkdown()}
-        title="複製目前篩選的所有筆記為 Markdown"
+        title={$t('notes.copyMarkdownTooltip')}
       >
         <span class="material-symbols-outlined text-[14px]">content_copy</span>
-        <span>複製全部</span>
+        <span>{$t('notes.copyMarkdown')}</span>
       </button>
 
       <button
         class="px-3 py-1 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-bold rounded-lg text-xs flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
         onclick={() => handleExportMarkdown()}
-        title="匯出目前所有筆記為 .md 檔案"
+        title={$t('notes.exportMdTooltip')}
       >
         <span class="material-symbols-outlined text-[15px]">download</span>
-        <span>匯出 .md 全集</span>
+        <span>{$t('notes.exportMarkdown')}</span>
       </button>
 
       <div class="h-4 w-px bg-[#3c3836] mx-0.5"></div>
@@ -280,10 +281,10 @@
       <button
         class="px-2.5 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] rounded-lg text-xs font-mono flex items-center gap-1 transition-colors cursor-pointer"
         onclick={() => onbackToWorkspace?.()}
-        title="返回閱讀工作台"
+        title={$t('notes.backToWorkspace')}
       >
-        <span class="material-symbols-outlined text-[14px]">close</span>
-        <span>返回</span>
+        <span class="material-symbols-outlined text-[14px]">arrow_back</span>
+        <span>{$t('notes.backToWorkspace')}</span>
       </button>
     </div>
   </header>

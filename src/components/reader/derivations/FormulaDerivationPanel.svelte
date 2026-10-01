@@ -3,6 +3,8 @@
   import type { FormulaDerivationData } from '../../../types/derivation';
   import type { ExtractedFormulaItem } from '../../../utils/derivationExtractor';
   import { renderMath, copyLatexToClipboard } from '../../../utils/katexUtils';
+  import { t } from '../../../stores/localeStore';
+  import { get } from 'svelte/store';
 
   interface Props {
     paper?: PaperDocument | null;
@@ -50,7 +52,7 @@
     const raw =
       activeFormulaItem?.sectionTitle ||
       currentFormulaDerivation?.sourceSectionTitle ||
-      (dynamicFormulas.length === 0 ? '3.2.1 Scaled Dot-Product Attention' : '文獻主體章節');
+      (dynamicFormulas.length === 0 ? '3.2.1 Scaled Dot-Product Attention' : get(t)('derivations.mainSection'));
     return raw.replace(/^§\s*/, '').trim();
   })());
 
@@ -68,7 +70,7 @@
 
   function handleCopyLatex(latex: string) {
     copyLatexToClipboard(latex);
-    ontoast?.({ text: 'LaTeX 原始碼已複製！' });
+    ontoast?.({ text: get(t)('derivations.latexCopiedToast') });
   }
 </script>
 
@@ -81,7 +83,7 @@
           <button
             class="font-mono text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 shrink-0 {selectedFormulaIndex === idx ? 'bg-[#3c3836] text-[#fe8019] font-semibold border border-[#fe8019]/40 shadow-sm' : 'text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2]'}"
             onclick={() => onselectFormula?.({ index: idx })}
-            title="來源出處：§ {item.sectionTitle || '未指定'}"
+            title={$t('derivations.sourcePrefix', { title: item.sectionTitle || $t('derivations.unspecified') })}
           >
             <span class="material-symbols-outlined text-[13px]">functions</span>
             <span>{item.formula.number || `Eq (${idx + 1})`}</span>
@@ -103,20 +105,20 @@
           >
             {#if isDerivingFormula}
               <span class="inline-block w-2.5 h-2.5 border-2 border-[#fe8019] border-t-transparent rounded-full animate-spin"></span>
-              <span>推導中...</span>
+              <span>{$t('derivations.deriving')}</span>
             {:else}
               <span class="material-symbols-outlined text-[13px]">psychology</span>
-              <span>⚡ AI 步驟證明推導</span>
+              <span>{$t('derivations.aiStepDerivation')}</span>
             {/if}
           </button>
         {/if}
         <button
           class="font-mono text-[10px] bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#fabd2f] hover:text-[#fe8019] px-2 py-1 rounded flex items-center gap-1 transition-colors"
           onclick={() => oncaptureToNotes?.()}
-          title="將分步數學推導與證明收錄至精讀筆記"
+          title={$t('derivations.saveProofToNotesTooltip')}
         >
           <span class="material-symbols-outlined text-[13px]">edit_note</span>
-          <span>收錄至筆記</span>
+          <span>{$t('derivations.saveToNotes')}</span>
         </button>
       </div>
     </div>
@@ -132,21 +134,21 @@
           onclick={() => onselectFallbackTab?.({ tab: 'derivation1' })}
         >
           <span class="material-symbols-outlined text-[13px]">functions</span>
-          <span>Eq (1): 縮放點積注意力</span>
+          <span>{$t('derivations.fallbackDerivation1')}</span>
         </button>
         <button
           class="font-mono text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1 shrink-0 {activeDerivationTab === 'derivation2' ? 'bg-[#3c3836] text-[#fe8019] font-semibold border border-[#fe8019]/40' : 'text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2]'}"
           onclick={() => onselectFallbackTab?.({ tab: 'derivation2' })}
         >
           <span class="material-symbols-outlined text-[13px]">calculate</span>
-          <span>Eq (2): 多頭子空間投影</span>
+          <span>{$t('derivations.fallbackDerivation2')}</span>
         </button>
         <button
           class="font-mono text-xs px-2.5 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1 shrink-0 {activeDerivationTab === 'derivation3' ? 'bg-[#3c3836] text-[#fe8019] font-semibold border border-[#fe8019]/40' : 'text-[#a89984] hover:bg-[#282828] hover:text-[#ebdbb2]'}"
           onclick={() => onselectFallbackTab?.({ tab: 'derivation3' })}
         >
           <span class="material-symbols-outlined text-[13px]">speed</span>
-          <span>說明書: 認知效能模型</span>
+          <span>{$t('derivations.fallbackDerivation3')}</span>
         </button>
       </div>
       <button
@@ -154,7 +156,7 @@
         onclick={() => oncaptureToNotes?.()}
       >
         <span class="material-symbols-outlined text-[13px]">edit_note</span>
-        <span>收錄至筆記</span>
+        <span>{$t('derivations.saveToNotes')}</span>
       </button>
     </div>
   {/if}
@@ -167,8 +169,8 @@
         <div class="flex items-center gap-2 text-[#fabd2f]">
           <span class="material-symbols-outlined text-[18px]">functions</span>
           <div class="flex flex-col">
-            <span class="font-bold">範例預覽 (Preview Mode)</span>
-            <span class="text-[11px] text-[#d5c4a1]">當前論文尚未萃取出數學公式，此處為展示模板。點擊右側以程式初篩提煉。</span>
+            <span class="font-bold">{$t('derivations.previewMode')}</span>
+            <span class="text-[11px] text-[#d5c4a1]">{$t('derivations.noFormulasExtracted')}</span>
           </div>
         </div>
         <button
@@ -178,10 +180,10 @@
         >
           {#if isScanningHeuristically}
             <span class="inline-block w-2.5 h-2.5 border-2 border-[#1d2021] border-t-transparent rounded-full animate-spin"></span>
-            <span>提煉中...</span>
+            <span>{$t('derivations.deriving')}</span>
           {:else}
             <span class="material-symbols-outlined text-[13px]">calculate</span>
-            <span>程式初篩 + 提煉推導</span>
+            <span>{$t('derivations.extractFormulasBtn')}</span>
           {/if}
         </button>
       </div>
@@ -198,17 +200,17 @@
             <button
               class="font-mono text-[10px] text-[#a89984] hover:text-[#ebdbb2] bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] px-2 py-0.5 rounded flex items-center gap-1"
               onclick={() => handleCopyLatex(currentFormulaDerivation?.latexText || '')}
-              title="複製 LaTeX 公式原始碼"
+              title={$t('derivations.copyLatexTooltip')}
             >
               <span class="material-symbols-outlined text-[12px]">content_copy</span>
-              <span>複製 LaTeX</span>
+              <span>{$t('derivations.copyLatex')}</span>
             </button>
             {#if activeSectionProvenanceId}
               <button
                 class="font-mono text-[10px] text-[#8ec07c] hover:underline flex items-center gap-0.5 cursor-pointer shrink-0"
                 onclick={() => onjumpToSection?.({ sectionId: activeSectionProvenanceId })}
               >
-                <span>跳轉至章節</span>
+                <span>{$t('derivations.jumpSection')}</span>
                 <span class="material-symbols-outlined text-[12px]">arrow_forward</span>
               </button>
             {/if}
@@ -219,7 +221,7 @@
         <div class="flex flex-wrap items-center justify-between gap-2 bg-[#181a1b] border border-[#3c3836] px-3 py-1.5 rounded-lg text-xs font-mono">
           <div class="flex items-center gap-2 text-[#8ec07c] min-w-0">
             <span class="material-symbols-outlined text-[14px] text-[#fe8019] shrink-0">pin_drop</span>
-            <span class="font-bold text-[#fe8019] shrink-0">文獻出處:</span>
+            <span class="font-bold text-[#fe8019] shrink-0">{$t('derivations.paperSource')}</span>
             <span class="font-medium text-[#ebdbb2] truncate" title="§ {activeSectionProvenanceTitle}">
               § {activeSectionProvenanceTitle}
             </span>
@@ -234,10 +236,10 @@
               type="button"
               class="font-mono text-[10px] text-[#8ec07c] hover:text-[#b8bb26] hover:bg-[#282828] border border-[#8ec07c]/40 px-2 py-0.5 rounded flex items-center gap-1 transition-colors cursor-pointer shrink-0"
               onclick={() => onjumpToSection?.({ sectionId: activeSectionProvenanceId })}
-              title="跳轉回文獻並定位到該章節原文"
+              title={$t('derivations.locateSectionTooltip')}
             >
               <span class="material-symbols-outlined text-[12px]">my_location</span>
-              <span>定位原文對應段落</span>
+              <span>{$t('derivations.locateSection')}</span>
             </button>
           {/if}
         </div>
@@ -245,7 +247,7 @@
         <!-- Context Quote Snippet -->
         {#if activeContextSnippet}
           <div class="bg-[#181a1b]/60 border-l-2 border-[#fe8019] px-3 py-1.5 rounded-r text-[11px] text-[#a89984] italic">
-            <span class="text-[#fe8019] font-semibold not-italic mr-1">[原文引述線索]:</span>
+            <span class="text-[#fe8019] font-semibold not-italic mr-1">{$t('derivations.sourceQuoteClue')}</span>
             “{activeContextSnippet}”
           </div>
         {/if}
@@ -260,7 +262,7 @@
           <div class="flex flex-col gap-2 text-xs pt-1">
             <h4 class="font-mono text-[#fe8019] font-bold flex items-center gap-1">
               <span class="material-symbols-outlined text-[13px]">palette</span>
-              關鍵變數符號語義字典
+              {$t('derivations.variablesDictionary')}
             </h4>
             <div class="grid grid-cols-1 gap-1.5 font-mono text-[11px]">
               {#each activeFormulaItem.formula.variables as v}
@@ -279,15 +281,15 @@
         <div class="flex items-center justify-between border-b border-[#3c3836] pb-2">
           <span class="font-mono text-xs text-[#8ec07c] font-bold flex items-center gap-1">
             <span class="material-symbols-outlined text-[15px]">calculate</span>
-            分步嚴謹數學推導與證明 (Step-by-Step Proof)
+            {$t('derivations.stepByStepProof')}
           </span>
-          <span class="font-mono text-[10px] text-[#a89984]">代數演繹與幾何證明</span>
+          <span class="font-mono text-[10px] text-[#a89984]">{$t('derivations.algebraicProof')}</span>
         </div>
 
         <!-- Initial Assumptions -->
         {#if currentFormulaDerivation.assumptions && currentFormulaDerivation.assumptions.length > 0}
           <div class="flex flex-col gap-1.5 bg-[#282828]/60 p-3 rounded-lg border border-[#3c3836]">
-            <h4 class="font-mono text-[11px] font-bold text-[#fabd2f]">前置定義與統計假設 (Formulation & Assumptions)</h4>
+            <h4 class="font-mono text-[11px] font-bold text-[#fabd2f]">{$t('derivations.formulationAssumptions')}</h4>
             <ul class="list-disc list-inside text-xs text-[#d5c4a1] space-y-1">
               {#each currentFormulaDerivation.assumptions as assumption}
                 <li class="leading-relaxed">{@html renderMath(assumption, false)}</li>
@@ -320,7 +322,7 @@
 
               {#if step.intuition}
                 <div class="text-[11px] text-[#8ec07c] bg-[#1d2021]/60 px-2.5 py-1.5 rounded border-l-2 border-[#8ec07c] leading-relaxed flex items-center gap-1">
-                  <span>💡 <strong>直覺：</strong></span>
+                  <span>💡 <strong>{$t('derivations.intuition')}</strong></span>
                   <span>{step.intuition}</span>
                 </div>
               {/if}
@@ -333,7 +335,7 @@
           <div class="flex flex-col gap-2 pt-2 border-t border-[#3c3836]">
             <h4 class="font-mono text-xs font-bold text-[#fe8019] flex items-center gap-1">
               <span class="material-symbols-outlined text-[14px]">query_stats</span>
-              極限分析與數值穩定性 (Boundary & Limit Analysis)
+              {$t('derivations.boundaryAnalysis')}
             </h4>
             <div class="grid grid-cols-1 gap-2">
               {#each currentFormulaDerivation.limitAnalysis as limit}
@@ -362,15 +364,15 @@
           <div class="flex flex-col gap-2 pt-2 border-t border-[#3c3836]">
             <h4 class="font-mono text-xs font-bold text-[#83a598] flex items-center gap-1">
               <span class="material-symbols-outlined text-[14px]">view_in_ar</span>
-              張量維度拓撲演進矩陣 (Tensor Dimensions)
+              {$t('derivations.tensorEvolutionMatrix')}
             </h4>
             <div class="overflow-x-auto rounded-lg border border-[#3c3836]">
               <table class="w-full text-left font-mono text-xs">
                 <thead class="bg-[#282828] text-[#fabd2f] border-b border-[#3c3836]">
                   <tr>
-                    <th class="p-2">運算階段 / 節點</th>
-                    <th class="p-2 text-[#8ec07c]">張量形狀 (Tensor Shape)</th>
-                    <th class="p-2">維度物理意涵</th>
+                    <th class="p-2">{$t('derivations.opStage')}</th>
+                    <th class="p-2 text-[#8ec07c]">{$t('derivations.tensorShape')}</th>
+                    <th class="p-2">{$t('derivations.dimMeaning')}</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-[#3c3836] bg-[#1d2021]/50 text-[#d5c4a1]">
@@ -389,7 +391,7 @@
 
         <!-- 5. Physical Intuition Banner -->
         <div class="bg-[#32302f] border-l-4 border-[#fe8019] p-3 rounded-r-lg text-xs text-[#ebdbb2] leading-relaxed">
-          <span class="font-bold text-[#fe8019]">🏛️ 科研物理與幾何本質直覺：</span>
+          <span class="font-bold text-[#fe8019]">{$t('derivations.scientificIntuition')}</span>
           {currentFormulaDerivation.physicalIntuition}
         </div>
       </div>

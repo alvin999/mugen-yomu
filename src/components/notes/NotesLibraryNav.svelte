@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { PaperDocument } from '../../stores/documentStore';
+  import { t } from '../../stores/localeStore';
 
   interface Props {
     paperLibrary?: PaperDocument[];
@@ -41,10 +42,10 @@
     <div class="flex items-center justify-between px-2 py-1.5 border-b border-[#3c3836]/70">
       <div class="flex items-center gap-2">
         <span class="material-symbols-outlined text-[18px] text-[#fabd2f]">menu_book</span>
-        <span class="font-bold text-xs text-[#ebdbb2]">文獻筆記庫</span>
+        <span class="font-bold text-xs text-[#ebdbb2]">{$t('notes.libraryNavTitle')}</span>
       </div>
       <span class="font-mono text-[10px] bg-[#282828] text-[#a89984] px-1.5 py-0.5 rounded border border-[#3c3836]">
-        {paperLibrary.length} 篇文獻
+        {$t('notes.libraryPapersCount').replace('{count}', String(paperLibrary.length))}
       </span>
     </div>
 
@@ -56,7 +57,7 @@
       >
         <div class="flex items-center gap-2">
           <span class="material-symbols-outlined text-[16px]">folder_copy</span>
-          <span>全部精讀筆記</span>
+          <span>{$t('notes.allNotesFilter')}</span>
         </div>
         <span class="font-mono text-[10px] bg-[#141617] text-[#fabd2f] px-1.5 py-0.2 rounded border border-[#3c3836]">
           {totalNotesCount}
@@ -69,7 +70,7 @@
       >
         <div class="flex items-center gap-2">
           <span class="material-symbols-outlined text-[16px] text-[#fabd2f]">star</span>
-          <span>重要標註與釘選</span>
+          <span>{$t('notes.starredFilter')}</span>
         </div>
         <span class="font-mono text-[10px] text-[#7c6f64]">★</span>
       </button>
@@ -79,7 +80,7 @@
 
     <!-- Per-Paper List -->
     <div class="flex flex-col gap-1 overflow-y-auto flex-1 pr-1">
-      <span class="font-mono text-[10px] uppercase tracking-wider text-[#7c6f64] px-2 py-0.5">依論文分組</span>
+      <span class="font-mono text-[10px] uppercase tracking-wider text-[#7c6f64] px-2 py-0.5">{$t('notes.groupByPaper')}</span>
 
       {#each paperLibrary as paper (paper.id)}
         {@const count = paperNotesCountMap[paper.id] || 0}
@@ -94,7 +95,7 @@
               {paper.title}
             </span>
             <span class="font-mono text-[10px] text-[#7c6f64] truncate">
-              {paper.venue || '文獻庫'}
+              {paper.venue || 'Library'}
             </span>
           </div>
 
@@ -110,14 +111,14 @@
   <div class="flex flex-col gap-2 pt-2 border-t border-[#3c3836]">
     <div class="bg-[#282828] border border-[#3c3836] p-2.5 rounded-lg flex flex-col gap-1">
       <div class="flex items-center justify-between text-[#a89984] text-[10px] font-mono">
-        <span>本機儲存</span>
+        <span>{$t('rail.localMemory')}</span>
         <span class="text-[#b8bb26] flex items-center gap-1">
           <span class="h-1.5 w-1.5 rounded-full bg-[#b8bb26]"></span>
-          即時同步
+          {$t('notes.syncLive')}
         </span>
       </div>
       <span class="text-[11px] text-[#ebdbb2] font-semibold">
-        共 {totalNotesCount} 則深度研讀思維觀點
+        {$t('notes.navTotalCount', { count: totalNotesCount })}
       </span>
     </div>
 
@@ -126,7 +127,7 @@
       onclick={() => onbackToWorkspace?.()}
     >
       <span class="material-symbols-outlined text-[15px]">arrow_back</span>
-      <span>返回閱讀工作台</span>
+      <span>{$t('nav.backToWorkspace')}</span>
     </button>
   </div>
 </aside>

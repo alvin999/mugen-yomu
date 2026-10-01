@@ -1,6 +1,7 @@
 <script lang="ts">
   import { flowStore } from '../../stores/flowStore';
   import { embeddingStore } from '../../stores/embeddingStore';
+  import { t } from '../../stores/localeStore';
   import FlowCockpitModal from './FlowCockpitModal.svelte';
 
   interface Props {
@@ -21,11 +22,11 @@
 
   let isCockpitOpen: boolean = $state(false);
 
-  let activeEngineLabel = $derived(`語意檢索 (${embeddingDim}-dim)`);
+  let activeEngineLabel = $derived($t('flowCockpit.semanticSearchLabel', { dim: embeddingDim }));
   let currentTelemetry = $derived($flowStore);
   let displayWpm = $derived(currentTelemetry?.currentWpm || flowWpm);
   let activeColor = $derived(currentTelemetry?.stateColor || '#b8bb26');
-  let activeLabel = $derived(currentTelemetry?.stateLabel || '沉浸心流 ⚡');
+  let activeLabel = $derived(currentTelemetry?.stateLabel || $t('flowCockpit.defaultFlowState'));
   let isPaused = $derived(currentTelemetry?.isPaused || false);
   let isPacerActive = $derived(currentTelemetry?.isPacerActive || false);
 
@@ -54,16 +55,16 @@
       class="flex items-center gap-1.5 font-mono text-[11px] px-2 py-0.5 rounded border transition-all cursor-pointer shadow-xs group {isPacerActive ? 'ring-1 ring-[#fe8019]/50' : ''} hover:brightness-110 active:scale-98"
       style="background-color: {activeColor}15; border-color: {activeColor}40; color: {activeColor};"
       onclick={handleOpenCockpit}
-      title="點擊開啟閱讀心流與眼動遙測儀表板 (Flow Cockpit)"
+      title={$t('flowCockpit.ribbonTooltip')}
     >
       <span class="material-symbols-outlined text-[13px] animate-pulse" style="color: {activeColor};">
         {isPaused ? 'pause_circle' : 'speed'}
       </span>
       <span class="text-[#ebdbb2] flex items-center gap-1">
         {#if currentTelemetry?.calculationMode === 'cursor'}
-          <span class="material-symbols-outlined text-[12px] text-[#fe8019]" title="🎯 游標引導精準計算">ads_click</span>
+          <span class="material-symbols-outlined text-[12px] text-[#fe8019]" title="🎯 Cursor Pacing">ads_click</span>
         {/if}
-        心流速率: <strong class="font-semibold" style="color: {activeColor};">{displayWpm} wpm</strong>
+        {$t('flowCockpit.ribbonFlowSpeed')} <strong class="font-semibold" style="color: {activeColor};">{displayWpm} wpm</strong>
       </span>
       <span
         class="text-[9px] px-1 py-0.1 rounded font-sans font-medium hidden sm:inline-block"
@@ -83,7 +84,7 @@
       type="button"
       class="flex items-center gap-1.5 font-mono text-[11px] px-2 py-0.5 rounded border border-[#fabd2f]/30 bg-[#fabd2f]/10 text-[#fabd2f] hover:bg-[#fabd2f]/20 hover:border-[#fabd2f]/50 transition-all cursor-pointer shadow-xs active:scale-98 group"
       onclick={handleOpenSemanticRadar}
-      title="點擊開啟語意檢索雷達 (支援跨語言自然語意段落搜尋與 Local RAG)"
+      title={$t('flowCockpit.semanticSearchTooltip')}
     >
       <span class="material-symbols-outlined text-[13px] text-[#fe8019] animate-pulse">radar</span>
       <span class="group-hover:text-[#fbf1c7] transition-colors">{activeEngineLabel}</span>

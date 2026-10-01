@@ -6,6 +6,7 @@
   import { pdfViewerStore } from '../../../stores/pdfViewerStore';
   import ThemeCodeBlock from '../../common/ThemeCodeBlock.svelte';
   import { marked } from 'marked';
+  import { t } from '../../../stores/localeStore';
 
   interface Props {
     paper?: PaperDocument | null;
@@ -193,10 +194,10 @@
     <div class="flex items-center gap-2">
       <span class="font-bold text-[#fabd2f] flex items-center gap-1">
         <span class="material-symbols-outlined text-[15px]">menu_book</span>
-        學術擬真排版模式 (Academic Structured Edition)
+        {$t('reader.original.academicStructured')}
       </span>
       <span class="text-[11px] text-[#a89984]">
-        {allSections.length} 章節 · 完整圖表與 KaTeX 公式
+        {$t('reader.original.sectionsWithKatex', { count: allSections.length })}
       </span>
     </div>
 
@@ -206,18 +207,18 @@
         <button
           class="px-2 py-0.5 rounded transition-colors flex items-center gap-1 cursor-pointer {paperTheme === 'parchment' ? 'bg-[#fcfbf9] text-[#1d2021] font-bold shadow-xs' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
           onclick={() => paperTheme = 'parchment'}
-          title="經典米白論文紙張"
+          title={$t('reader.original.paperPaper')}
         >
           <span>📜</span>
-          <span>紙本</span>
+          <span>{$t('reader.original.paperPaper')}</span>
         </button>
         <button
           class="px-2 py-0.5 rounded transition-colors flex items-center gap-1 cursor-pointer {paperTheme === 'dark' ? 'bg-[#fe8019] text-[#1d2021] font-bold shadow-xs' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
           onclick={() => paperTheme = 'dark'}
-          title="深邃學者夜間模式"
+          title={$t('reader.original.paperNight')}
         >
           <span>🌙</span>
-          <span>夜間</span>
+          <span>{$t('reader.original.paperNight')}</span>
         </button>
       </div>
 
@@ -226,12 +227,12 @@
         <button
           class="px-1.5 py-0.5 rounded transition-colors cursor-pointer {paperFontSize === 'normal' ? 'bg-[#3c3836] text-[#ebdbb2] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
           onclick={() => paperFontSize = 'normal'}
-          title="標準字體"
+          title={$t('reader.original.standardFont')}
         >A</button>
         <button
           class="px-1.5 py-0.5 rounded transition-colors cursor-pointer {paperFontSize === 'large' ? 'bg-[#3c3836] text-[#ebdbb2] font-bold' : 'text-[#a89984] hover:text-[#ebdbb2]'}"
           onclick={() => paperFontSize = 'large'}
-          title="放大字體"
+          title={$t('reader.original.enlargeFont')}
         >A+</button>
       </div>
 
@@ -239,10 +240,10 @@
         <button
           class="text-[#fabd2f] hover:underline cursor-pointer flex items-center gap-0.5 text-[11px] ml-1"
           onclick={() => onretryPdf?.()}
-          title="嘗試載入 PDF 向量畫布"
+          title={$t('reader.original.canvasMode')}
         >
           <span class="material-symbols-outlined text-[13px]">brush</span>
-          <span>畫布</span>
+          <span>{$t('reader.original.canvasMode')}</span>
         </button>
       {/if}
     </div>
@@ -275,9 +276,9 @@
                 target="_blank"
                 rel="noopener noreferrer"
                 class="hover:underline flex items-center gap-0.5 {paperTheme === 'parchment' ? 'text-[#0969da]' : 'text-[#8ec07c]'}"
-                title="官方刊載 DOI / 來源網址"
+                title={$t('reader.original.doiOriginal')}
               >
-                <span>DOI / 原文</span>
+                <span>{$t('reader.original.doiOriginal')}</span>
                 <span class="material-symbols-outlined text-[12px]">open_in_new</span>
               </a>
             {/if}
@@ -326,7 +327,7 @@
                   onsectionClick?.({ sectionId: sec.id });
                 }
               }}
-              title="點擊定位章節"
+              title={$t('reader.sectionHeading.locateTopTooltip')}
             >
               <h2 class="font-serif text-base sm:text-lg font-bold flex items-baseline gap-2 {paperTheme === 'parchment' ? 'text-[#1c1b1a]' : 'text-[#fbf1c7]'} group-hover/sec-header:text-[#fe8019] transition-colors">
                 <span class="font-mono text-sm {paperTheme === 'parchment' ? 'text-[#b57614]' : 'text-[#fe8019]'}">
@@ -387,7 +388,7 @@
                       <strong class="font-mono {paperTheme === 'parchment' ? 'text-[#1c1b1a]' : 'text-[#ebdbb2]'}">
                         Figure {sIndex + 1}.{itemIdx + 1}
                       </strong>
-                      <span class="ml-1">{item.alt || '學術圖表'}</span>
+                      <span class="ml-1">{item.alt || $t('readingMap.academicFigure')}</span>
                     </figcaption>
                   </figure>
                 {:else if item.type === 'formula' && item.latex}
@@ -438,7 +439,7 @@
                     <div class="flex items-center justify-between text-[11px] font-mono {
                       paperTheme === 'parchment' ? 'text-[#b57614]' : 'text-[#fabd2f]'
                     }">
-                      <span>{formula.name || '方程式'}</span>
+                      <span>{formula.name || $t('reader.paragraphs.coreEquation')}</span>
                       <span class="font-bold">{formula.number || ''}</span>
                     </div>
                     <div class="overflow-x-auto py-1 text-center">
@@ -462,7 +463,7 @@
     </article>
   {:else}
     <div class="text-center py-16 text-[#a89984] text-xs font-mono">
-      尚未選定文獻章節內容
+      {$t('reader.original.noSectionSelected')}
     </div>
   {/if}
 </div>

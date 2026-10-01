@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { PaperDocument, ChapterSection } from '../../../types/document';
+  import { t } from '../../../stores/localeStore';
 
   interface Props {
     paper?: PaperDocument | null;
@@ -101,35 +102,35 @@
     {#if localPdfArrayBuffer}
       <span class="font-mono text-[9px] bg-[#fe8019]/20 border border-[#fe8019]/60 text-[#fe8019] px-2 py-0.5 rounded font-semibold flex items-center gap-1 shrink-0">
         <span class="material-symbols-outlined text-[12px]">picture_as_pdf</span>
-        本機畫布
+        {$t('reader.original.localCanvas')}
       </span>
     {:else if isPdf}
       <span class="font-mono text-[9px] bg-[#fabd2f]/15 border border-[#fabd2f]/40 text-[#fabd2f] px-2 py-0.5 rounded font-semibold flex items-center gap-1 shrink-0">
         <span class="material-symbols-outlined text-[12px]">description</span>
-        {viewerMode === 'canvas' ? '畫布視圖' : '學術 PDF 原版'}
+        {viewerMode === 'canvas' ? $t('reader.original.canvasView') : $t('reader.original.pdfOriginal')}
       </span>
     {:else}
       <span class="font-mono text-[9px] bg-[#83a598]/15 border border-[#83a598]/40 text-[#83a598] px-2 py-0.5 rounded font-semibold flex items-center gap-1 shrink-0">
         <span class="material-symbols-outlined text-[12px]">language</span>
-        網頁文獻
+        {$t('reader.original.webArticle')}
       </span>
     {/if}
 
     <!-- String Matching Badge -->
     {#if isStringMatchActive}
-      <span class="font-mono text-[9px] bg-[#b8bb26]/20 border border-[#b8bb26]/60 text-[#b8bb26] px-1.5 py-0.5 rounded font-bold flex items-center gap-1 shrink-0 animate-fade-in" title="已透過 PDF 文字自動校正所有章節出處">
+      <span class="font-mono text-[9px] bg-[#b8bb26]/20 border border-[#b8bb26]/60 text-[#b8bb26] px-1.5 py-0.5 rounded font-bold flex items-center gap-1 shrink-0 animate-fade-in" title={$t('reader.original.stringAnchorTooltip')}>
         <span class="material-symbols-outlined text-[11px]">manage_search</span>
-        字串錨定
+        {$t('reader.original.stringAnchor')}
       </span>
     {:else if isStringIndexing}
       <span class="font-mono text-[9px] bg-[#fabd2f]/15 border border-[#fabd2f]/40 text-[#fabd2f] px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0 animate-pulse">
         <span class="material-symbols-outlined text-[11px] animate-spin">sync</span>
-        比對中 {stringIndexProgress}%
+        {$t('reader.original.matchingProgress', { progress: stringIndexProgress })}
       </span>
     {/if}
 
     <span class="text-[#ebdbb2] truncate font-sans text-xs" title={paper?.title}>
-      {paper?.title || '原始學術文獻'}
+      {paper?.title || $t('reader.original.defaultTitle')}
     </span>
   </div>
 
@@ -141,14 +142,14 @@
         class="px-2 py-0.5 rounded bg-[#fe8019]/20 hover:bg-[#fe8019] text-[#fe8019] hover:text-[#1d2021] border border-[#fe8019]/60 transition-colors flex items-center gap-1 text-[10px] font-mono font-bold cursor-pointer disabled:opacity-50"
         disabled={isConvertingToPaper}
         onclick={() => onconvertToPaper?.()}
-        title="將此 PDF 解析為章節，轉換為雙語研讀畫布"
+        title={$t('reader.original.convertToCanvasTooltip')}
       >
         {#if isConvertingToPaper}
           <span class="material-symbols-outlined text-[12px] animate-spin">sync</span>
-          <span>解析中 {convertProgress}%</span>
+          <span>{$t('reader.original.converting', { progress: convertProgress })}</span>
         {:else}
           <span class="material-symbols-outlined text-[12px]">auto_stories</span>
-          <span>✨ 轉換為研讀畫布</span>
+          <span>{$t('reader.original.convertToCanvas')}</span>
         {/if}
       </button>
     {/if}
@@ -159,13 +160,13 @@
         <button
           class="hover:text-[#ebdbb2] px-1 text-xs transition-colors cursor-pointer"
           onclick={() => onsetZoom?.({ zoom: zoomLevel - 0.2 })}
-          title="縮小"
+          title={$t('reader.original.zoomOut')}
         >-</button>
         <span class="text-[#fabd2f] font-mono w-9 text-center text-[10px]">{Math.round(zoomLevel * 100)}%</span>
         <button
           class="hover:text-[#ebdbb2] px-1 text-xs transition-colors cursor-pointer"
           onclick={() => onsetZoom?.({ zoom: zoomLevel + 0.2 })}
-          title="放大"
+          title={$t('reader.original.zoomIn')}
         >+</button>
       </div>
     {/if}
@@ -173,12 +174,12 @@
     {#if isPdf}
       <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#282828] border border-[#3c3836] text-[10px] font-mono text-[#fabd2f]">
         <span class="material-symbols-outlined text-[12px] text-[#fe8019]">brush</span>
-        <span>JavaScript 單頁畫布</span>
+        <span>{$t('reader.original.spaCanvas')}</span>
       </div>
     {:else}
       <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#282828] border border-[#3c3836] text-[10px] font-mono text-[#83a598]">
         <span class="material-symbols-outlined text-[12px] text-[#83a598]">public</span>
-        <span>原始網頁視圖</span>
+        <span>{$t('reader.original.originalWebView')}</span>
       </div>
     {/if}
 
@@ -189,20 +190,20 @@
         class="px-2 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#fe8019]/60 rounded text-[11px] text-[#fabd2f] flex items-center gap-1 transition-colors cursor-pointer"
         onclick={() => onretry?.()}
         disabled={isLoadingPdf}
-        title="重新載入 PDF 來源"
+        title={$t('reader.original.reloadPdf')}
       >
         <span class="material-symbols-outlined text-[13px] {isLoadingPdf ? 'animate-spin text-[#fe8019]' : ''}">sync</span>
-        <span class="hidden sm:inline">重試</span>
+        <span class="hidden sm:inline">{$t('reader.original.retry')}</span>
       </button>
 
       <!-- Local PDF Upload -->
       <button
         class="px-2 py-1 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#504945] rounded text-[11px] text-[#d5c4a1] flex items-center gap-1 transition-colors cursor-pointer"
         onclick={() => fileInputRef?.click()}
-        title="選取本機 PDF 檔案進行比對"
+        title={$t('reader.original.localPdfTooltip')}
       >
         <span class="material-symbols-outlined text-[13px] text-[#fe8019]">upload_file</span>
-        <span class="hidden sm:inline">本地 PDF</span>
+        <span class="hidden sm:inline">{$t('reader.original.localPdf')}</span>
       </button>
       <input
         type="file"
@@ -216,9 +217,9 @@
         <button
           class="px-1.5 py-1 text-[#fb4934] hover:bg-[#282828] rounded text-[10px] cursor-pointer"
           onclick={() => onclearLocalPdf?.()}
-          title="清除本地自訂 PDF"
+          title={$t('reader.original.restoreDefaultPdf')}
         >
-          復原預設
+          {$t('reader.original.restoreDefaultPdf')}
         </button>
       {/if}
     {/if}
@@ -229,7 +230,7 @@
     <button
       class="p-1 hover:bg-[#282828] hover:text-[#ebdbb2] rounded text-[#a89984] flex items-center transition-colors cursor-pointer"
       onclick={() => onopenExternal?.()}
-      title="在獨立新分頁開啟"
+      title={$t('reader.original.openNewTab')}
     >
       <span class="material-symbols-outlined text-[15px]">open_in_new</span>
     </button>
@@ -239,16 +240,16 @@
       <button
         class="px-2 py-1 bg-[#3c3836] hover:bg-[#504945] text-[#fabd2f] rounded text-[11px] flex items-center gap-1 font-semibold transition-colors cursor-pointer"
         onclick={() => onswitchToSplit?.()}
-        title="切換為左右 50/50 對照模式"
+        title={$t('reader.original.splitCompareTooltip')}
       >
         <span class="material-symbols-outlined text-[13px]">view_column</span>
-        <span>切換對照</span>
+        <span>{$t('reader.original.splitCompare')}</span>
       </button>
 
       <button
         class="w-6 h-6 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828] transition-colors cursor-pointer ml-1"
         onclick={() => onclose?.()}
-        title="收起抽屜 (Esc)"
+        title={$t('reader.original.collapseDrawer')}
       >
         <span class="material-symbols-outlined text-[16px]">close</span>
       </button>
@@ -269,19 +270,19 @@
             : 'bg-[#3c3836]/40 border-[#504945] text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#3c3836]'
         }"
         onclick={() => ontoggleSync?.()}
-        title={isSyncEnabled ? '目前已開啟雙向閱讀聯動（點擊以自由翻閱）' : '目前處於獨立模式（點擊重新鎖定進度）'}
+        title={isSyncEnabled ? $t('reader.original.syncEnabledTooltip') : $t('reader.original.syncDisabledTooltip')}
       >
         <span class="material-symbols-outlined text-[13px]">{isSyncEnabled ? 'link' : 'link_off'}</span>
-        <span class="font-bold hidden sm:inline">{isSyncEnabled ? '聯動中' : '獨立閱讀'}</span>
+        <span class="font-bold hidden sm:inline">{isSyncEnabled ? $t('reader.original.syncEnabled') : $t('reader.original.syncDisabled')}</span>
       </button>
     {:else}
       <!-- 網頁來源時，提示無法連動 -->
       <div
         class="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono border shrink-0 bg-[#3c3836]/30 border-[#504945] text-[#fabd2f]"
-        title="外部網頁受瀏覽器跨網域安全機制保護，無法與右側章節連動"
+        title={$t('reader.original.externalWebNoSyncTooltip')}
       >
         <span class="material-symbols-outlined text-[13px] text-[#fe8019]">link_off</span>
-        <span class="font-bold hidden sm:inline">無法連動</span>
+        <span class="font-bold hidden sm:inline">{$t('reader.original.externalWebNoSync')}</span>
       </div>
     {/if}
 
@@ -290,13 +291,13 @@
     <!-- Chapter Dropdown -->
     {#if allSections.length > 0}
       <div class="flex items-center gap-1 min-w-0 {viewerMode === 'native' ? 'opacity-40' : ''}">
-        <span class="text-[#a89984] text-[10px] hidden md:inline shrink-0">章節:</span>
+        <span class="text-[#a89984] text-[10px] hidden md:inline shrink-0">{$t('reader.original.sectionLabel')}</span>
         <select
           class="bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#ebdbb2] text-[11px] rounded px-2 py-0.5 font-sans truncate max-w-[170px] sm:max-w-[240px] cursor-pointer focus:outline-none focus:border-[#fe8019] disabled:cursor-not-allowed"
           value={activeSectionId}
           disabled={viewerMode === 'native'}
           onchange={(e) => onselectSection?.({ sectionId: e.currentTarget.value })}
-          title={viewerMode === 'native' ? '原站受瀏覽器限制無法跨域跳轉章節，請切換至「排版」模式' : '章節快速跳轉對應頁面/區塊'}
+          title={viewerMode === 'native' ? $t('viewer.crossDomainChapterNotice') : $t('viewer.quickChapterJump')}
         >
           {#each allSections as sec}
             <option value={sec.id}>
@@ -315,13 +316,13 @@
         class="w-6 h-6 bg-[#282828] hover:bg-[#3c3836] disabled:opacity-30 border border-[#3c3836] rounded flex items-center justify-center text-[#d5c4a1] transition-colors cursor-pointer"
         onclick={() => onprevPage?.()}
         disabled={currentPage <= 1}
-        title="上一頁"
+        title={$t('reader.original.prevPage')}
       >
         <span class="material-symbols-outlined text-[14px]">chevron_left</span>
       </button>
 
       <div class="flex items-center gap-1 px-1">
-        <span class="text-[#a89984] text-[10px]">第</span>
+        <span class="text-[#a89984] text-[10px]">{$t('reader.original.pagePrefix')}</span>
         <input
           type="number"
           min="1"
@@ -331,14 +332,14 @@
           onblur={handlePageCommit}
           class="w-9 bg-[#282828] border border-[#504945] rounded text-center text-[#fabd2f] font-bold text-xs py-0.5 focus:outline-none focus:border-[#fe8019]"
         />
-        <span class="text-[#a89984] text-[10px]">/ {totalPages} 頁</span>
+        <span class="text-[#a89984] text-[10px]">{$t('reader.original.pageSuffix', { totalPages })}</span>
       </div>
 
       <button
         class="w-6 h-6 bg-[#282828] hover:bg-[#3c3836] disabled:opacity-30 border border-[#3c3836] rounded flex items-center justify-center text-[#d5c4a1] transition-colors cursor-pointer"
         onclick={() => onnextPage?.()}
         disabled={currentPage >= totalPages}
-        title="下一頁"
+        title={$t('reader.original.nextPage')}
       >
         <span class="material-symbols-outlined text-[14px]">chevron_right</span>
       </button>

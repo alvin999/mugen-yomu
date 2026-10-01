@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { PaperDocument } from '../../stores/documentStore';
+  import { t } from '../../stores/localeStore';
 
   interface Props {
     papers?: PaperDocument[];
@@ -30,11 +31,11 @@
   <table class="w-full text-left border-collapse text-xs">
     <thead>
       <tr class="bg-[#141617] border-b border-[#3c3836] text-[#a89984] font-mono text-[11px]">
-        <th class="py-3 px-4 w-28">研讀進度</th>
-        <th class="py-3 px-4 min-w-[280px]">文獻標題 / 作者</th>
-        <th class="py-3 px-4 w-36">類型 / 出處</th>
-        <th class="py-3 px-4 w-40 text-center">規模統計</th>
-        <th class="py-3 px-4 w-44 text-right">操作動作</th>
+        <th class="py-3 px-4 w-28">{$t('repo.table.progress')}</th>
+        <th class="py-3 px-4 min-w-[280px]">{$t('repo.table.titleAuthors')}</th>
+        <th class="py-3 px-4 w-36">{$t('repo.table.typeVenue')}</th>
+        <th class="py-3 px-4 w-40 text-center">{$t('repo.table.stats')}</th>
+        <th class="py-3 px-4 w-44 text-right">{$t('repo.table.actions')}</th>
       </tr>
     </thead>
     <tbody class="divide-y divide-[#282828]">
@@ -54,12 +55,12 @@
                 {#if isActive}
                   <span class="text-[#fe8019] font-bold flex items-center gap-1">
                     <span class="h-1.5 w-1.5 rounded-full bg-[#fe8019] animate-pulse"></span>
-                    當前
+                    {$t('repo.table.current')}
                   </span>
                 {:else if progress >= 100}
-                  <span class="text-[#b8bb26] font-semibold">精讀完畢</span>
+                  <span class="text-[#b8bb26] font-semibold">{$t('repo.table.completed')}</span>
                 {:else}
-                  <span class="text-[#a89984]">研讀中</span>
+                  <span class="text-[#a89984]">{$t('repo.table.inProgress')}</span>
                 {/if}
                 <span class={progress >= 100 ? 'text-[#b8bb26]' : 'text-[#fabd2f]'}>{progress}%</span>
               </div>
@@ -83,7 +84,7 @@
                 {paper.title}
               </button>
               <span class="text-[11px] text-[#7c6f64] truncate max-w-sm">
-                {Array.isArray(paper.authors) ? paper.authors.join(', ') : (paper.authors || '未知作者')}
+                {Array.isArray(paper.authors) ? paper.authors.join(', ') : (paper.authors || $t('repo.table.unknownAuthor'))}
               </span>
             </div>
           </td>
@@ -93,9 +94,9 @@
             <div class="flex flex-col gap-1">
               <div class="flex items-center gap-1">
                 {#if paper.type === 'web'}
-                  <span class="font-mono text-[9px] bg-[#83a598]/15 text-[#83a598] px-1.5 py-0.2 rounded border border-[#83a598]/30 uppercase">網頁</span>
+                  <span class="font-mono text-[9px] bg-[#83a598]/15 text-[#83a598] px-1.5 py-0.2 rounded border border-[#83a598]/30 uppercase">{$t('repo.table.webBadge')}</span>
                 {:else}
-                  <span class="font-mono text-[9px] bg-[#fe8019]/15 text-[#fe8019] px-1.5 py-0.2 rounded border border-[#fe8019]/30 uppercase">論文</span>
+                  <span class="font-mono text-[9px] bg-[#fe8019]/15 text-[#fe8019] px-1.5 py-0.2 rounded border border-[#fe8019]/30 uppercase">{$t('repo.table.paperBadge')}</span>
                 {/if}
                 <span class="font-mono text-[10px] text-[#ebdbb2] truncate max-w-[90px]">{paper.venue}</span>
               </div>
@@ -108,13 +109,13 @@
           <!-- 4. Stats -->
           <td class="py-3 px-4 text-center">
             <div class="inline-flex items-center gap-2 font-mono text-[10px] text-[#a89984] bg-[#141617] px-2.5 py-1 rounded-lg border border-[#32302f]">
-              <span title="章節數">{paper.sections?.length || 0} 章</span>
+              <span title={$t('repo.grid.sectionsTitle')}>{paper.sections?.length || 0} {$t('repo.table.sectionsUnit')}</span>
               <span class="text-[#504945]">·</span>
-              <span class="text-[#fabd2f]" title="公式數">{formulaCount} 式</span>
+              <span class="text-[#fabd2f]" title={$t('repo.grid.formulasTitle')}>{formulaCount} {$t('repo.table.formulasUnit')}</span>
               <span class="text-[#504945]">·</span>
-              <span class="text-[#8ec07c]" title="圖表數">{figureCount} 圖</span>
+              <span class="text-[#8ec07c]" title={$t('repo.grid.figuresTitle')}>{figureCount} {$t('repo.table.figuresUnit')}</span>
               <span class="text-[#504945]">·</span>
-              <span class="text-[#fe8019]" title="筆記數">{notesCount} 記</span>
+              <span class="text-[#fe8019]" title={$t('repo.grid.notesTitle')}>{notesCount} {$t('repo.table.notesUnit')}</span>
             </div>
           </td>
 
@@ -124,28 +125,28 @@
               <button
                 class="px-2 py-1 bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold text-xs rounded transition-colors cursor-pointer"
                 onclick={() => onselect?.({ paper })}
-                title="進入閱讀工作台"
+                title={$t('repo.table.studyTooltip')}
               >
-                研讀
+                {$t('repo.table.studyBtn')}
               </button>
               <button
                 class="p-1 text-[#a89984] hover:text-[#83a598] hover:bg-[#282828] rounded transition-colors cursor-pointer"
                 onclick={() => onviewCitation?.({ paper })}
-                title="引文星系圖譜"
+                title={$t('repo.table.citationTooltip')}
               >
                 <span class="material-symbols-outlined text-[16px]">hub</span>
               </button>
               <button
                 class="p-1 text-[#a89984] hover:text-[#fabd2f] hover:bg-[#282828] rounded transition-colors cursor-pointer"
                 onclick={() => onviewNotes?.({ paper })}
-                title="查看精讀筆記"
+                title={$t('repo.table.notesTooltip')}
               >
                 <span class="material-symbols-outlined text-[16px]">draw</span>
               </button>
               <button
                 class="p-1 text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#282828] rounded transition-colors cursor-pointer"
                 onclick={() => onpreview?.({ paper })}
-                title="預覽大綱"
+                title={$t('repo.table.previewTooltip')}
               >
                 <span class="material-symbols-outlined text-[16px]">visibility</span>
               </button>
@@ -153,7 +154,7 @@
                 type="button"
                 class="p-1 text-[#7c6f64] hover:text-[#fb4934] hover:bg-[#282828] rounded transition-colors cursor-pointer"
                 onclick={(e) => { e.stopPropagation(); ondelete?.({ id: paper.id }); }}
-                title="移除文獻"
+                title={$t('repo.table.deleteTooltip')}
               >
                 <span class="material-symbols-outlined text-[16px]">delete</span>
               </button>

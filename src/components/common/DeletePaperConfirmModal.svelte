@@ -2,6 +2,7 @@
   import type { PaperDocument } from '../../types/document';
   import { isPresetPaper } from '../../stores/documentStore';
   import { deactivateCursor, activateCursor } from '../../stores/vimCursorStore';
+  import { t } from '../../stores/localeStore';
 
   interface Props {
     isOpen?: boolean;
@@ -65,7 +66,7 @@
       onclick={handleCancel}
       role="button"
       tabindex="-1"
-      aria-label="點擊遮罩關閉彈窗"
+      aria-label={$t('common.closeModal')}
     ></div>
 
     <!-- Modal Card Container -->
@@ -79,8 +80,8 @@
             <span class="material-symbols-outlined text-[18px]">delete_forever</span>
           </div>
           <div class="flex flex-col">
-            <h3 class="text-sm font-bold text-[#ebdbb2]">移除文獻確認</h3>
-            <span class="font-mono text-[10px] text-[#a89984]">Remove Paper from Repository</span>
+            <h3 class="text-sm font-bold text-[#ebdbb2]">{$t('deleteModal.title')}</h3>
+            <span class="font-mono text-[10px] text-[#a89984]">{$t('deleteModal.subtitle')}</span>
           </div>
         </div>
 
@@ -88,7 +89,7 @@
           type="button"
           class="w-7 h-7 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f] transition-colors cursor-pointer"
           onclick={handleCancel}
-          title="關閉 (Esc)"
+          title="{$t('common.close')} (Esc)"
         >
           <span class="material-symbols-outlined text-[18px]">close</span>
         </button>
@@ -101,20 +102,20 @@
           <div class="flex items-center gap-1.5 flex-wrap">
             {#if isPreset}
               <span class="font-mono text-[9px] bg-[#fabd2f]/15 border border-[#fabd2f]/40 text-[#fabd2f] px-1.5 py-0.2 rounded font-semibold uppercase flex items-center gap-0.5">
-                <span class="material-symbols-outlined text-[10px]">auto_stories</span> 內建核心文獻
+                <span class="material-symbols-outlined text-[10px]">auto_stories</span> {$t('deleteModal.presetBadge')}
               </span>
             {/if}
             {#if paper.type === 'web'}
               <span class="font-mono text-[9px] bg-[#83a598]/15 border border-[#83a598]/40 text-[#83a598] px-1.5 py-0.2 rounded font-semibold uppercase flex items-center gap-0.5">
-                <span class="material-symbols-outlined text-[10px]">language</span> 網頁文章
+                <span class="material-symbols-outlined text-[10px]">language</span> {$t('deleteModal.webBadge')}
               </span>
             {:else}
               <span class="font-mono text-[9px] bg-[#fe8019]/15 border border-[#fe8019]/40 text-[#fe8019] px-1.5 py-0.2 rounded font-semibold uppercase flex items-center gap-0.5">
-                <span class="material-symbols-outlined text-[10px]">description</span> 學術論文
+                <span class="material-symbols-outlined text-[10px]">description</span> {$t('deleteModal.paperBadge')}
               </span>
             {/if}
             <span class="font-mono text-[10px] text-[#a89984] truncate max-w-[180px]">
-              {paper.venue || '學術文庫'}
+              {paper.venue || 'Academic Repository'}
             </span>
             {#if paper.arxivId}
               <span class="font-mono text-[10px] text-[#fabd2f] bg-[#fabd2f]/10 px-1 py-0.2 rounded">
@@ -129,9 +130,9 @@
 
           <div class="flex items-center justify-between text-[10px] font-mono text-[#a89984] pt-1.5 border-t border-[#3c3836]">
             <span class="truncate max-w-[200px]">
-              {Array.isArray(paper.authors) ? paper.authors.join(', ') : (paper.authors || '未知作者')}
+              {Array.isArray(paper.authors) ? paper.authors.join(', ') : (paper.authors || 'Unknown Authors')}
             </span>
-            <span>{paper.sections?.length || 0} 個章節</span>
+            <span>{paper.sections?.length || 0} {$t('deleteModal.sectionsCount')}</span>
           </div>
         </div>
 
@@ -139,27 +140,27 @@
         <div class="bg-[#fb4934]/10 border border-[#fb4934]/30 rounded-lg p-3 flex items-start gap-2.5 text-[#fb4934]">
           <span class="material-symbols-outlined text-[18px] shrink-0 mt-0.5">warning</span>
           <div class="flex flex-col gap-1.5 text-[11px] leading-relaxed flex-1">
-            <span class="font-bold text-[#ebdbb2]">確定要從本機文獻庫中移除這篇文章嗎？</span>
-            <span class="text-[#d5c4a1]">此操作將從本地儲存中永久移除此文獻，並連同清除：</span>
+            <span class="font-bold text-[#ebdbb2]">{$t('deleteModal.warningQuestion')}</span>
+            <span class="text-[#d5c4a1]">{$t('deleteModal.warningDesc')}</span>
             <div class="bg-[#1d2021]/80 rounded p-2 border border-[#3c3836] flex flex-col gap-1 text-[10.5px]">
               <div class="flex items-center gap-1.5 text-[#ebdbb2]">
                 <span class="h-1.5 w-1.5 rounded-full bg-[#fb4934]"></span>
-                <span>本機閱讀掌握度與章節進度狀態</span>
+                <span>{$t('deleteModal.warningReadProgress')}</span>
               </div>
               <div class="flex items-center gap-1.5 text-[#ebdbb2]">
                 <span class="h-1.5 w-1.5 rounded-full bg-[#fb4934]"></span>
-                <span>此文獻所關聯的所有精讀筆記</span>
+                <span>{$t('deleteModal.warningNotes')}</span>
               </div>
               <div class="flex items-center gap-1.5 text-[#ebdbb2]">
                 <span class="h-1.5 w-1.5 rounded-full bg-[#fb4934]"></span>
-                <span>PDF 與網頁閱讀之捲動進度與頁碼記憶</span>
+                <span>{$t('deleteModal.warningPositions')}</span>
               </div>
             </div>
 
             {#if isPreset}
               <div class="mt-1 pt-1.5 border-t border-[#fb4934]/20 text-[#fabd2f] text-[10.5px] flex items-center gap-1">
                 <span class="material-symbols-outlined text-[13px]">info</span>
-                <span>此為內建核心文獻，刪除後若需要可隨時至「匯入」選單中的「經典推薦」重新載入 (Fallback)。</span>
+                <span>{$t('deleteModal.presetWarning')}</span>
               </div>
             {/if}
           </div>
@@ -173,7 +174,7 @@
           class="px-3 py-1.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#a89984] hover:text-[#ebdbb2] rounded-lg text-xs font-medium transition-colors cursor-pointer"
           onclick={handleCancel}
         >
-          取消 (Esc)
+          {$t('deleteModal.cancelBtn')}
         </button>
 
         <button
@@ -182,7 +183,7 @@
           onclick={handleConfirm}
         >
           <span class="material-symbols-outlined text-[15px]">delete</span>
-          <span>確認移除文獻</span>
+          <span>{$t('deleteModal.confirmBtn')}</span>
         </button>
       </div>
     </div>

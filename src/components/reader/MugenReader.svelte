@@ -22,6 +22,7 @@
     vimCursorState,
     adjustCursorForScroll
   } from '../../stores/vimCursorStore';
+  import { t } from '../../stores/localeStore';
 
   // Subcomponents
   import MugenPaperHeader from './header/MugenPaperHeader.svelte';
@@ -175,13 +176,13 @@
 
   function copyLatex(latex: string) {
     copyLatexToClipboard(latex);
-    showToast('已複製 LaTeX 方程式碼');
+    showToast(get(t)('reader.latexCopied'));
   }
 
   function copyTranslationText(text: string) {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(text);
-      showToast('繁體譯文已複製！');
+      showToast(get(t)('reader.translationCopied'));
     }
   }
 
@@ -192,7 +193,7 @@
   function openLightbox(imgUrl: string, caption?: string) {
     if (!imgUrl) return;
     activeLightboxImg = imgUrl;
-    activeLightboxCaption = caption || '學術圖表預覽';
+    activeLightboxCaption = caption || get(t)('reader.lightboxCaption');
   }
 
   function closeLightbox() {
@@ -903,16 +904,16 @@
 
       paragraphTranslations[key] = streamResult.translation;
       translationSourceMap[key] = streamResult.cached
-        ? 'IndexedDB 本機快取'
-        : (p === 'groq' ? 'Groq LPU 極速推論' : 'AI 伴讀專屬模型');
+        ? get(t)('reader.localCache')
+        : (p === 'groq' ? get(t)('reader.groqFast') : get(t)('reader.aiCompanionModel'));
 
       if (!k && p !== 'ollama') {
-        translationNoticeMap[key] = `尚未設定 ${p.toUpperCase()} 金鑰。請於右上方設定自備金鑰 (BYOK) 以連線官方端點即時翻譯。`;
+        translationNoticeMap[key] = get(t)('reader.noticeNoKey', { provider: p.toUpperCase() });
       } else if (streamResult.fallbackNotice) {
-        translationNoticeMap[key] = `目前狀態（${streamResult.fallbackNotice}）。`;
+        translationNoticeMap[key] = get(t)('reader.noticeStatus', { notice: streamResult.fallbackNotice });
       }
     } catch (err: any) {
-      paragraphTranslations[key] = `[翻譯暫時無法完成: ${err.message || '連線逾時'}]`;
+      paragraphTranslations[key] = get(t)('reader.transUnavailable', { msg: err.message || 'Timeout' });
     } finally {
       translatingMap[key] = false;
       setTimeout(() => {
@@ -955,7 +956,7 @@
       const ollamaUrl = localStorage.getItem('mugen_ollama_url') || 'http://localhost:11434';
 
       if (!apiKey && activeProvider !== 'ollama') {
-        throw new Error(`請先在右側伴讀欄或設定中配置 ${activeProvider.toUpperCase()} API Key`);
+        throw new Error(get(t)('reader.configKeyFirst', { provider: activeProvider.toUpperCase() }));
       }
 
       const res = await generatePaperAbstractCore(paper, activeProvider, apiKey, activeModel, ollamaUrl);
@@ -968,12 +969,12 @@
       isAbstractCollapsed = false;
       dispatch('updatePaper', { paper });
     } catch (err: any) {
-      console.error('生成核心摘要失敗:', err);
+      console.error('Abstract generation error:', err);
       const msg = String(err?.message || '');
       if (msg.includes('unexpected EOF') || msg.includes('stream reading')) {
-        abstractGenError = 'Groq 雲端連線不穩定，請重新點擊重試（系統已啟用 8B-Instant 自動修復）。';
+        abstractGenError = get(t)('reader.groqUnstable');
       } else {
-        abstractGenError = err.message || '生成失敗，請檢查 API Key 或網路狀態';
+        abstractGenError = err.message || get(t)('reader.genFailed');
       }
     } finally {
       isGeneratingAbstract = false;
@@ -1274,13 +1275,13 @@
             <span class="w-12 h-px bg-[#504945]/60"></span>
             <span class="flex items-center gap-1.5 text-[#fabd2f]">
               <span class="material-symbols-outlined text-sm">verified</span>
-              <span>End of Document · 全文研讀完成</span>
+              <span>{$t('reader.endOfDoc')}</span>
             </span>
             <span class="w-12 h-px bg-[#504945]/60"></span>
           </div>
 
           <p class="text-xs text-[#928374] max-w-md font-mono leading-relaxed">
-            您已研讀至文獻末尾。本篇所有認知節點與段落已完整錨定至本機知識庫。
+            {$t('reader.endOfDocDesc')}
           </p>
 
           <div class="flex items-center gap-3 mt-1">
@@ -1293,14 +1294,14 @@
               }}
             >
               <span class="material-symbols-outlined text-[14px]">arrow_upward</span>
-              <span>回到論文頂端</span>
+              <span>{$t('reader.backToTop')}</span>
             </button>
             <button
               class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#32302f] hover:bg-[#3c3836] border border-[#504945] hover:border-[#8ec07c] text-xs font-mono text-[#8ec07c] transition-all cursor-pointer shadow-xs active:scale-95"
               onclick={() => dispatch('readerAction', { action: 'exportNotes' })}
             >
               <span class="material-symbols-outlined text-[14px]">psychology</span>
-              <span>檢視本篇認知筆記</span>
+              <span>{$t('reader.viewNotes')}</span>
             </button>
           </div>
         </div>

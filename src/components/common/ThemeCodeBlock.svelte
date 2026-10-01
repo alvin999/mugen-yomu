@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import hljs from 'highlight.js';
+  import { t } from '../../stores/localeStore';
 
   export let code: string = '';
   export let language: string = '';
@@ -79,10 +80,10 @@
           : (paperTheme === 'parchment' ? 'hover:bg-[#e2dac8] text-[#504945]' : 'hover:bg-[#282828] text-[#d5c4a1]')
       }"
       on:click={handleCopy}
-      title="複製程式碼"
+      title={$t('common.copyCode')}
     >
       <span class="material-symbols-outlined text-[13px]">{isCopied ? 'check' : 'content_copy'}</span>
-      <span>{isCopied ? '已複製' : '複製'}</span>
+      <span>{isCopied ? $t('common.copied') : $t('common.copy')}</span>
     </button>
   </div>
 

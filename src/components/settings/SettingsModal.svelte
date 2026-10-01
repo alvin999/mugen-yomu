@@ -3,6 +3,7 @@
   import { fetchProviderModels, FALLBACK_MODELS, type ProviderModelItem } from '../../services/aiService';
   import { THEMES, currentTheme, setTheme } from '../../stores/themeStore';
   import { vimConfigStore, updateVimConfig } from '../../stores/vimCursorStore';
+  import { t } from '../../stores/localeStore';
   import {
     getEmbeddingPreference,
     setEmbeddingPreference,
@@ -30,7 +31,7 @@
   }: Props = $props();
 
   const providers = [
-    { id: 'groq', name: 'Groq LPU (極速推薦)', defaultModel: 'llama-3.3-70b-versatile', badge: 'Ultra-Fast' },
+    { id: 'groq', name: 'Groq LPU', defaultModel: 'llama-3.3-70b-versatile', badge: 'Ultra-Fast' },
     { id: 'google', name: 'Google Gemini', defaultModel: 'gemini-1.5-pro' },
     { id: 'anthropic', name: 'Anthropic Claude', defaultModel: 'claude-3-5-sonnet-20241022' },
     { id: 'openai', name: 'OpenAI GPT', defaultModel: 'gpt-4o' },
@@ -127,13 +128,13 @@
           currentModel = availableModels[0].id;
         }
       } else {
-        throw new Error('未取得模型清單');
+        throw new Error($t('settingsModal.errors.modelFetchFailed'));
       }
     } catch (err: any) {
       console.warn('讀取模型清單失敗，切換為預設模型:', err);
       availableModels = FALLBACK_MODELS[currentProvider] || [];
       fetchStatus = 'error';
-      fetchErrorMsg = err.message || '連線讀取失敗，已載入本機預設模型';
+      fetchErrorMsg = err.message || $t('settingsModal.errors.modelFetchError');
     } finally {
       isLoadingModels = false;
     }
@@ -172,21 +173,21 @@
       vaultMode = newMode;
       isUnlocked = isVaultUnlocked();
       isSettingNewPin = false;
-      vaultNotice = newMode === 'device-auto' ? '已切換至「裝置透明加密」保護' : '已切換至「明文相容模式」';
+      vaultNotice = newMode === 'device-auto' ? $t('settingsModal.notices.deviceAuto') : $t('settingsModal.notices.plain');
       setTimeout(() => (vaultNotice = ''), 3000);
     } catch (e: any) {
-      vaultError = e.message || '切換安全模式失敗';
+      vaultError = e.message || $t('settingsModal.errors.switchFailed');
     }
   }
 
   async function applyMasterPin() {
     vaultError = '';
     if (!newPinInput || newPinInput.length < 4) {
-      vaultError = '主 PIN 碼長度至少需為 4 位';
+      vaultError = $t('settingsModal.errors.pinMinLen');
       return;
     }
     if (newPinInput !== confirmPinInput) {
-      vaultError = '兩次輸入的 PIN 碼不相符';
+      vaultError = $t('settingsModal.errors.pinMismatch');
       return;
     }
 
@@ -197,17 +198,17 @@
       isSettingNewPin = false;
       newPinInput = '';
       confirmPinInput = '';
-      vaultNotice = '已啟用「主密碼 / PIN 強化保護」，密鑰已加密存放';
+      vaultNotice = $t('settingsModal.notices.pinMode');
       setTimeout(() => (vaultNotice = ''), 3000);
     } catch (e: any) {
-      vaultError = e.message || '設置主 PIN 碼失敗';
+      vaultError = e.message || $t('settingsModal.errors.pinSetupFailed');
     }
   }
 
   async function handleUnlockVault() {
     vaultError = '';
     if (!pinInput) {
-      vaultError = '請輸入解鎖 PIN 碼';
+      vaultError = $t('settingsModal.errors.pinRequired');
       return;
     }
 
@@ -215,14 +216,14 @@
     if (success) {
       isUnlocked = true;
       pinInput = '';
-      vaultNotice = '金鑰庫已成功解鎖！';
+      vaultNotice = $t('settingsModal.notices.unlocked');
       apiKey = await getApiKey(currentProvider);
       if (apiKey && apiKey.trim().length > 5) {
         refreshModels();
       }
       setTimeout(() => (vaultNotice = ''), 3000);
     } else {
-      vaultError = 'PIN 碼錯誤，無法解鎖金鑰';
+      vaultError = $t('settingsModal.errors.pinIncorrect');
     }
   }
 
@@ -230,15 +231,15 @@
     lockVault();
     isUnlocked = false;
     apiKey = '';
-    vaultNotice = '金鑰庫已立即鎖定，記憶體快取已安全釋放';
+    vaultNotice = $t('settingsModal.notices.locked');
     setTimeout(() => (vaultNotice = ''), 3000);
   }
 
   async function handleWipeAllKeys() {
-    if (confirm('確定要安全抹除所有本機 API 金鑰與加密憑證嗎？此動作無法復原。')) {
+    if (confirm($t('settingsModal.wipeConfirm'))) {
       await clearAllStoredKeys();
       apiKey = '';
-      vaultNotice = '所有金鑰與憑證已安全抹除！';
+      vaultNotice = $t('settingsModal.notices.wiped');
       setTimeout(() => (vaultNotice = ''), 3000);
     }
   }
@@ -281,15 +282,15 @@
             <span class="material-symbols-outlined text-[18px]">settings</span>
           </div>
           <div class="flex flex-col">
-            <h3 class="text-sm font-bold text-[#ebdbb2]">系統偏好與模型設定 (Settings)</h3>
-            <span class="font-mono text-[10px] text-[#a89984]">自訂 AI 密鑰、閱讀主題與 Vim 導航</span>
+            <h3 class="text-sm font-bold text-[#ebdbb2]">{$t('settings.title')}</h3>
+            <span class="font-mono text-[10px] text-[#a89984]">{$t('settingsModal.headerSubtitle')}</span>
           </div>
         </div>
 
         <button
           class="w-7 h-7 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f] transition-colors cursor-pointer"
           on:click={close}
-          title="關閉"
+          title={$t('settings.close')}
         >
           <span class="material-symbols-outlined text-[18px]">close</span>
         </button>
@@ -302,16 +303,16 @@
         <div class="bg-[#32302f] border border-[#3c3836] p-3 rounded-lg flex items-start gap-2.5">
           <span class="material-symbols-outlined text-[18px] text-[#b8bb26] shrink-0 mt-0.5">verified_user</span>
           <div class="flex flex-col gap-0.5">
-            <span class="font-semibold text-[#ebdbb2]">零伺服器隱私保證 (Zero-Server Knowledge)</span>
+            <span class="font-semibold text-[#ebdbb2]">{$t('settingsModal.privacyTitle')}</span>
             <span class="text-[#a89984] leading-relaxed">
-              您的 API 金鑰僅存放於本機瀏覽器 LocalStorage，所有伴讀請求直接向官方端點發起。
+              {$t('settingsModal.privacyDesc')}
             </span>
           </div>
         </div>
 
         <!-- Provider Select -->
         <div class="flex flex-col gap-1.5">
-          <span class="font-mono text-[11px] text-[#d5c4a1]">選擇 AI Provider</span>
+          <span class="font-mono text-[11px] text-[#d5c4a1]">{$t('settingsModal.selectProvider')}</span>
           <div class="grid grid-cols-2 gap-2">
             {#each providers as p}
               <button
@@ -342,7 +343,7 @@
                     {vaultMode === 'plaintext' ? 'lock_open' : vaultMode === 'device-auto' ? 'lock' : 'key'}
                   </span>
                   <span>
-                    {vaultMode === 'plaintext' ? '明文儲存' : vaultMode === 'device-auto' ? 'AES-GCM 透明加密' : (isUnlocked ? 'PIN 已解鎖' : 'PIN 鎖定中')}
+                    {vaultMode === 'plaintext' ? $t('settingsModal.statusPlaintext') : vaultMode === 'device-auto' ? $t('settingsModal.statusDeviceAuto') : (isUnlocked ? $t('settingsModal.statusPinUnlocked') : $t('settingsModal.statusPinLocked'))}
                   </span>
                 </span>
               {/if}
@@ -355,7 +356,7 @@
                 rel="noopener noreferrer"
                 class="font-mono text-[10px] text-[#fabd2f] hover:underline flex items-center gap-0.5"
               >
-                <span>免費領取 Groq Key (免信用卡)</span>
+                <span>{$t('settingsModal.freeGroqKey')}</span>
                 <span class="material-symbols-outlined text-[11px]">open_in_new</span>
               </a>
             {/if}
@@ -385,7 +386,7 @@
                 type="button"
                 class="absolute right-2.5 text-[#a89984] hover:text-[#ebdbb2] transition-colors p-1 flex items-center justify-center cursor-pointer"
                 on:click={() => (showApiKey = !showApiKey)}
-                title={showApiKey ? '隱藏金鑰' : '顯示明文'}
+                title={showApiKey ? $t('settingsModal.hideKey') : $t('settingsModal.showPlaintext')}
               >
                 <span class="material-symbols-outlined text-[16px]">
                   {showApiKey ? 'visibility_off' : 'visibility'}
@@ -397,11 +398,11 @@
           {#if vaultMode === 'master-pin' && !isUnlocked}
             <span class="font-mono text-[10px] text-[#fe8019] flex items-center gap-1">
               <span class="material-symbols-outlined text-[13px]">lock</span>
-              金鑰庫處於鎖定狀態，請在下方輸入 PIN 碼解鎖後使用。
+              {$t('settingsModal.keyLockedHint')}
             </span>
           {:else}
             <span class="font-mono text-[10px] text-[#a89984]">
-              輸入金鑰後將自動連線官方端點讀取最新可用模型清單
+              {$t('settingsModal.keyAutoFetchHint')}
             </span>
           {/if}
         </div>
@@ -411,16 +412,16 @@
           <div class="flex items-center justify-between">
             <span class="font-mono text-[11px] text-[#d5c4a1] flex items-center gap-1.5 font-medium">
               <span class="material-symbols-outlined text-[15px] text-[#8ec07c]">shield</span>
-              <span>BYOK API 金鑰本機加密保存 (KeyVault)</span>
+              <span>{$t('settingsModal.vaultTitle')}</span>
             </span>
             <button
               type="button"
               class="font-mono text-[10px] text-[#fb4934] hover:underline flex items-center gap-0.5 cursor-pointer"
               on:click={handleWipeAllKeys}
-              title="清除所有儲存之金鑰與解密憑證"
+              title={$t('settingsModal.wipeAllKeys')}
             >
               <span class="material-symbols-outlined text-[12px]">delete_forever</span>
-              <span>抹除所有金鑰</span>
+              <span>{$t('settingsModal.wipeAllKeys')}</span>
             </button>
           </div>
 
@@ -433,12 +434,12 @@
               on:click={() => handleModeSelect('device-auto')}
             >
               <div class="flex items-center justify-between">
-                <span class="font-semibold text-[11px] {vaultMode === 'device-auto' ? 'text-[#8ec07c]' : ''}">裝置透明加密</span>
+                <span class="font-semibold text-[11px] {vaultMode === 'device-auto' ? 'text-[#8ec07c]' : ''}">{$t('settingsModal.modeDeviceAuto')}</span>
                 {#if vaultMode === 'device-auto'}
                   <span class="material-symbols-outlined text-[13px] text-[#8ec07c]">check_circle</span>
                 {/if}
               </div>
-              <span class="text-[9px] text-[#a89984]">AES-GCM 免輸密碼自動加解密</span>
+              <span class="text-[9px] text-[#a89984]">{$t('settingsModal.modeDeviceAutoDesc')}</span>
             </button>
 
             <!-- 主 PIN 碼強化 -->
@@ -448,12 +449,12 @@
               on:click={() => handleModeSelect('master-pin')}
             >
               <div class="flex items-center justify-between">
-                <span class="font-semibold text-[11px] {vaultMode === 'master-pin' ? 'text-[#fe8019]' : ''}">主 PIN 碼強化</span>
+                <span class="font-semibold text-[11px] {vaultMode === 'master-pin' ? 'text-[#fe8019]' : ''}">{$t('settingsModal.modeMasterPin')}</span>
                 {#if vaultMode === 'master-pin'}
                   <span class="material-symbols-outlined text-[13px] text-[#fe8019]">check_circle</span>
                 {/if}
               </div>
-              <span class="text-[9px] text-[#a89984]">自訂密碼 PBKDF2 衍生金鑰</span>
+              <span class="text-[9px] text-[#a89984]">{$t('settingsModal.modeMasterPinDesc')}</span>
             </button>
 
             <!-- 明文模式 -->
@@ -463,12 +464,12 @@
               on:click={() => handleModeSelect('plaintext')}
             >
               <div class="flex items-center justify-between">
-                <span class="font-semibold text-[11px]">明文相容模式</span>
+                <span class="font-semibold text-[11px]">{$t('settingsModal.modePlaintext')}</span>
                 {#if vaultMode === 'plaintext'}
                   <span class="material-symbols-outlined text-[13px] text-[#d5c4a1]">check_circle</span>
                 {/if}
               </div>
-              <span class="text-[9px] text-[#a89984]">原生 localStorage（不加密）</span>
+              <span class="text-[9px] text-[#a89984]">{$t('settingsModal.modePlaintextDesc')}</span>
             </button>
           </div>
 
@@ -477,18 +478,18 @@
             <div class="mt-1 p-2.5 bg-[#282828] border border-[#504945] rounded-md flex flex-col gap-2">
               {#if isSettingNewPin}
                 <div class="flex flex-col gap-1.5">
-                  <span class="font-medium text-[#ebdbb2] text-[11px]">設定主解鎖 PIN 碼 (至少 4 位)：</span>
+                  <span class="font-medium text-[#ebdbb2] text-[11px]">{$t('settingsModal.setMasterPinTitle')}</span>
                   <div class="grid grid-cols-2 gap-2">
                     <input
                       type="password"
                       class="bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] px-2.5 py-1.5 rounded text-xs focus:border-[#fe8019] focus:outline-none"
-                      placeholder="輸入新 PIN 碼"
+                      placeholder={$t('settingsModal.newPinPlaceholder')}
                       bind:value={newPinInput}
                     />
                     <input
                       type="password"
                       class="bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] px-2.5 py-1.5 rounded text-xs focus:border-[#fe8019] focus:outline-none"
-                      placeholder="再次確認 PIN 碼"
+                      placeholder={$t('settingsModal.confirmPinPlaceholder')}
                       bind:value={confirmPinInput}
                     />
                   </div>
@@ -498,14 +499,14 @@
                       class="px-2.5 py-1 text-[10px] text-[#a89984] hover:text-[#ebdbb2]"
                       on:click={() => (isSettingNewPin = false)}
                     >
-                      取消
+                      {$t('common.cancel')}
                     </button>
                     <button
                       type="button"
                       class="px-3 py-1 bg-[#fe8019] text-[#1d2021] font-semibold rounded text-[10px] hover:bg-[#d65d0e] transition-colors"
                       on:click={applyMasterPin}
                     >
-                      確認並加密金鑰
+                      {$t('settingsModal.confirmAndEncryptBtn')}
                     </button>
                   </div>
                 </div>
@@ -514,7 +515,7 @@
                   <input
                     type="password"
                     class="flex-1 bg-[#1d2021] border border-[#3c3836] text-[#ebdbb2] px-2.5 py-1.5 rounded text-xs focus:border-[#fe8019] focus:outline-none"
-                    placeholder="輸入 PIN 碼解鎖金鑰庫..."
+                    placeholder={$t('settingsModal.unlockPinPlaceholder')}
                     bind:value={pinInput}
                     on:keydown={(e) => e.key === 'Enter' && handleUnlockVault()}
                   />
@@ -524,14 +525,14 @@
                     on:click={handleUnlockVault}
                   >
                     <span class="material-symbols-outlined text-[14px]">lock_open</span>
-                    <span>解鎖</span>
+                    <span>{$t('settingsModal.unlockBtn')}</span>
                   </button>
                 </div>
               {:else}
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-1.5 text-[#8ec07c] font-medium text-[11px]">
                     <span class="material-symbols-outlined text-[15px]">verified</span>
-                    <span>金鑰庫已解鎖 (本分頁記憶體 Session 有效)</span>
+                    <span>{$t('settingsModal.vaultUnlockedBanner')}</span>
                   </div>
                   <div class="flex items-center gap-2">
                     <button
@@ -539,7 +540,7 @@
                       class="text-[10px] text-[#fabd2f] hover:underline cursor-pointer"
                       on:click={() => (isSettingNewPin = true)}
                     >
-                      變更 PIN 碼
+                      {$t('settingsModal.changePinBtn')}
                     </button>
                     <button
                       type="button"
@@ -547,7 +548,7 @@
                       on:click={handleLockVault}
                     >
                       <span class="material-symbols-outlined text-[12px]">lock</span>
-                      <span>立即鎖定</span>
+                      <span>{$t('settingsModal.lockNowBtn')}</span>
                     </button>
                   </div>
                 </div>
@@ -574,14 +575,14 @@
         <div class="flex flex-col gap-1.5">
           <div class="flex items-center justify-between">
             <label for="settings-model-select" class="font-mono text-[11px] text-[#d5c4a1] flex items-center gap-1.5">
-              <span>模型選擇 (Model ID)</span>
+              <span>{$t('settingsModal.modelTitle')}</span>
               {#if isLoadingModels}
                 <span class="material-symbols-outlined text-[13px] animate-spin text-[#fabd2f]">sync</span>
-                <span class="text-[10px] text-[#fabd2f]">自動讀取中...</span>
+                <span class="text-[10px] text-[#fabd2f]">{$t('settingsModal.autoFetching')}</span>
               {:else if fetchStatus === 'success'}
                 <span class="text-[10px] text-[#b8bb26] font-medium flex items-center gap-0.5">
                   <span class="material-symbols-outlined text-[13px]">check_circle</span>
-                  已載入 {availableModels.length} 個可用模型
+                  {$t('settingsModal.modelsLoaded').replace('{count}', String(availableModels.length))}
                 </span>
               {/if}
             </label>
@@ -592,7 +593,7 @@
                 on:click={refreshModels}
               >
                 <span class="material-symbols-outlined text-[11px]">refresh</span>
-                <span>重新檢查</span>
+                <span>{$t('settingsModal.recheckModels')}</span>
               </button>
             {/if}
           </div>
@@ -624,10 +625,10 @@
           <div class="flex items-center justify-between">
             <span class="font-mono text-[11px] text-[#d5c4a1] flex items-center gap-1.5 font-medium">
               <span class="material-symbols-outlined text-[15px] text-[#fe8019]">terminal</span>
-              <span>Vim 游標瀏覽與動態彈跳效果</span>
+              <span>{$t('settingsModal.vimTitle')}</span>
             </span>
             <span class="font-mono text-[10px] text-[#8ec07c]">
-              {$vimConfigStore.isVimEnabled ? '已啟用' : '已關閉'}
+              {$vimConfigStore.isVimEnabled ? $t('settingsModal.vimEnabled') : $t('settingsModal.vimDisabled')}
             </span>
           </div>
 
@@ -635,8 +636,8 @@
             <!-- Vim 模式主開關 -->
             <label class="flex items-center justify-between cursor-pointer select-none">
               <div class="flex flex-col pr-3">
-                <span class="text-[11px] font-medium text-[#ebdbb2]">啟用 Vim 鍵盤瀏覽 (h, j, k, l)</span>
-                <span class="text-[10px] text-[#a89984]">按 j/k 垂直行換行（到達段落末/首時跨段落）、h/l 水平移動字元、t 切換譯文</span>
+                <span class="text-[11px] font-medium text-[#ebdbb2]">{$t('settingsModal.enableVim')}</span>
+                <span class="text-[10px] text-[#a89984]">{$t('settingsModal.enableVimDesc')}</span>
               </div>
               <input
                 type="checkbox"
@@ -649,8 +650,8 @@
             <!-- 閃爍游標開關 -->
             <label class="flex items-center justify-between cursor-pointer select-none border-t border-[#3c3836]/60 pt-2">
               <div class="flex flex-col pr-3">
-                <span class="text-[11px] font-medium text-[#ebdbb2]">真實呼吸閃爍方塊游標 (Blinking Block Cursor)</span>
-                <span class="text-[10px] text-[#a89984]">模擬終端機方塊游標呼吸閃爍，移動時維持常亮、停止 400ms 後呼吸閃爍</span>
+                <span class="text-[11px] font-medium text-[#ebdbb2]">{$t('settingsModal.blinkingCursor')}</span>
+                <span class="text-[10px] text-[#a89984]">{$t('settingsModal.blinkingCursorDesc')}</span>
               </div>
               <input
                 type="checkbox"
@@ -662,8 +663,8 @@
             <!-- 跨段落平滑捲動開關 -->
             <label class="flex items-center justify-between cursor-pointer select-none border-t border-[#3c3836]/60 pt-2">
               <div class="flex flex-col pr-3">
-                <span class="text-[11px] font-medium text-[#ebdbb2]">跨段落平滑捲動 (Smooth Scroll)</span>
-                <span class="text-[10px] text-[#a89984]">游標跨越段落或長距離移動時平滑引導視線，防止畫面大範圍突跳；關閉時為即時切換</span>
+                <span class="text-[11px] font-medium text-[#ebdbb2]">{$t('settingsModal.smoothScroll')}</span>
+                <span class="text-[10px] text-[#a89984]">{$t('settingsModal.smoothScrollDesc')}</span>
               </div>
               <input
                 type="checkbox"
@@ -677,11 +678,11 @@
             <div class="flex flex-col gap-1.5 border-t border-[#3c3836]/60 pt-2">
               <div class="flex items-center justify-between text-[10px] font-mono">
                 <div class="flex flex-col">
-                  <span class="text-[#ebdbb2] font-medium">游標彈跳強度 (Bounce Strength)</span>
-                  <span class="text-[#a89984] text-[9px]">調節 Spring 物理回彈力度與梯形動態形變（設為 0% 即無彈跳瞬移到位）</span>
+                  <span class="text-[#ebdbb2] font-medium">{$t('settingsModal.bounceStrength')}</span>
+                  <span class="text-[#a89984] text-[9px]">{$t('settingsModal.bounceStrengthDesc')}</span>
                 </div>
                 <span class="text-[#fabd2f] font-bold shrink-0">
-                  {($vimConfigStore.bounceStrength ?? 60) === 0 ? '0% (無彈跳)' : `${$vimConfigStore.bounceStrength ?? 60}%`}
+                  {($vimConfigStore.bounceStrength ?? 60) === 0 ? '0%' : `${$vimConfigStore.bounceStrength ?? 60}%`}
                 </span>
               </div>
               <input
@@ -702,10 +703,10 @@
           <div class="flex items-center justify-between">
             <span class="font-mono text-[11px] text-[#d5c4a1] flex items-center gap-1.5 font-medium">
               <span class="material-symbols-outlined text-[15px] text-[#fabd2f]">radar</span>
-              <span>語意向量搜尋與端側嵌入引擎 (Hybrid Embeddings)</span>
+              <span>{$t('settingsModal.hybridEmbeddingTitle')}</span>
             </span>
             <span class="font-mono text-[10px] text-[#fabd2f]">
-              {embeddingPref === 'local-only' ? '端側 ONNX (384-dim)' : '智慧混合 (API 優先)'}
+              {embeddingPref === 'local-only' ? 'ONNX (384-dim)' : 'Hybrid (API First)'}
             </span>
           </div>
 
@@ -720,14 +721,14 @@
                 <div class="flex items-center justify-between">
                   <span class="text-[11px] font-semibold flex items-center gap-1 {embeddingPref === 'local-only' ? 'text-[#8ec07c]' : 'text-[#ebdbb2]'}">
                     <span class="material-symbols-outlined text-[14px]">offline_bolt</span>
-                    純端側 ONNX (推薦)
+                    {$t('settingsModal.localOnnx')}
                   </span>
                   {#if embeddingPref === 'local-only'}
                     <span class="material-symbols-outlined text-[13px] text-[#8ec07c]">check_circle</span>
                   {/if}
                 </div>
                 <p class="text-[10px] leading-tight text-[#a89984]">
-                  瀏覽器端 384-dim 本機推論，100% 離線免金鑰、零依賴、開箱即用、絕不報錯
+                  {$t('settingsModal.localOnnxDesc')}
                 </p>
               </button>
 
@@ -739,14 +740,14 @@
                 <div class="flex items-center justify-between">
                   <span class="text-[11px] font-semibold flex items-center gap-1 {embeddingPref === 'api-first' ? 'text-[#fabd2f]' : 'text-[#ebdbb2]'}">
                     <span class="material-symbols-outlined text-[14px]">cloud_sync</span>
-                    雲端 API 向量 (進階)
+                    {$t('settingsModal.apiFirst')}
                   </span>
                   {#if embeddingPref === 'api-first'}
                     <span class="material-symbols-outlined text-[13px] text-[#fabd2f]">check_circle</span>
                   {/if}
                 </div>
                 <p class="text-[10px] leading-tight text-[#a89984]">
-                  需配置支援 Embedding 權限之 API Key；若 API 異常時將自動無縫退避至端側 ONNX
+                  {$t('settingsModal.apiFirstDesc')}
                 </p>
               </button>
             </div>
@@ -758,10 +759,10 @@
           <div class="flex items-center justify-between">
             <span class="font-mono text-[11px] text-[#d5c4a1] flex items-center gap-1">
               <span class="material-symbols-outlined text-[14px] text-[#fe8019]">palette</span>
-              <span>介面與閱讀主題 (Appearance & Theme)</span>
+              <span>{$t('settingsModal.appearanceTitle')}</span>
             </span>
             <span class="font-mono text-[10px] text-[#a89984]">
-              {THEMES.find(t => t.id === $currentTheme)?.zhName || '經典暖墨'}
+              {THEMES.find(t => t.id === $currentTheme)?.zhName || $t('settingsModal.defaultThemeName')}
             </span>
           </div>
 
@@ -803,13 +804,13 @@
           class="px-4 py-1.5 rounded-lg text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f] transition-colors cursor-pointer"
           on:click={close}
         >
-          取消
+          {$t('settingsModal.cancel')}
         </button>
         <button
           class="px-5 py-1.5 rounded-lg bg-[#fe8019] hover:bg-[#d65d0e] text-[#1d2021] font-semibold transition-colors shadow-sm cursor-pointer"
           on:click={saveSettings}
         >
-          儲存設定
+          {$t('settingsModal.saveSettings')}
         </button>
       </div>
 

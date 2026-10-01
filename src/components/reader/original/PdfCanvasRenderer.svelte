@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t } from '../../../stores/localeStore';
+
   interface Props {
     pdfDoc?: any;
     currentPage?: number;
@@ -26,8 +28,8 @@
   {#if isLoadingPdf}
     <div class="w-full h-full flex flex-col items-center justify-center gap-3 text-xs font-mono text-[#fabd2f]">
       <span class="material-symbols-outlined text-3xl animate-spin text-[#fe8019]">sync</span>
-      <span class="text-sm font-semibold">正在載入 PDF 結構...</span>
-      <span class="text-[#a89984] text-[11px]">透過本機代理繞過 CORS 限制 · 請稍候</span>
+      <span class="text-sm font-semibold">{$t('reader.original.loadingPdf')}</span>
+      <span class="text-[#a89984] text-[11px]">{$t('reader.original.proxyHint')}</span>
     </div>
   {:else if pdfDoc}
     <!-- High-Fidelity PDF.js Canvas Renderer (可超出視窗自由縮放與水平捲動) -->
@@ -38,7 +40,7 @@
         {#if isRenderingPage}
           <div class="absolute inset-0 bg-[#141617]/50 backdrop-blur-[2px] flex flex-col items-center justify-center gap-2 text-xs font-mono text-[#fabd2f]">
             <span class="material-symbols-outlined text-2xl animate-spin text-[#fe8019]">sync</span>
-            <span>繪製第 {currentPage} 頁...</span>
+            <span>{$t('reader.original.renderingPage', { page: currentPage })}</span>
           </div>
         {/if}
       </div>
@@ -50,9 +52,9 @@
         <span class="material-symbols-outlined text-2xl">picture_as_pdf</span>
       </div>
       <div class="flex flex-col gap-1 max-w-md">
-        <h4 class="text-sm font-bold text-[#ebdbb2]">PDF 畫布暫未能載入</h4>
+        <h4 class="text-sm font-bold text-[#ebdbb2]">{$t('reader.original.canvasLoadFailed')}</h4>
         <p class="text-xs text-[#a89984] leading-relaxed">
-          {renderError || 'PDF 暫未能載入，請確認檔案結構或點擊重新載入。'}
+          {renderError || $t('reader.original.canvasDefaultError')}
         </p>
       </div>
 
@@ -62,7 +64,7 @@
           onclick={() => onretry?.()}
         >
           <span class="material-symbols-outlined text-[14px]">sync</span>
-          <span>重新載入</span>
+          <span>{$t('reader.original.reloadPdf')}</span>
         </button>
 
         <button
@@ -70,7 +72,7 @@
           onclick={() => onopenExternal?.()}
         >
           <span class="material-symbols-outlined text-[14px]">open_in_new</span>
-          <span>獨立新分頁開啟</span>
+          <span>{$t('reader.original.openNewTab')}</span>
         </button>
       </div>
     </div>

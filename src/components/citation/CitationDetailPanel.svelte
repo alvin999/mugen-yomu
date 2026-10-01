@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { SimNode } from '../../services/citation/citationPhysicsEngine';
+  import { t } from '../../stores/localeStore';
 
   interface Props {
     selectedNode?: SimNode | null;
@@ -46,7 +47,7 @@
       <button
         class="text-[#a89984] hover:text-[#ebdbb2] p-1 rounded hover:bg-[#282828] transition-colors"
         onclick={() => onclose?.()}
-        title="收合卷宗"
+        title={$t('citation.closeDossier')}
       >
         <span class="material-symbols-outlined text-[16px]">close</span>
       </button>
@@ -58,18 +59,18 @@
       <!-- Authors & Venue Card -->
       <div class="bg-[#282828] border border-[#3c3836] p-3 rounded-xl flex flex-col gap-2 shadow-inner">
         <div class="flex items-center justify-between text-[11px]">
-          <span class="text-[#a89984] font-mono">發表場域 / 會議</span>
+          <span class="text-[#a89984] font-mono">{$t('citation.dossierVenue')}</span>
           <span class="text-[#fabd2f] font-mono font-medium">{selectedNode.venue}</span>
         </div>
         <div class="flex flex-col gap-0.5">
-          <span class="text-[#a89984] font-mono text-[10px]">作者群 (Authors)</span>
+          <span class="text-[#a89984] font-mono text-[10px]">{$t('citation.dossierAuthors')}</span>
           <span class="text-[#d5c4a1] leading-relaxed">
             {selectedNode.authors.join(', ')}
           </span>
         </div>
         {#if selectedNode.citations}
           <div class="pt-2 border-t border-[#3c3836] flex items-center justify-between">
-            <span class="text-[#a89984] font-mono text-[10px]">總引用數 (Citations)</span>
+            <span class="text-[#a89984] font-mono text-[10px]">{$t('citation.dossierCitations')}</span>
             <span class="text-[#8ec07c] font-mono font-bold bg-[#8ec07c]/10 px-2 py-0.5 rounded border border-[#8ec07c]/30">
               {selectedNode.citations}
             </span>
@@ -81,7 +82,7 @@
       <div class="bg-[#282828] border-l-4 p-3.5 rounded-r-xl flex flex-col gap-1.5 shadow-md" style="border-left-color: {meta.color};">
         <div class="flex items-center gap-1.5 font-mono text-[11px] font-bold" style="color: {meta.color};">
           <span class="material-symbols-outlined text-[16px]">account_tree</span>
-          <span>與研讀主文之學術承接關係</span>
+          <span>{$t('citation.dossierLineage')}</span>
         </div>
         <p class="text-[#ebdbb2] leading-relaxed text-[12px] bg-[#1d2021]/80 p-2.5 rounded-lg border border-[#3c3836]">
           {selectedNode.connectionSnippet}
@@ -93,7 +94,7 @@
         <div class="flex flex-col gap-1.5">
           <span class="font-mono text-[10px] text-[#a89984] uppercase tracking-wider flex items-center gap-1">
             <span class="material-symbols-outlined text-[13px] text-[#fabd2f]">lightbulb</span>
-            核心理論突破與貢獻 (Core Insight)
+            {$t('citation.dossierCoreInsight')}
           </span>
           <div class="bg-[#282828] border border-[#3c3836] p-3 rounded-lg text-[#d5c4a1] leading-relaxed text-[11px]">
             {selectedNode.coreInsight}
@@ -123,7 +124,7 @@
             class="flex-1 py-2 px-3 rounded-lg bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] hover:border-[#8ec07c] text-[#ebdbb2] text-[11px] font-mono flex items-center justify-center gap-1.5 transition-colors"
           >
             <span class="material-symbols-outlined text-[14px] text-[#8ec07c]">link</span>
-            <span>DOI 官方索引</span>
+            <span>DOI</span>
           </a>
         {/if}
       </div>
@@ -135,7 +136,7 @@
           onclick={() => handleLoadTarget(selectedNode?.targetPaperId)}
         >
           <span class="material-symbols-outlined text-[17px]">auto_stories</span>
-          <span>載入此論文並進入雙語伴讀</span>
+          <span>{$t('citation.dossierLoadIntoWorkspace')}</span>
         </button>
       {/if}
 
