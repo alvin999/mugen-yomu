@@ -17,6 +17,8 @@
     initSimulationNodes,
     runGalaxyPhysicsStep,
     runTimelineStep,
+    resetGalaxyLayoutImpulse,
+    resetTimelineLayoutImpulse,
     type SimNode,
     type SimEdge
   } from '../../services/citation/citationPhysicsEngine';
@@ -115,6 +117,9 @@
 
   // 選中的節點物件
   let selectedNode = $derived(simNodes.find(n => n.id === selectedNodeId) || simNodes.find(n => n.category === 'core') || simNodes[0] || null);
+
+  // 即時響應式節點索引對照表
+  let nodeMap = $derived(new Map(simNodes.map(n => [n.id, n])));
 
   // 搜尋與類別篩選器過濾
   let visibleNodes = $derived(simNodes.filter(n => {
@@ -299,6 +304,11 @@
     panX = 0;
     panY = 0;
     zoom = mode === 'timeline' ? 0.85 : 1.0;
+    if (mode === 'galaxy') {
+      resetGalaxyLayoutImpulse(simNodes, containerWidth, containerHeight);
+    } else {
+      resetTimelineLayoutImpulse(simNodes, containerWidth, containerHeight);
+    }
     startSimulation();
   }
 
@@ -500,33 +510,54 @@
         <!-- 1. Citation Edges (Lines & Curved Arcs) -->
         <g class="edges-layer">
           {#each visibleEdges as edge}
-            {@const s = edge.sourceNode}
-            {@const t = edge.targetNode}
+            {@const sId = typeof edge.source === 'string' ? edge.source : (edge.source as any)?.id}
+            {@const tId = typeof edge.target === 'string' ? edge.target : (edge.target as any)?.id}
+            {@const s = nodeMap.get(sId)}
+            {@const t = nodeMap.get(tId)}
             {#if s && t}
               {@const isConnected = isEdgeConnected(edge)}
               {@const isHoveredEdge = hoveredNodeId && (s.id === hoveredNodeId || t.id === hoveredNodeId)}
               {@const strokeColor = isHoveredEdge ? '#fe8019' : (edge.relationType === 'builds-on' ? '#b8bb26' : (edge.relationType === 'influences' ? '#83a598' : '#504945'))}
               {@const markerId = isHoveredEdge ? 'arrow-active' : (edge.relationType === 'builds-on' ? 'arrow-foundation' : (edge.relationType === 'influences' ? 'arrow-derivative' : 'arrow-default'))}
-              {@const midX = (s.x + t.x) / 2}
-              {@const midY = (s.y + t.y) / 2}
+              {@const isTimeline = layoutMode === 'timeline'}
+              {@const dx = t.x - s.x}
+              {@const arcHeight = Math.min(65, Math.max(25, Math.abs(dx) * 0.22))}
+              {@const ctrlX = (s.x + t.x) / 2}
+              {@const ctrlY = Math.min(s.y, t.y) - arcHeight}
+              {@const badgeX = isTimeline ? ctrlX : (s.x + t.x) / 2}
+              {@const badgeY = isTimeline ? (0.25 * s.y + 0.5 * ctrlY + 0.25 * t.y) : (s.y + t.y) / 2}
 
-              <!-- Connecting Line -->
-              <line
-                x1={s.x}
-                y1={s.y}
-                x2={t.x}
-                y2={t.y}
-                stroke={strokeColor}
-                stroke-width={isHoveredEdge ? 2.5 : 1.5}
-                stroke-dasharray={edge.relationType === 'architectural-cousin' ? '4,4' : 'none'}
-                opacity={isConnected ? 0.85 : 0.12}
-                marker-end="url(#{markerId})"
-                class="transition-all duration-300"
-              />
+              {#if isTimeline}
+                <!-- Curved Bezier Arc in Timeline Mode -->
+                <path
+                  d="M {s.x} {s.y} Q {ctrlX} {ctrlY} {t.x} {t.y}"
+                  fill="none"
+                  stroke={strokeColor}
+                  stroke-width={isHoveredEdge ? 2.5 : 1.5}
+                  stroke-dasharray={edge.relationType === 'architectural-cousin' ? '4,4' : 'none'}
+                  opacity={isConnected ? 0.85 : 0.12}
+                  marker-end="url(#{markerId})"
+                  class="transition-[stroke,opacity,stroke-width] duration-200"
+                />
+              {:else}
+                <!-- Direct Straight Line in Galaxy Mode -->
+                <line
+                  x1={s.x}
+                  y1={s.y}
+                  x2={t.x}
+                  y2={t.y}
+                  stroke={strokeColor}
+                  stroke-width={isHoveredEdge ? 2.5 : 1.5}
+                  stroke-dasharray={edge.relationType === 'architectural-cousin' ? '4,4' : 'none'}
+                  opacity={isConnected ? 0.85 : 0.12}
+                  marker-end="url(#{markerId})"
+                  class="transition-[stroke,opacity,stroke-width] duration-200"
+                />
+              {/if}
 
               <!-- Edge Relationship Badge (Visible when hovered or zoomed in) -->
               {#if edge.label && (zoom >= 1.25 || isHoveredEdge)}
-                <g transform="translate({midX}, {midY})" opacity={isConnected ? 0.95 : 0.08} class="pointer-events-none transition-opacity">
+                <g transform="translate({badgeX}, {badgeY})" opacity={isConnected ? 0.95 : 0.08} class="pointer-events-none transition-opacity">
                   <rect
                     x="-45"
                     y="-9"

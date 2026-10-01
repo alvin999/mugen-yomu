@@ -70,6 +70,84 @@ export function initSimulationNodes(
 }
 
 /**
+ * 當自時序視圖切換回星系視圖時，若節點處於一維水平線上，賦予二維徑向展開衝量，解除維度塌陷
+ */
+export function resetGalaxyLayoutImpulse(
+  simNodes: SimNode[],
+  width: number,
+  height: number
+): void {
+  const cx = width / 2;
+  const cy = height / 2;
+  const nonCoreNodes = simNodes.filter(n => n.category !== 'core');
+  const total = nonCoreNodes.length || 1;
+
+  nonCoreNodes.forEach((node, i) => {
+    const angle = (i / total) * Math.PI * 2;
+    const baseDist = node.category === 'foundational' ? 150 : (node.category === 'derivative' ? 240 : 190);
+    const targetX = cx + Math.cos(angle) * baseDist;
+    const targetY = cy + Math.sin(angle) * baseDist;
+
+    // 給予平滑位移初速度與適度座標擾動，確保脫離直線拘束
+    node.vx = (targetX - node.x) * 0.35;
+    node.vy = (targetY - node.y) * 0.35 + (Math.sin(angle) * 12);
+  });
+
+  const coreNode = simNodes.find(n => n.category === 'core');
+  if (coreNode) {
+    coreNode.vx = (cx - coreNode.x) * 0.4;
+    coreNode.vy = (cy - coreNode.y) * 0.4;
+  }
+}
+
+/**
+ * 當切換至演進譜系視圖時，即時計算時序目標座標並賦予彈跳初速度衝量
+ */
+export function resetTimelineLayoutImpulse(
+  simNodes: SimNode[],
+  width: number,
+  height: number
+): void {
+  const w = width || 900;
+  const h = height || 650;
+
+  const distinctYears = Array.from(new Set(simNodes.map(n => n.year || 2017))).sort((a, b) => a - b);
+  const numEpochs = distinctYears.length;
+  const availableWidth = Math.max(300, w - 160);
+  const columnWidth = numEpochs <= 1 ? 0 : Math.max(160, Math.min(230, availableWidth / (numEpochs - 1)));
+  const totalSpan = (numEpochs - 1) * columnWidth;
+  const startX = (w - totalSpan) / 2;
+
+  const yearToXMap = new Map<number, number>();
+  distinctYears.forEach((yr, idx) => {
+    yearToXMap.set(yr, numEpochs <= 1 ? w / 2 : startX + idx * columnWidth);
+  });
+
+  const yearGroups: Record<number, SimNode[]> = {};
+  simNodes.forEach(n => {
+    const y = n.year || 2017;
+    if (!yearGroups[y]) yearGroups[y] = [];
+    yearGroups[y].push(n);
+  });
+
+  for (const [yrStr, group] of Object.entries(yearGroups)) {
+    const yr = Number(yrStr);
+    const targetX = yearToXMap.get(yr) ?? w / 2;
+    const count = group.length;
+    const verticalGap = 130;
+    const totalColHeight = (count - 1) * verticalGap;
+    const startY = (h - totalColHeight) / 2;
+
+    group.forEach((node, idx) => {
+      const targetY = startY + idx * verticalGap;
+      // 瞬間賦予彈射初速度衝量
+      node.vx = (targetX - node.x) * 0.38;
+      node.vy = (targetY - node.y) * 0.38;
+    });
+  }
+}
+
+/**
  * 星系引力場物理步進迭代 (Galaxy Force Physics Step)
  * 包含：節點間庫倫斥力、彈簧引力、核心向心引力與速度阻尼
  */
@@ -113,11 +191,17 @@ export function runGalaxyPhysicsStep(
   }
 
   // 2. 連線彈簧引力 (Spring Attraction)
+  // 動態建立即時節點對照表，保證力學 100% 作用於傳入的活躍節點物件
+  const activeNodeMap = new Map<string, SimNode>(simNodes.map(n => [n.id, n]));
   const targetEdgeLen = 190;
   for (const edge of simEdges) {
-    const s = edge.sourceNode;
-    const t = edge.targetNode;
+    const s = activeNodeMap.get(edge.source) || edge.sourceNode;
+    const t = activeNodeMap.get(edge.target) || edge.targetNode;
     if (!s || !t) continue;
+
+    // 保持 edge 引用同步
+    edge.sourceNode = s;
+    edge.targetNode = t;
 
     const dx = t.x - s.x;
     const dy = t.y - s.y;
@@ -169,10 +253,11 @@ export function runTimelineStep(
   const distinctYears = Array.from(new Set(simNodes.map(n => n.year || 2017))).sort((a, b) => a - b);
   const numEpochs = distinctYears.length;
 
-  // 每個年份縱列保證至少 230px 寬度，確保 150px 的標籤橫向絕不干擾重疊
-  const minColumnWidth = 230;
-  const totalIdealWidth = (numEpochs - 1) * minColumnWidth;
-  const startX = Math.max(140, (w - totalIdealWidth) / 2);
+  // 自適應年份欄寬計算，確保在不同容器寬度下皆能優雅居中展示
+  const availableWidth = Math.max(300, w - 160);
+  const columnWidth = numEpochs <= 1 ? 0 : Math.max(160, Math.min(230, availableWidth / (numEpochs - 1)));
+  const totalSpan = (numEpochs - 1) * columnWidth;
+  const startX = (w - totalSpan) / 2;
 
   // 建立年份對應的 X 座標映射表
   const yearToXMap = new Map<number, number>();
@@ -180,7 +265,7 @@ export function runTimelineStep(
     if (numEpochs <= 1) {
       yearToXMap.set(yr, w / 2);
     } else {
-      const xPos = startX + idx * minColumnWidth;
+      const xPos = startX + idx * columnWidth;
       yearToXMap.set(yr, xPos);
     }
   });
@@ -214,12 +299,12 @@ export function runTimelineStep(
 
       const targetY = startY + idx * verticalGap;
 
-      // 平滑導向目標座標
-      node.vx += (targetX - node.x) * 0.16 * simAlpha;
-      node.vy += (targetY - node.y) * 0.16 * simAlpha;
+      // 平滑導向目標座標（具彈性回彈手感）
+      node.vx += (targetX - node.x) * 0.24 * simAlpha;
+      node.vy += (targetY - node.y) * 0.24 * simAlpha;
 
-      node.vx *= 0.78;
-      node.vy *= 0.78;
+      node.vx *= 0.83;
+      node.vy *= 0.83;
 
       node.x += node.vx;
       node.y += node.vy;
