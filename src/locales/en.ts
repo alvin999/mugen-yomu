@@ -1192,7 +1192,14 @@ export const en: LocaleDict = {
     unknownError: 'Unknown error',
     dropEpubFileHint: 'Please drop an EPUB ebook file (.epub)',
     readingLocalEpubFile: 'Reading local EPUB file...',
-    epubParseFail: 'EPUB parsing failed, please verify the file structure'
+    epubParseFail: 'EPUB parsing failed, please verify the file structure',
+    botBlockedTitle: 'Protected by Anti-Bot Verification (Captcha / Cloudflare)',
+    botBlockedDesc: 'This publisher enforces human verification challenges, preventing automated crawlers from extracting full-text directly. Recommended alternatives:',
+    botActionOpenUrl: 'Open Original in Browser',
+    botActionPasteText: 'Switch to Manual Paste',
+    botActionUploadPdf: 'Upload Local PDF Instead',
+    academicFallbackNotice: 'Extracted core academic metadata via Open Scholarship APIs (Semantic Scholar / Crossref)'
+
   },
   viewer: {
     crossDomainChapterNotice: 'Native mode is restricted by browser cross-origin policy; please switch to Rendered mode',

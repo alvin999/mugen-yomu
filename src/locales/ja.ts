@@ -1192,7 +1192,14 @@ export const ja: LocaleDict = {
     unknownError: '不明なエラー',
     dropEpubFileHint: '拡張子が .epub の電子書籍ファイルをドロップしてください',
     readingLocalEpubFile: 'ローカル EPUB ファイルを読み込み中...',
-    epubParseFail: 'EPUB の解析に失敗しました。ファイル構造が完全か確認してください'
+    epubParseFail: 'EPUB の解析に失敗しました。ファイル構造が完全か確認してください',
+    botBlockedTitle: '対象サイトはボット対策（Captcha / Cloudflare）で保護されています',
+    botBlockedDesc: '学術雑誌サイト等は人間による認証を求めるため、クローラーで直接取得できません。以下の代替手段をご利用ください:',
+    botActionOpenUrl: 'ブラウザで原文を開く',
+    botActionPasteText: '手動貼り付けに切り替え',
+    botActionUploadPdf: 'ローカルPDFをアップロード',
+    academicFallbackNotice: 'オープン学術データベース（Semantic Scholar / Crossref）より主要情報を自動取得しました'
+
   },
   viewer: {
     crossDomainChapterNotice: 'ブラウザの同一生成元ポリシー制限により、原著モードでの章ジャンプはできません。「組版」モードに切り替えてください',

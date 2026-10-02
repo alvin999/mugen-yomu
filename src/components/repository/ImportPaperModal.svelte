@@ -59,6 +59,8 @@
   let isFetchingWeb = $state(false);
   let webError = $state('');
   let previewWebPaper = $state<PaperDocument | null>(null);
+  let botBlockedInfo = $state<{ siteName: string; url: string } | null>(null);
+
 
   // Tab 3: Paste Text State
   let pasteTitle = $state('');
@@ -209,6 +211,7 @@
     }
 
     webError = '';
+    botBlockedInfo = null;
     isFetchingWeb = true;
     previewWebPaper = null;
 
@@ -216,10 +219,39 @@
       const doc = await fetchWebArticle(webUrl);
       previewWebPaper = doc;
     } catch (err: any) {
-      webError = get(t)('import.webFetchFail', { error: err.message || 'Error' });
+      if (err?.isBotChallenge) {
+        botBlockedInfo = {
+          siteName: err.siteName || '目標網站',
+          url: webUrl
+        };
+      } else {
+        webError = get(t)('import.webFetchFail', { error: err.message || 'Error' });
+      }
     } finally {
       isFetchingWeb = false;
     }
+  }
+
+  function handleOpenOriginalUrl() {
+    if (webUrl) {
+      window.open(webUrl, '_blank', 'noopener,noreferrer');
+    }
+  }
+
+  function handleSwitchToPaste() {
+    if (webUrl) {
+      try {
+        const u = new URL(webUrl);
+        pasteTitle = u.pathname.split('/').filter(Boolean).pop() || u.hostname;
+      } catch {
+        pasteTitle = '網頁文章';
+      }
+    }
+    activeTab = 'paste';
+  }
+
+  function handleSwitchToPdf() {
+    activeTab = 'pdf';
   }
 
   function handleImportWebArticle() {
@@ -231,6 +263,7 @@
     webUrl = url;
     handleFetchWeb();
   }
+
 
   // --- Tab 2: Preset Loader ---
   function handleSelectPreset(preset: PaperDocument) {
@@ -1078,6 +1111,54 @@
               </button>
             </div>
 
+            <!-- 反爬蟲機器人驗證專屬 Fallback 警示與引導卡片 -->
+            {#if botBlockedInfo}
+              <div class="mt-2 p-3.5 bg-[#282828] border border-[#fe8019]/70 rounded-xl flex flex-col gap-2.5 shadow-lg animate-fade-in">
+                <div class="flex items-start gap-2.5">
+                  <span class="material-symbols-outlined text-[20px] text-[#fe8019] shrink-0 mt-0.5 animate-pulse">security</span>
+                  <div class="flex flex-col gap-1">
+                    <span class="font-bold text-[#ebdbb2] text-xs flex items-center gap-1.5 flex-wrap">
+                      {$t('importer.botBlockedTitle')}
+                      <span class="bg-[#fe8019]/20 text-[#fe8019] border border-[#fe8019]/40 text-[9px] font-mono px-1.5 py-0.2 rounded font-semibold uppercase">{botBlockedInfo.siteName}</span>
+                    </span>
+                    <p class="text-[#a89984] text-[11px] leading-relaxed">
+                      {$t('importer.botBlockedDesc')}
+                    </p>
+                  </div>
+                </div>
+
+                <!-- 降級操作推薦按鈕列 -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-[#3c3836]">
+                  <button
+                    type="button"
+                    class="px-2.5 py-2 bg-[#1d2021] hover:bg-[#32302f] border border-[#504945] hover:border-[#8ec07c] text-[#8ec07c] rounded-lg transition-colors flex items-center justify-center gap-1.5 font-mono text-[11px] font-semibold cursor-pointer"
+                    onclick={handleOpenOriginalUrl}
+                  >
+                    <span class="material-symbols-outlined text-[15px]">open_in_new</span>
+                    <span>{$t('importer.botActionOpenUrl')}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="px-2.5 py-2 bg-[#1d2021] hover:bg-[#32302f] border border-[#504945] hover:border-[#fabd2f] text-[#fabd2f] rounded-lg transition-colors flex items-center justify-center gap-1.5 font-mono text-[11px] font-semibold cursor-pointer"
+                    onclick={handleSwitchToPaste}
+                  >
+                    <span class="material-symbols-outlined text-[15px]">content_paste</span>
+                    <span>{$t('importer.botActionPasteText')}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="px-2.5 py-2 bg-[#1d2021] hover:bg-[#32302f] border border-[#504945] hover:border-[#fe8019] text-[#fe8019] rounded-lg transition-colors flex items-center justify-center gap-1.5 font-mono text-[11px] font-semibold cursor-pointer"
+                    onclick={handleSwitchToPdf}
+                  >
+                    <span class="material-symbols-outlined text-[15px]">picture_as_pdf</span>
+                    <span>{$t('importer.botActionUploadPdf')}</span>
+                  </button>
+                </div>
+              </div>
+            {/if}
+
             <!-- Parsed Preview Card -->
             {#if previewWebPaper}
               <div class="mt-2 bg-[#1d2021] border border-[#504945] p-3.5 rounded-xl flex flex-col gap-2.5">
@@ -1089,6 +1170,13 @@
                     {$t('import.sectionsSplit').replace('{count}', String(previewWebPaper.sections.length))}
                   </span>
                 </div>
+
+                {#if previewWebPaper.id.startsWith('academic-')}
+                  <div class="bg-[#fabd2f]/10 border border-[#fabd2f]/30 px-2.5 py-1.5 rounded-lg text-[11px] text-[#fabd2f] flex items-center gap-1.5">
+                    <span class="material-symbols-outlined text-[16px] text-[#fabd2f]">school</span>
+                    <span class="leading-relaxed">{$t('importer.academicFallbackNotice')}</span>
+                  </div>
+                {/if}
 
                 <h4 class="text-sm font-bold text-[#ebdbb2] leading-snug">
                   {previewWebPaper.title}
@@ -1112,6 +1200,7 @@
                 </div>
               </div>
             {/if}
+
           </div>
 
         <!-- ==================== TAB 2: PRESET LIBRARY ==================== -->

@@ -1190,7 +1190,14 @@ export const zhTW = {
     unknownError: '未知錯誤',
     dropEpubFileHint: '請拖放副檔名為 .epub 的電子書檔案',
     readingLocalEpubFile: '讀取本機 EPUB 檔案...',
-    epubParseFail: 'EPUB 解析失敗，請確認檔案結構是否完整'
+    epubParseFail: 'EPUB 解析失敗，請確認檔案結構是否完整',
+    botBlockedTitle: '目標網站設有反爬蟲保護 (Captcha / Cloudflare)',
+    botBlockedDesc: '此期刊網站設有機器人驗證挑戰，爬蟲管道無法直接自動提取內文。建議透過以下方式閱讀：',
+    botActionOpenUrl: '在新分頁開啟原文',
+    botActionPasteText: '轉為手動貼上閱讀',
+    botActionUploadPdf: '改用上傳本機 PDF',
+    academicFallbackNotice: '已透過學術開放資料庫 (Semantic Scholar / Crossref) 自動萃取論文核心資訊'
+
   },
   viewer: {
     crossDomainChapterNotice: '原站受瀏覽器限制無法跨域跳轉章節，請切換至「排版」模式',

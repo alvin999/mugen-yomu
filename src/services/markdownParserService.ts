@@ -1,6 +1,9 @@
 import type { ChapterSection, FormulaItem, FigureItem, PaperDocument } from '../types/document';
 import { cleanPaperText, unwrapParagraphLines } from '../utils/paperTextSanitizer';
 import { parseHtmlWithReadability } from './htmlReadabilityService';
+import { isBotChallengeHtml, isBotChallengeMarkdown, isBotChallengeDocument, BotChallengeError } from './crawler/botDetector';
+import { tryAcademicFallback, isAcademicUrl } from './crawler/academicDoiFallback';
+
 
 /**
  * 輔助函式：自 LaTeX 簡單萃取關鍵變數符號標記
@@ -418,7 +421,10 @@ async function fetchRawHtml(targetUrl: string): Promise<string> {
       if (res.ok) {
         const html = await res.text();
         if (html && (html.includes('<html') || html.includes('<body') || html.length > 500)) {
-          return html;
+          if (!isBotChallengeHtml(html)) {
+            return html;
+          }
+          console.warn('本機 Proxy 回傳內容命中反爬蟲驗證挑戰 (Captcha/WAF)');
         }
       }
     } catch {}
@@ -429,7 +435,9 @@ async function fetchRawHtml(targetUrl: string): Promise<string> {
     const res = await fetch(targetUrl, { headers: { 'Accept': 'text/html' } });
     if (res.ok) {
       const html = await res.text();
-      if (html && html.includes('<html')) return html;
+      if (html && html.includes('<html') && !isBotChallengeHtml(html)) {
+        return html;
+      }
     }
   } catch {}
 
@@ -445,17 +453,20 @@ async function fetchRawHtml(targetUrl: string): Promise<string> {
       if (res.ok) {
         const html = await res.text();
         if (html && (html.includes('<html') || html.includes('<body') || html.includes('<div') || html.length > 500)) {
-          return html;
+          if (!isBotChallengeHtml(html)) {
+            return html;
+          }
+          console.warn('外部 Proxy 回傳內容命中反爬蟲驗證挑戰 (Captcha/WAF)');
         }
       }
     } catch {}
   }
 
-  throw new Error('無法取得原生 HTML');
+  throw new Error('無法取得有效原生 HTML 內容');
 }
 
 /**
- * 解析器 2: 網頁 URL 抓取與智慧萃取 (Mozilla Readability / Reader Fallback)
+ * 解析器 2: 網頁 URL 抓取與智慧萃取 (Mozilla Readability / Reader Fallback / Academic DOI Fallback)
  */
 export async function fetchWebArticle(url: string): Promise<PaperDocument> {
   let targetUrl = url.trim();
@@ -465,12 +476,21 @@ export async function fetchWebArticle(url: string): Promise<PaperDocument> {
 
   const isMdpi = targetUrl.includes('mdpi.com');
   const domainName = new URL(targetUrl).hostname;
+  let encounteredBotChallenge = false;
 
   // 策略 A (最優推薦)：直接使用 Mozilla Readability 進行原生 HTML DOM 語意萃取
   // 100% 完整保留 <pre><code> 換行、縮排、空格與註解，段落自然獨立，不經過正則重流！
   try {
     const rawHtml = await fetchRawHtml(targetUrl);
     const doc = parseHtmlWithReadability(rawHtml, targetUrl);
+
+    if (isBotChallengeDocument(doc)) {
+      encounteredBotChallenge = true;
+      throw new BotChallengeError({
+        message: '解析結果命中反爬蟲機器人挑戰頁 (Captcha/WAF)',
+        originalUrl: targetUrl
+      });
+    }
 
     if (isMdpi) {
       const mdpiMatch = targetUrl.match(/https?:\/\/(?:www\.)?mdpi\.com\/([0-9-]+\/[0-9]+\/[0-9]+\/[0-9]+)/i);
@@ -488,7 +508,10 @@ export async function fetchWebArticle(url: string): Promise<PaperDocument> {
     }
 
     return doc;
-  } catch (readabilityErr) {
+  } catch (readabilityErr: any) {
+    if (readabilityErr?.isBotChallenge) {
+      encounteredBotChallenge = true;
+    }
     console.warn('Mozilla Readability 原生 DOM 萃取受限，啟用備援流程:', readabilityErr);
   }
 
@@ -506,7 +529,15 @@ export async function fetchWebArticle(url: string): Promise<PaperDocument> {
     }
 
     let markdownText = await response.text();
-    
+
+    if (isBotChallengeMarkdown(markdownText)) {
+      encounteredBotChallenge = true;
+      throw new BotChallengeError({
+        message: 'Reader 備援管道回傳受反爬蟲驗證阻擋',
+        originalUrl: targetUrl
+      });
+    }
+
     let parsedTitle = '';
     const titleMatch = markdownText.match(/^Title:\s*(.*)$/m) || markdownText.match(/^#\s*(.*)$/m);
     if (titleMatch && titleMatch[1]) {
@@ -529,6 +560,14 @@ export async function fetchWebArticle(url: string): Promise<PaperDocument> {
 
     const doc = parseMarkdownToDocument(parsedTitle, markdownText, targetUrl, isMdpi ? 'MDPI Open Access' : domainName);
 
+    if (isBotChallengeDocument(doc)) {
+      encounteredBotChallenge = true;
+      throw new BotChallengeError({
+        message: 'Markdown 解析後內容為反爬蟲驗證挑戰',
+        originalUrl: targetUrl
+      });
+    }
+
     if (isMdpi) {
       const mdpiMatch = targetUrl.match(/https?:\/\/(?:www\.)?mdpi\.com\/([0-9-]+\/[0-9]+\/[0-9]+\/[0-9]+)/i);
       if (mdpiMatch) {
@@ -545,21 +584,36 @@ export async function fetchWebArticle(url: string): Promise<PaperDocument> {
     }
 
     return doc;
-  } catch (err) {
-    console.warn('線上 Reader 引擎連線逾時或受限，啟用備用高品質萃取器:', err);
-    const fallbackTitle = `線上文章: ${domainName}`;
-    const mockMarkdown = `# 1. Introduction to ${domainName}\n` +
-      `Source URL: ${targetUrl}\n\n` +
-      `This web article was retrieved and structured by MUGEN YOMU Web Reader.\n\n` +
-      `## 2. Core Methodologies and Analysis\n` +
-      `The article explores modern research directions and engineering paradigms.\n` +
-      `Key findings indicate significant advancements in computational efficiency and practical applications.\n\n` +
-      `## 3. Conclusion and Key Insights\n` +
-      `The authors demonstrate empirical superiority across benchmark suites.`;
-
-    return parseMarkdownToDocument(fallbackTitle, mockMarkdown, targetUrl, domainName);
+  } catch (readerErr: any) {
+    if (readerErr?.isBotChallenge) {
+      encounteredBotChallenge = true;
+    }
+    console.warn('線上 Reader 引擎連線逾時或受限，嘗試學術開放資料庫備援:', readerErr);
   }
+
+  // 策略 C (學術開放 API 降級)：Semantic Scholar / Crossref
+  if (isAcademicUrl(targetUrl) || encounteredBotChallenge) {
+    try {
+      const academicDoc = await tryAcademicFallback(targetUrl);
+      if (academicDoc) {
+        return academicDoc;
+      }
+    } catch (academicErr) {
+      console.warn('學術開放 API 備援嘗試失敗:', academicErr);
+    }
+  }
+
+  // 若確認為反爬蟲驗證阻擋且無法自動繞過，明確拋出結構化例外，引導使用者手動貼上或上傳 PDF
+  if (encounteredBotChallenge || isAcademicUrl(targetUrl)) {
+    throw new BotChallengeError({
+      message: `目標網站設有反爬蟲或機器人驗證保護 (Captcha/Cloudflare)，無法直接自動抓取內文。`,
+      originalUrl: targetUrl
+    });
+  }
+
+  throw new Error(`無法解析該網頁內容，請確認網址是否可公開存取，或改用「手動貼上文字 / 上傳 PDF」方式閱讀。`);
 }
+
 
 /**
  * 解析器 3: arXiv / ar5iv 論文圖文結構化擷取引擎
