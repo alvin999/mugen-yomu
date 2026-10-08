@@ -3,9 +3,10 @@
 
   interface Props {
     onselectJumpPoint: (point: JumpPoint) => void;
+    onjumpReturn?: (toStart: boolean) => void;
   }
 
-  let { onselectJumpPoint }: Props = $props();
+  let { onselectJumpPoint, onjumpReturn }: Props = $props();
 
   let displayedJumps = $derived($jumpStackStore.stack.slice(0, 9));
   let selectedIdx = $derived($jumpStackStore.selectedIndex);
@@ -17,6 +18,24 @@
 
   function handleKeyDown(e: KeyboardEvent) {
     if (!$jumpStackStore.isMenuOpen) return;
+
+    // 再次按下 ' 立即執行 '' 跳轉回溯（段首）
+    if (e.key === "'") {
+      e.preventDefault();
+      e.stopPropagation();
+      closeJumpMenu();
+      onjumpReturn?.(true);
+      return;
+    }
+
+    // 再次按下 ` 立即執行 `` 跳轉回溯（精確位置）
+    if (e.key === '`') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeJumpMenu();
+      onjumpReturn?.(false);
+      return;
+    }
 
     // 數字鍵 1-9 直達
     const num = parseInt(e.key, 10);

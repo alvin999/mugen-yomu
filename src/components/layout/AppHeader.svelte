@@ -547,20 +547,24 @@
               <span class="text-[#a89984]">返回上一跳躍點 (段首/精確)</span>
             </div>
             <div class="flex justify-between items-center py-0.5">
-              <span class="text-[#fabd2f] font-bold">Ctrl+J / M</span>
+              <span class="text-[#fabd2f] font-bold">Ctrl+J / M / ' / `</span>
               <span class="text-[#a89984]">Neovim Jump Menu HUD (1-9)</span>
             </div>
             <div class="flex justify-between items-center py-0.5">
-              <span class="text-[#8ec07c] font-bold">t</span>
-              <span class="text-[#a89984]">{$t('vim.toggleTranslation')}</span>
-            </div>
-            <div class="flex justify-between items-center py-0.5">
-              <span class="text-[#8ec07c] font-bold">a</span>
-              <span class="text-[#a89984]">{$t('vim.askAi')}</span>
+              <span class="text-[#8ec07c] font-bold">v</span>
+              <span class="text-[#a89984]">切換 VISUAL 視覺選取模式</span>
             </div>
             <div class="flex justify-between items-center py-0.5">
               <span class="text-[#8ec07c] font-bold">y</span>
-              <span class="text-[#a89984]">{$t('vim.copyContent')}</span>
+              <span class="text-[#a89984]">複製選取文字 (V) / 原文 (N)</span>
+            </div>
+            <div class="flex justify-between items-center py-0.5">
+              <span class="text-[#8ec07c] font-bold">t</span>
+              <span class="text-[#a89984]">翻譯選取子句 (V) / 段落 (N)</span>
+            </div>
+            <div class="flex justify-between items-center py-0.5">
+              <span class="text-[#8ec07c] font-bold">a</span>
+              <span class="text-[#a89984]">AI 解析選取片段 (V) / 段落 (N)</span>
             </div>
             <div class="flex justify-between items-center py-0.5">
               <span class="text-[#fe8019] font-bold">?</span>

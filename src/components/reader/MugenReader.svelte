@@ -1187,7 +1187,35 @@
         flowStore.recordCursorProgress(deltaWords, moveType, elapsedMs);
       },
       onCloseLightbox: closeLightbox,
-      isLightboxOpen: Boolean(activeLightboxImg)
+      isLightboxOpen: Boolean(activeLightboxImg),
+      onTranslateSelection: async (selText, secId, pIndex) => {
+        const p = (typeof window !== 'undefined' ? localStorage.getItem('mugen_provider') : null) || 'groq';
+        const k = getStoredApiKey(p);
+        const m = (typeof window !== 'undefined' ? localStorage.getItem('mugen_model') : null) || 'llama-3.3-70b-versatile';
+        const o = (typeof window !== 'undefined' ? localStorage.getItem('mugen_ollama_url') : null) || 'http://localhost:11434';
+        showToast('正在翻譯選取片段...');
+        try {
+          const res = await translateAcademicText(selText, p, k, m, o);
+          showToast(`譯文: ${res.slice(0, 80)}${res.length > 80 ? '...' : ''}`);
+          const sec = allSections.find(s => s.id === secId) || { id: secId, title: secId };
+          dispatch('readerAction', {
+            action: 'focusCompanion',
+            section: sec as ChapterSection,
+            paragraphIndex: pIndex,
+            text: `【原文片段】\n${selText}\n\n【繁中釋義】\n${res}`
+          });
+        } catch (err) {
+          showToast('選取片段翻譯失敗');
+        }
+      },
+      onTextSelected: (text) => {
+        selectedText = text;
+        dispatch('textSelected', { text });
+      },
+      onClearSelection: () => {
+        selectedText = '';
+        dispatch('textSelected', { text: '' });
+      }
     });
 
     if ($vimConfigStore.isVimEnabled) {
@@ -1337,7 +1365,22 @@
   <VimCursorOverlay {zoomLevel} />
 
   <!-- Neovim Jump Menu HUD (Ctrl+J / M / '' / ``) -->
-  <NeovimJumpMenuHud onselectJumpPoint={handleJumpMenuSelect} />
+  <NeovimJumpMenuHud
+    onselectJumpPoint={handleJumpMenuSelect}
+    onjumpReturn={(toStart) => {
+      if (vimController && scrollContainer) {
+        const allParas = getAllRenderedParas(scrollContainer);
+        const curPos = vimController.getCurrentCursorReadingPos();
+        const curIdx = allParas.findIndex(p => p.paraKey === curPos?.key);
+        if (curIdx >= 0) {
+          vimController.performJumpReturnPublic(allParas, curIdx, {
+            onParagraphClick: handleParagraphClick,
+            onShowToast: showToast
+          }, toStart);
+        }
+      }
+    }}
+  />
 </main>
 
 <!-- High-Resolution Image Lightbox Modal -->

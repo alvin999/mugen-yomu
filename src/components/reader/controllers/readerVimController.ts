@@ -1,9 +1,9 @@
-import type { CursorRect } from '../../../stores/vimCursorStore';
 import {
   vimConfigStore,
   vimCursorState,
   updateCursorPosition,
-  setVimHelpOpen
+  setVimHelpOpen,
+  setVimMode
 } from '../../../stores/vimCursorStore';
 import { countWords, countPreciseWords } from '../../../stores/flowStore';
 import { getNextWordOffset, getPrevWordOffset, getWordEndOffset } from '../../../utils/wordNavigator';
@@ -12,6 +12,7 @@ import {
   setPreviousJumpPoint,
   jumpStackStore,
   toggleJumpMenu,
+  closeJumpMenu,
   type JumpPoint
 } from '../../../stores/jumpStackStore';
 import { get } from 'svelte/store';
@@ -176,6 +177,68 @@ export function getAllRenderedParas(scrollContainer: HTMLElement | null, fallbac
     const pIndex = parseInt(key.split('_').pop() || '0', 10);
     return { el, key, secId, pIndex, text };
   });
+}
+
+/**
+ * 依據文字偏移範圍在段落元素中建立原生 DOM 選取範圍 (Selection)
+ */
+export function createDomSelectionForRange(
+  el: HTMLElement,
+  startCharIdx: number,
+  endCharIdx: number
+): string {
+  if (typeof window === 'undefined') return '';
+  const textRoot = getTextElement(el);
+  const minIdx = Math.min(startCharIdx, endCharIdx);
+  const maxIdx = Math.max(startCharIdx, endCharIdx);
+
+  const walker = document.createTreeWalker(textRoot, NodeFilter.SHOW_TEXT);
+  let node: Text | null = null;
+  let accumulated = 0;
+  let startNode: Text | null = null;
+  let startOffset = 0;
+  let endNode: Text | null = null;
+  let endOffset = 0;
+
+  while ((node = walker.nextNode() as Text)) {
+    const len = (node.nodeValue || '').length;
+    if (!startNode && accumulated + len >= minIdx) {
+      startNode = node;
+      startOffset = Math.max(0, minIdx - accumulated);
+    }
+    if (accumulated + len >= maxIdx + 1) {
+      endNode = node;
+      endOffset = Math.min(len, maxIdx + 1 - accumulated);
+      break;
+    }
+    accumulated += len;
+  }
+
+  if (startNode) {
+    if (!endNode) {
+      endNode = startNode;
+      endOffset = (startNode.nodeValue || '').length;
+    }
+    const range = document.createRange();
+    try {
+      range.setStart(startNode, startOffset);
+      range.setEnd(endNode, endOffset);
+      const sel = window.getSelection();
+      if (sel) {
+        sel.removeAllRanges();
+        sel.addRange(range);
+        return sel.toString();
+      }
+    } catch (e) {}
+  }
+  return '';
+}
+
+export function clearDomSelection() {
+  if (typeof window !== 'undefined') {
+    const sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+  }
 }
 
 export function computeCharRect(el: HTMLElement, charIdx: number, scrollContainer: HTMLElement | null): CursorRect | null {
@@ -429,8 +492,37 @@ export class ReaderVimController {
   public lastReadingPos: CursorReadingPos | null = null;
   private lastHLTime: number = 0;
 
+  // VISUAL 模式狀態
+  public visualMode: boolean = false;
+  public visualAnchorCharIdx: number | null = null;
+  public visualSelectedText: string = '';
+
   constructor(scrollContainer?: HTMLElement | null) {
     this.scrollContainer = scrollContainer || null;
+  }
+
+  public syncVisualSelection(el: HTMLElement, text: string, callbacks?: any) {
+    if (this.visualAnchorCharIdx === null) {
+      this.visualAnchorCharIdx = this.currentCharIndex;
+    }
+    const minIdx = Math.min(this.visualAnchorCharIdx, this.currentCharIndex);
+    const maxIdx = Math.max(this.visualAnchorCharIdx, this.currentCharIndex);
+    const selStr = createDomSelectionForRange(el, minIdx, maxIdx);
+    this.visualSelectedText = selStr || text.slice(minIdx, maxIdx + 1);
+    callbacks?.onTextSelected?.(this.visualSelectedText);
+  }
+
+  public exitVisualMode(callbacks?: any) {
+    this.visualMode = false;
+    this.visualAnchorCharIdx = null;
+    this.visualSelectedText = '';
+    clearDomSelection();
+    setVimMode('NORMAL');
+    callbacks?.onClearSelection?.();
+  }
+
+  public performJumpReturnPublic(paras: RenderedPara[], curIdx: number, callbacks: any, toStart: boolean) {
+    this.performJumpReturn(paras, curIdx, callbacks, toStart);
   }
 
   /**
@@ -667,9 +759,16 @@ export class ReaderVimController {
       onCursorProgress?: (deltaWords: number, moveType: 'forward' | 'regression' | 'jump', elapsedMs?: number) => void;
       onCloseLightbox?: () => void;
       isLightboxOpen?: boolean;
+      onTranslateSelection?: (selectedText: string, secId: string, pIndex: number) => void;
+      onTextSelected?: (selectedText: string) => void;
+      onClearSelection?: () => void;
     }
   ) {
     if (e.key === 'Escape') {
+      if (this.visualMode) {
+        this.exitVisualMode(callbacks);
+        return;
+      }
       if (callbacks.isLightboxOpen && callbacks.onCloseLightbox) {
         callbacks.onCloseLightbox();
         return;
@@ -679,6 +778,15 @@ export class ReaderVimController {
         setVimHelpOpen(false);
         return;
       }
+      closeJumpMenu();
+      return;
+    }
+
+    // Ctrl+j / Ctrl+o: 開啟 Neovim Jump Menu HUD (即便帶有 Ctrl 鍵也優先響應)
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'j' || e.key === 'J' || e.key === 'o' || e.key === 'O')) {
+      e.preventDefault();
+      toggleJumpMenu();
+      return;
     }
 
     const config = get(vimConfigStore);
@@ -718,23 +826,55 @@ export class ReaderVimController {
       return;
     }
 
-    // t: 切換當前段落繁中譯文展開/收合
+    // v: 切換 VISUAL 視覺選取模式
+    if (key === 'v' || key === 'V') {
+      e.preventDefault();
+      if (!this.visualMode) {
+        this.visualMode = true;
+        this.visualAnchorCharIdx = this.currentCharIndex;
+        setVimMode('VISUAL');
+        this.syncVisualSelection(curPara.el, curPara.text, callbacks);
+        callbacks.onShowToast('進入 VISUAL 模式（可使用 hjkl/wbe/$ 擴展選取範圍）');
+      } else {
+        this.exitVisualMode(callbacks);
+        callbacks.onShowToast('已退出 VISUAL 模式');
+      }
+      return;
+    }
+
+    // t: 切換譯文 (NORMAL) 或即時翻譯選取子句 (VISUAL)
     if (key === 't' || key === 'T') {
       e.preventDefault();
+      if (this.visualMode && this.visualSelectedText) {
+        callbacks.onTranslateSelection?.(this.visualSelectedText, curPara.secId, curPara.pIndex);
+        return;
+      }
       callbacks.onToggleTranslation(curPara.secId, curPara.pIndex, curPara.text);
       return;
     }
 
-    // a: 喚醒 AI 伴讀助理
+    // a: 喚醒 AI 伴讀助理 (VISUAL 模式傳送選取片段，NORMAL 模式傳送段落全文)
     if (key === 'a' || key === 'A') {
       e.preventDefault();
-      callbacks.onAskCompanion(curPara.secId, curPara.pIndex, curPara.text);
+      const textToAsk = (this.visualMode && this.visualSelectedText) ? this.visualSelectedText : curPara.text;
+      callbacks.onAskCompanion(curPara.secId, curPara.pIndex, textToAsk);
+      if (this.visualMode) {
+        callbacks.onShowToast('已將選取片段傳送至 AI 伴讀助理');
+      }
       return;
     }
 
-    // y: 複製當前段落原文
+    // y: 精準複製選取文字 (VISUAL) 或當前段落原文 (NORMAL)
     if (key === 'y' || key === 'Y') {
       e.preventDefault();
+      if (this.visualMode && this.visualSelectedText) {
+        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+          navigator.clipboard.writeText(this.visualSelectedText);
+          callbacks.onShowToast(`已複製選取文字 (${this.visualSelectedText.length} 字元)`);
+        }
+        this.exitVisualMode(callbacks);
+        return;
+      }
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         navigator.clipboard.writeText(curPara.text);
         callbacks.onShowToast('已複製當前段落原文');
@@ -780,6 +920,7 @@ export class ReaderVimController {
       this.syncCursor(curPara.secId, curPara.pIndex, 0, true);
       this.recordPositionChange(curPara.secId, curPara.pIndex, 0, curPara.text, callbacks.onCursorProgress, 'regression');
       callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
+      if (this.visualMode) this.syncVisualSelection(curPara.el, curPara.text, callbacks);
       return;
     }
 
@@ -791,6 +932,7 @@ export class ReaderVimController {
       this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
       this.recordPositionChange(curPara.secId, curPara.pIndex, this.currentCharIndex, curPara.text, callbacks.onCursorProgress);
       callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
+      if (this.visualMode) this.syncVisualSelection(curPara.el, curPara.text, callbacks);
       return;
     }
 
@@ -804,6 +946,7 @@ export class ReaderVimController {
         this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
         this.recordPositionChange(curPara.secId, curPara.pIndex, this.currentCharIndex, curPara.text, callbacks.onCursorProgress);
         callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
+        if (this.visualMode) this.syncVisualSelection(curPara.el, curPara.text, callbacks);
       } else if (curIdx < paras.length - 1) {
         const next = paras[curIdx + 1];
         this.currentCharIndex = 0;
@@ -823,11 +966,13 @@ export class ReaderVimController {
         this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
         this.recordPositionChange(curPara.secId, curPara.pIndex, this.currentCharIndex, curPara.text, callbacks.onCursorProgress, 'regression');
         callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
+        if (this.visualMode) this.syncVisualSelection(curPara.el, curPara.text, callbacks);
       } else if (this.currentCharIndex > 0) {
         this.currentCharIndex = 0;
         this.syncCursor(curPara.secId, curPara.pIndex, 0, true);
         this.recordPositionChange(curPara.secId, curPara.pIndex, 0, curPara.text, callbacks.onCursorProgress, 'regression');
         callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
+        if (this.visualMode) this.syncVisualSelection(curPara.el, curPara.text, callbacks);
       } else if (curIdx > 0) {
         const prev = paras[curIdx - 1];
         this.currentCharIndex = Math.max(0, prev.text.length - 1);
@@ -847,6 +992,7 @@ export class ReaderVimController {
         this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
         this.recordPositionChange(curPara.secId, curPara.pIndex, this.currentCharIndex, curPara.text, callbacks.onCursorProgress);
         callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
+        if (this.visualMode) this.syncVisualSelection(curPara.el, curPara.text, callbacks);
       } else if (curIdx < paras.length - 1) {
         const next = paras[curIdx + 1];
         const nextEnd = getWordEndOffset(next.text, 0);
@@ -895,37 +1041,38 @@ export class ReaderVimController {
       return;
     }
 
-    // '': 跳回前一跳躍點段首 (Jump back to start of previous jump line)
+    // '': 開啟跳轉歷史 HUD，若 500ms 內連按兩次則直接執行 '' 跳轉 (段首)
     if (key === "'") {
+      e.preventDefault();
       const now = Date.now();
       if (now - this.lastQuotePressTime < 500) {
-        e.preventDefault();
         this.lastQuotePressTime = 0;
+        closeJumpMenu();
         this.performJumpReturn(paras, curIdx, callbacks, true);
         return;
       }
       this.lastQuotePressTime = now;
+      toggleJumpMenu(true);
       return;
     }
 
-    // ``: 跳回前一跳躍點精確位置 (Jump back to exact previous position)
+    // `: 開啟跳轉歷史 HUD，若 500ms 內連按兩次則直接執行 `` 跳轉 (精確位置)
     if (key === '`') {
+      e.preventDefault();
       const now = Date.now();
       if (now - this.lastBacktickPressTime < 500) {
-        e.preventDefault();
         this.lastBacktickPressTime = 0;
+        closeJumpMenu();
         this.performJumpReturn(paras, curIdx, callbacks, false);
         return;
       }
       this.lastBacktickPressTime = now;
+      toggleJumpMenu(true);
       return;
     }
 
-    // Ctrl+j / Ctrl+o / M: 開啟 Neovim Jump Menu HUD
-    if (
-      ((e.ctrlKey || e.metaKey) && (key === 'j' || key === 'J' || key === 'o' || key === 'O')) ||
-      (key === 'M' && !e.ctrlKey && !e.altKey && !e.metaKey)
-    ) {
+    // M: 開啟 Neovim Jump Menu HUD
+    if (key === 'M') {
       e.preventDefault();
       toggleJumpMenu();
       return;
@@ -947,6 +1094,7 @@ export class ReaderVimController {
           this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
           this.recordPositionChange(curPara.secId, curPara.pIndex, this.currentCharIndex, curPara.text, callbacks.onCursorProgress);
           callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
+          if (this.visualMode) this.syncVisualSelection(curPara.el, curPara.text, callbacks);
         } else if (curIdx < paras.length - 1) {
           const next = paras[curIdx + 1];
           const nextVis = getParagraphVisibleCharIndices(next.el);
@@ -985,6 +1133,7 @@ export class ReaderVimController {
           this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
           this.recordPositionChange(curPara.secId, curPara.pIndex, this.currentCharIndex, curPara.text, callbacks.onCursorProgress, 'regression');
           callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
+          if (this.visualMode) this.syncVisualSelection(curPara.el, curPara.text, callbacks);
         } else if (curIdx > 0) {
           const prev = paras[curIdx - 1];
           const prevVis = getParagraphVisibleCharIndices(prev.el);
@@ -1041,6 +1190,7 @@ export class ReaderVimController {
         this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
         this.recordPositionChange(curPara.secId, curPara.pIndex, this.currentCharIndex, curPara.text, callbacks.onCursorProgress);
         callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
+        if (this.visualMode) this.syncVisualSelection(curPara.el, curPara.text, callbacks);
       } else {
         if (curIdx < paras.length - 1) {
           const nextPara = paras[curIdx + 1];
@@ -1064,6 +1214,7 @@ export class ReaderVimController {
           this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
           this.recordPositionChange(curPara.secId, curPara.pIndex, this.currentCharIndex, curPara.text, callbacks.onCursorProgress);
           callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
+          if (this.visualMode) this.syncVisualSelection(curPara.el, curPara.text, callbacks);
         }
       }
       return;
@@ -1109,6 +1260,7 @@ export class ReaderVimController {
         this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
         this.recordPositionChange(curPara.secId, curPara.pIndex, this.currentCharIndex, curPara.text, callbacks.onCursorProgress, 'regression');
         callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
+        if (this.visualMode) this.syncVisualSelection(curPara.el, curPara.text, callbacks);
       } else {
         if (curIdx > 0) {
           const prevPara = paras[curIdx - 1];
@@ -1131,6 +1283,7 @@ export class ReaderVimController {
           this.syncCursor(curPara.secId, curPara.pIndex, 0, true);
           this.recordPositionChange(curPara.secId, curPara.pIndex, 0, curPara.text, callbacks.onCursorProgress, 'regression');
           callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
+          if (this.visualMode) this.syncVisualSelection(curPara.el, curPara.text, callbacks);
         }
       }
       return;

@@ -154,6 +154,14 @@ export function setVimStatusMessage(msg: string) {
   vimCursorState.update((s) => ({ ...s, statusMessage: msg }));
 }
 
+export function setVimMode(mode: 'NORMAL' | 'VISUAL') {
+  vimCursorState.update((s) => ({
+    ...s,
+    mode,
+    statusMessage: mode === 'VISUAL' ? '-- VISUAL --' : '-- NORMAL --'
+  }));
+}
+
 /**
  * 捲動追蹤：輕量調整游標 rect.top，不重新計算文字節點，不觸發彈跳動畫，不影響閃爍狀態
  * @param deltaScrollTop scrollTop 的變化量（向下捲動為正值，文字向上移動）
