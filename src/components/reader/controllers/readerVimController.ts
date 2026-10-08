@@ -7,6 +7,13 @@ import {
 } from '../../../stores/vimCursorStore';
 import { countWords, countPreciseWords } from '../../../stores/flowStore';
 import { getNextWordOffset, getPrevWordOffset, getWordEndOffset } from '../../../utils/wordNavigator';
+import {
+  pushJumpPoint,
+  setPreviousJumpPoint,
+  jumpStackStore,
+  toggleJumpMenu,
+  type JumpPoint
+} from '../../../stores/jumpStackStore';
 import { get } from 'svelte/store';
 
 export interface CursorReadingPos {
@@ -417,11 +424,85 @@ export class ReaderVimController {
   /** 在 ensureCursorInComfortView 捲動前呼叫，用於設定 isProgrammaticScrolling 旗標 */
   private onBeforeComfortScroll: (() => void) | null = null;
   public lastGPressTime: number = 0;
+  public lastQuotePressTime: number = 0;
+  public lastBacktickPressTime: number = 0;
   public lastReadingPos: CursorReadingPos | null = null;
   private lastHLTime: number = 0;
 
   constructor(scrollContainer?: HTMLElement | null) {
     this.scrollContainer = scrollContainer || null;
+  }
+
+  /**
+   * 記錄當前游標閱讀位置至跳轉堆疊 (Jump Stack)
+   */
+  public recordCurrentJumpPoint(source: JumpPoint['source'] = 'jump') {
+    const pos = this.getCurrentCursorReadingPos();
+    if (!pos || !this.scrollContainer) return;
+    const allParas = getAllRenderedParas(this.scrollContainer);
+    const curIdx = allParas.findIndex(p => p.paraKey === pos.key);
+    const snippet = curIdx >= 0 ? allParas[curIdx].text.slice(0, 50).trim() : '';
+    const progress = allParas.length > 0 && curIdx >= 0 ? Math.round(((curIdx + 1) / allParas.length) * 100) : 0;
+    pushJumpPoint({
+      sectionId: pos.secId,
+      paraIndex: pos.pIndex,
+      charIndex: pos.charIndex,
+      textSnippet: snippet,
+      progressPercent: progress,
+      source
+    });
+  }
+
+  /**
+   * 執行 Vim '' 與 `` 跳轉回溯
+   */
+  private performJumpReturn(
+    paras: RenderedPara[],
+    curIdx: number,
+    callbacks: any,
+    toStart: boolean
+  ) {
+    const curPara = paras[curIdx];
+    const curPoint: JumpPoint = {
+      id: `jump_${Date.now()}`,
+      sectionId: curPara.secId,
+      paraIndex: curPara.pIndex,
+      charIndex: this.currentCharIndex,
+      textSnippet: curPara.text.slice(0, 50).trim(),
+      progressPercent: paras.length > 0 ? Math.round(((curIdx + 1) / paras.length) * 100) : 0,
+      timestamp: Date.now(),
+      source: 'jump'
+    };
+
+    const jumpState = get(jumpStackStore);
+    // 優先使用 previousPoint，若無或為當前位置則尋找 stack 中首個不同段落者
+    let target = jumpState.previousPoint;
+    if (!target || (target.sectionId === curPara.secId && target.paraIndex === curPara.pIndex)) {
+      target = jumpState.stack.find(p => !(p.sectionId === curPara.secId && p.paraIndex === curPara.pIndex)) || null;
+    }
+
+    if (!target) {
+      callbacks.onShowToast('尚無先前的跳躍錨點記錄');
+      return;
+    }
+
+    // 將當前點設為新的 previousPoint，實現 '' / `` 雙向雙向瞬移切換
+    setPreviousJumpPoint(curPoint);
+
+    // 尋找目標段落
+    const targetIdx = paras.findIndex(p => p.secId === target!.sectionId && p.pIndex === target!.paraIndex);
+    const targetPara = targetIdx >= 0 ? paras[targetIdx] : paras.find(p => p.secId === target!.sectionId);
+
+    if (targetPara) {
+      const targetCharIdx = toStart ? 0 : Math.max(0, Math.min(targetPara.text.length - 1, target.charIndex));
+      this.currentCharIndex = targetCharIdx;
+      this.preferredColLeft = null;
+      this.recordPositionChange(targetPara.secId, targetPara.pIndex, targetCharIdx, targetPara.text, callbacks.onCursorProgress, 'jump');
+      callbacks.onParagraphClick(targetPara.secId, targetPara.pIndex, targetPara.text, targetCharIdx);
+      callbacks.onShowToast(toStart ? '已跳回前次錨點（段首）' : '已跳回前次錨點（精確位置）');
+    } else {
+      callbacks.onShowToast(`跳轉目標章節 ${target.sectionId} 未在畫面上渲染`);
+    }
   }
 
   public setScrollContainer(container: HTMLElement | null) {
@@ -666,6 +747,7 @@ export class ReaderVimController {
       const now = Date.now();
       if (now - this.lastGPressTime < 450) {
         e.preventDefault();
+        this.recordCurrentJumpPoint('jump');
         const first = paras[0];
         this.currentCharIndex = 0;
         this.preferredColLeft = null;
@@ -681,6 +763,7 @@ export class ReaderVimController {
     // G: 跳至文末
     if (key === 'G') {
       e.preventDefault();
+      this.recordCurrentJumpPoint('jump');
       const last = paras[paras.length - 1];
       this.currentCharIndex = Math.max(0, last.text.length - 1);
       this.preferredColLeft = null;
@@ -778,6 +861,7 @@ export class ReaderVimController {
     if (key === 'd') {
       e.preventDefault();
       if (!this.scrollContainer) return;
+      this.recordCurrentJumpPoint('scroll');
       const viewH = this.scrollContainer.clientHeight;
       const targetScroll = this.scrollContainer.scrollTop + viewH * 0.45;
       animateScrollTo(this.scrollContainer, targetScroll, 260);
@@ -796,6 +880,7 @@ export class ReaderVimController {
     if (key === 'u') {
       e.preventDefault();
       if (!this.scrollContainer) return;
+      this.recordCurrentJumpPoint('scroll');
       const viewH = this.scrollContainer.clientHeight;
       const targetScroll = Math.max(0, this.scrollContainer.scrollTop - viewH * 0.45);
       animateScrollTo(this.scrollContainer, targetScroll, 260);
@@ -807,6 +892,42 @@ export class ReaderVimController {
         this.recordPositionChange(targetPara.secId, targetPara.pIndex, 0, targetPara.text, callbacks.onCursorProgress, 'regression');
         callbacks.onParagraphClick(targetPara.secId, targetPara.pIndex, targetPara.text, 0);
       }
+      return;
+    }
+
+    // '': 跳回前一跳躍點段首 (Jump back to start of previous jump line)
+    if (key === "'") {
+      const now = Date.now();
+      if (now - this.lastQuotePressTime < 500) {
+        e.preventDefault();
+        this.lastQuotePressTime = 0;
+        this.performJumpReturn(paras, curIdx, callbacks, true);
+        return;
+      }
+      this.lastQuotePressTime = now;
+      return;
+    }
+
+    // ``: 跳回前一跳躍點精確位置 (Jump back to exact previous position)
+    if (key === '`') {
+      const now = Date.now();
+      if (now - this.lastBacktickPressTime < 500) {
+        e.preventDefault();
+        this.lastBacktickPressTime = 0;
+        this.performJumpReturn(paras, curIdx, callbacks, false);
+        return;
+      }
+      this.lastBacktickPressTime = now;
+      return;
+    }
+
+    // Ctrl+j / Ctrl+o / M: 開啟 Neovim Jump Menu HUD
+    if (
+      ((e.ctrlKey || e.metaKey) && (key === 'j' || key === 'J' || key === 'o' || key === 'O')) ||
+      (key === 'M' && !e.ctrlKey && !e.altKey && !e.metaKey)
+    ) {
+      e.preventDefault();
+      toggleJumpMenu();
       return;
     }
 

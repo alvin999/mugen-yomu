@@ -30,6 +30,8 @@
   import SectionCard from './sections/SectionCard.svelte';
   import ImageLightboxModal from '../common/ImageLightboxModal.svelte';
   import VimCursorOverlay from './VimCursorOverlay.svelte';
+  import NeovimJumpMenuHud from './NeovimJumpMenuHud.svelte';
+  import type { JumpPoint } from '../../stores/jumpStackStore';
 
   // Controllers & Utilities
   import {
@@ -742,7 +744,28 @@
       targetParaEl?.classList.remove('ring-2', 'ring-[#fe8019]');
     }, 1800);
 
+    if (queryText && queryText.trim()) {
+      showToast('語意跳轉完成 · 按 \'\' 或 `` 隨時返回原位');
+    }
+
     return true;
+  }
+
+  /**
+   * 外部調用：將當前閱讀位置記錄為跳轉點（供語意搜尋跳轉前留存）
+   */
+  export function recordCurrentAsJumpPoint(source: JumpPoint['source'] = 'semantic') {
+    if (vimController) {
+      vimController.recordCurrentJumpPoint(source);
+    }
+  }
+
+  function handleJumpMenuSelect(point: JumpPoint) {
+    if (vimController) {
+      vimController.recordCurrentJumpPoint('jump');
+    }
+    focusParagraphAtChar(point.sectionId, point.paraIndex, point.charIndex);
+    showToast(`已跳至 § ${point.sectionTitle || point.sectionId} (${point.progressPercent}%)`);
   }
 
   export function focusSectionFirstParagraph(
@@ -1312,6 +1335,9 @@
 
   <!-- Vim 物理動態與閃爍方塊游標層 -->
   <VimCursorOverlay {zoomLevel} />
+
+  <!-- Neovim Jump Menu HUD (Ctrl+J / M / '' / ``) -->
+  <NeovimJumpMenuHud onselectJumpPoint={handleJumpMenuSelect} />
 </main>
 
 <!-- High-Resolution Image Lightbox Modal -->

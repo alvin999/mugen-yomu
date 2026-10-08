@@ -296,6 +296,11 @@
     const detail = 'detail' in event ? event.detail : event;
     const { sectionId, paragraphIndex, text, query, charIndex } = detail;
     if (sectionId) {
+      // 語意雷達聯動：在跳轉前記錄當前閱讀位置至 Jump Stack，讓讀者可隨時按 '' 或 `` 返回原處
+      if (readerRef && (readerRef as any).recordCurrentAsJumpPoint) {
+        (readerRef as any).recordCurrentAsJumpPoint('semantic');
+      }
+
       // 避免 source: 'outline' 觸發 scrollToTarget 重置到章節首字
       selectSection({ sectionId, source: 'semantic', noScroll: true });
       activeParagraphText = text;

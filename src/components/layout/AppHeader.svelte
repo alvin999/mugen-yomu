@@ -3,6 +3,7 @@
   import type { CacheStats } from '../../services/cacheService';
   import { THEMES, currentTheme, setTheme } from '../../stores/themeStore';
   import { vimCursorState, vimConfigStore, updateVimConfig, setVimHelpOpen } from '../../stores/vimCursorStore';
+  import { toggleJumpMenu } from '../../stores/jumpStackStore';
   import {
     currentLocale,
     setLocale,
@@ -472,6 +473,16 @@
       </button>
     </div>
 
+    <!-- Neovim Jump Menu HUD (Ctrl+J / M) -->
+    <button
+      type="button"
+      class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#fabd2f]"
+      onclick={() => toggleJumpMenu()}
+      title="Neovim Jump Menu HUD (Ctrl+J / M)"
+    >
+      <span class="material-symbols-outlined text-[16px]">swap_calls</span>
+    </button>
+
     <!-- Vim 操作說明指南 (取代頭像) -->
     <div class="relative" id="vim-help-container">
       <button
@@ -530,6 +541,14 @@
             <div class="flex justify-between items-center py-0.5">
               <span class="text-[#fabd2f] font-bold">gg / G</span>
               <span class="text-[#a89984]">{$t('vim.moveDocEdge')}</span>
+            </div>
+            <div class="flex justify-between items-center py-0.5">
+              <span class="text-[#fabd2f] font-bold">'' / ``</span>
+              <span class="text-[#a89984]">返回上一跳躍點 (段首/精確)</span>
+            </div>
+            <div class="flex justify-between items-center py-0.5">
+              <span class="text-[#fabd2f] font-bold">Ctrl+J / M</span>
+              <span class="text-[#a89984]">Neovim Jump Menu HUD (1-9)</span>
             </div>
             <div class="flex justify-between items-center py-0.5">
               <span class="text-[#8ec07c] font-bold">t</span>
