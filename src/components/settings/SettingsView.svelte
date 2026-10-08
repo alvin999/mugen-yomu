@@ -8,6 +8,7 @@
     type CursorShape,
     type PulseMode
   } from '../../stores/vimCursorStore';
+  import { getNextWordOffset, getPrevWordOffset, getWordEndOffset } from '../../utils/wordNavigator';
   import { t } from '../../stores/localeStore';
   import {
     getEmbeddingPreference,
@@ -281,6 +282,298 @@
     { id: 'breathe', label: '禪意呼吸 (Breathe)', desc: '3.0s 週期深邃雙層光暈綻放，營造專注心流', icon: 'air' },
     { id: 'steady', label: '常駐微光 (Steady)', desc: '靜止時無任何波動，安靜無干擾的常亮錨點', icon: 'light_mode' }
   ];
+
+  // ── 沙盒互動游標狀態與物理引擎 ──
+  const sandboxLines = [
+    '「手指引導視線閱讀，眼睛會自然跟隨指尖移動，',
+    '能減少視線回跳並提升專注與沉浸感。」——《如何閱讀一本書》',
+    'Tactile rhythm meets visual focus in deep flow state.'
+  ];
+
+  let sandboxLineIdx = $state(0);
+  let sandboxCharIdx = $state(0);
+  let sandboxIsFocused = $state(false);
+  let sandboxIsMoving = $state(false);
+  let sandboxMovingTimer: any = null;
+
+  let effectivePulseMode = $derived(
+    $vimConfigStore.pulseMode || ($vimConfigStore.isBlinkEnabled === false ? 'steady' : 'blink')
+  );
+
+  let sandboxPulseClass = $derived(
+    sandboxIsMoving
+      ? ''
+      : effectivePulseMode === 'breathe'
+        ? 'animate-vim-breathe'
+        : effectivePulseMode === 'blink'
+          ? 'animate-vim-blink'
+          : ''
+  );
+
+  // DOM 參照
+  let sandboxContainerEl: HTMLElement | null = $state(null);
+  let sandboxCursorDiv: HTMLDivElement | null = $state(null);
+
+  // Spring 物理狀態
+  let sbDispX = 0, sbDispY = 0;
+  let sbVelX = 0, sbVelY = 0;
+  let sbTargetX = 0, sbTargetY = 0;
+  let sbTargetW = 12, sbTargetH = 20;
+  let sbSpringActive = false;
+  let sbAnimId: number | null = null;
+  let sbInitialized = false;
+
+  function moveSandboxCursor(lIdx: number, cIdx: number, animate: boolean = true) {
+    const maxLine = sandboxLines.length - 1;
+    sandboxLineIdx = Math.max(0, Math.min(maxLine, lIdx));
+    const lineText = sandboxLines[sandboxLineIdx];
+    sandboxCharIdx = Math.max(0, Math.min(lineText.length - 1, cIdx));
+
+    if (sandboxMovingTimer) clearTimeout(sandboxMovingTimer);
+    sandboxIsMoving = true;
+    sandboxMovingTimer = setTimeout(() => {
+      sandboxIsMoving = false;
+    }, 400);
+
+    updateSandboxTarget(animate);
+  }
+
+  function updateSandboxTarget(animate: boolean = true) {
+    if (!sandboxContainerEl) return;
+    const charEl = sandboxContainerEl.querySelector(`[data-sb-line="${sandboxLineIdx}"][data-sb-char="${sandboxCharIdx}"]`) as HTMLElement | null;
+    if (!charEl) return;
+
+    const cRect = charEl.getBoundingClientRect();
+    const parentRect = sandboxContainerEl.getBoundingClientRect();
+
+    const tX = cRect.left - parentRect.left + sandboxContainerEl.scrollLeft;
+    const tY = cRect.top - parentRect.top + sandboxContainerEl.scrollTop;
+    const tW = Math.max(8, cRect.width);
+    const tH = Math.max(16, cRect.height);
+
+    sbTargetX = tX;
+    sbTargetY = tY;
+    sbTargetW = tW;
+    sbTargetH = tH;
+
+    const strength = Math.max(0, Math.min(100, $vimConfigStore.bounceStrength ?? 60)) / 100;
+    if (!sbInitialized || !animate || strength === 0) {
+      sbDispX = tX;
+      sbDispY = tY;
+      sbVelX = 0;
+      sbVelY = 0;
+      sbSpringActive = false;
+      sbInitialized = true;
+      applySbDivStyle(1, 1, 0, 0);
+    } else {
+      sbSpringActive = true;
+      if (!sbAnimId) {
+        sbAnimId = requestAnimationFrame(sbAnimLoop);
+      }
+    }
+  }
+
+  function sbAnimLoop() {
+    const converged = stepSbSpring();
+    if (!converged) {
+      sbAnimId = requestAnimationFrame(sbAnimLoop);
+    } else {
+      sbAnimId = null;
+    }
+  }
+
+  function stepSbSpring(): boolean {
+    if (!sbSpringActive) {
+      applySbDivStyle(1, 1, 0, 0);
+      return true;
+    }
+
+    const strength = Math.max(0, Math.min(100, $vimConfigStore.bounceStrength ?? 60)) / 100;
+    const dx = sbTargetX - sbDispX;
+    const dy = sbTargetY - sbDispY;
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+
+    const stiffnessX = 0.52 - 0.24 * strength;
+    const stiffnessY = 0.56 - 0.22 * strength;
+    const dampingX = 0.24 + 0.58 * Math.pow(strength, 0.9);
+    const dampingY = 0.22 + 0.54 * Math.pow(strength, 0.9);
+
+    const pullX = Math.sign(dx) * (absDx <= 35 ? absDx : (35 + Math.pow(absDx - 35, 0.65) * 2.8));
+    const pullY = Math.sign(dy) * (absDy <= 30 ? absDy : (30 + Math.pow(absDy - 30, 0.65) * 2.5));
+
+    sbVelX = (sbVelX + pullX * stiffnessX) * dampingX;
+    sbVelY = (sbVelY + pullY * stiffnessY) * dampingY;
+    sbDispX += sbVelX;
+    sbDispY += sbVelY;
+
+    const absVX = Math.abs(sbVelX);
+    const absVY = Math.abs(sbVelY);
+    const satVX = Math.min(16, absVX);
+    const satVY = Math.min(16, absVY);
+
+    const k = 0.08 * strength;
+    let sx = Math.max(0.65, Math.min(1.65, 1 + satVX * k - satVY * k * 0.35));
+    let sy = Math.max(0.65, Math.min(1.65, 1 + satVY * k - satVX * k * 0.35));
+
+    const rotX = Math.max(-20, Math.min(20, (sbVelY >= 0 ? satVY : -satVY) * 1.3 * strength));
+    const rotY = Math.max(-20, Math.min(20, (sbVelX >= 0 ? -satVX : satVX) * 1.3 * strength));
+
+    applySbDivStyle(sx, sy, rotX, rotY);
+
+    const converged = absDx < 0.2 && absDy < 0.2 && absVX < 0.05 && absVY < 0.05;
+    if (converged) {
+      sbDispX = sbTargetX;
+      sbDispY = sbTargetY;
+      sbVelX = 0;
+      sbVelY = 0;
+      sbSpringActive = false;
+      applySbDivStyle(1, 1, 0, 0);
+    }
+    return converged;
+  }
+
+  function applySbDivStyle(sx: number, sy: number, rotX: number = 0, rotY: number = 0) {
+    if (!sandboxCursorDiv) return;
+
+    const cfg = $vimConfigStore;
+    const isUnderline = cfg.shape === 'underline';
+    const isHollow = cfg.shape === 'hollow';
+    const thickness = Math.max(1, cfg.thickness ?? 1.5);
+    const rad = Math.max(0, cfg.borderRadius ?? 1.5);
+    const glow = Math.max(0, cfg.glowRadius ?? 0);
+
+    const baseW = Math.max(6, sbTargetW);
+    const baseH = Math.max(12, sbTargetH);
+
+    const w = Math.max(3, Math.round(baseW * sx));
+    const h = Math.max(6, Math.round(baseH * sy));
+
+    const ox = Math.round((baseW - w) / 2);
+    const oy = Math.round((baseH - h) / 2);
+
+    const actualH = isUnderline ? Math.max(2, Math.round(thickness)) : h;
+    const actualTop = isUnderline ? Math.round(sbDispY + baseH - actualH) : (Math.round(sbDispY) + oy);
+
+    sandboxCursorDiv.style.left = `${Math.round(sbDispX) + ox}px`;
+    sandboxCursorDiv.style.top = `${actualTop}px`;
+    sandboxCursorDiv.style.width = `${w}px`;
+    sandboxCursorDiv.style.height = `${actualH}px`;
+    sandboxCursorDiv.style.borderRadius = `${rad}px`;
+
+    if (isUnderline) {
+      sandboxCursorDiv.style.backgroundColor = 'rgba(254, 128, 25, 0.95)';
+      sandboxCursorDiv.style.outline = 'none';
+    } else if (isHollow) {
+      sandboxCursorDiv.style.backgroundColor = 'rgba(254, 128, 25, 0.04)';
+      sandboxCursorDiv.style.outline = `${thickness}px solid rgba(254, 128, 25, 0.95)`;
+      sandboxCursorDiv.style.outlineOffset = '-1px';
+    } else {
+      sandboxCursorDiv.style.backgroundColor = 'rgba(254, 128, 25, 0.28)';
+      sandboxCursorDiv.style.outline = `${thickness}px solid rgba(254, 128, 25, 0.92)`;
+      sandboxCursorDiv.style.outlineOffset = '-1px';
+    }
+
+    if (glow > 0) {
+      sandboxCursorDiv.style.boxShadow = `0 0 ${glow * 2.5}px rgba(254, 128, 25, 0.7)`;
+    } else {
+      sandboxCursorDiv.style.boxShadow = 'none';
+    }
+
+    if (rotX !== 0 || rotY !== 0) {
+      sandboxCursorDiv.style.transform = `perspective(200px) rotateX(${rotX.toFixed(1)}deg) rotateY(${rotY.toFixed(1)}deg)`;
+    } else {
+      sandboxCursorDiv.style.transform = 'none';
+    }
+  }
+
+  function handleSandboxKeydown(e: KeyboardEvent) {
+    const key = e.key;
+    if (['h', 'j', 'k', 'l', 'w', 'b', 'e', '0', '$'].includes(key)) {
+      e.preventDefault();
+    }
+
+    const curLine = sandboxLines[sandboxLineIdx];
+    if (key === 'h' || key === 'ArrowLeft') {
+      if (sandboxCharIdx > 0) {
+        moveSandboxCursor(sandboxLineIdx, sandboxCharIdx - 1);
+      } else if (sandboxLineIdx > 0) {
+        moveSandboxCursor(sandboxLineIdx - 1, sandboxLines[sandboxLineIdx - 1].length - 1);
+      }
+    } else if (key === 'l' || key === 'ArrowRight') {
+      if (sandboxCharIdx < curLine.length - 1) {
+        moveSandboxCursor(sandboxLineIdx, sandboxCharIdx + 1);
+      } else if (sandboxLineIdx < sandboxLines.length - 1) {
+        moveSandboxCursor(sandboxLineIdx + 1, 0);
+      }
+    } else if (key === 'j' || key === 'ArrowDown') {
+      if (sandboxLineIdx < sandboxLines.length - 1) {
+        moveSandboxCursor(sandboxLineIdx + 1, sandboxCharIdx);
+      }
+    } else if (key === 'k' || key === 'ArrowUp') {
+      if (sandboxLineIdx > 0) {
+        moveSandboxCursor(sandboxLineIdx - 1, sandboxCharIdx);
+      }
+    } else if (key === 'w') {
+      const nextOff = getNextWordOffset(curLine, sandboxCharIdx);
+      if (nextOff < curLine.length && nextOff > sandboxCharIdx) {
+        moveSandboxCursor(sandboxLineIdx, nextOff);
+      } else if (sandboxLineIdx < sandboxLines.length - 1) {
+        moveSandboxCursor(sandboxLineIdx + 1, 0);
+      }
+    } else if (key === 'b') {
+      const prevOff = getPrevWordOffset(curLine, sandboxCharIdx);
+      if (prevOff < sandboxCharIdx && prevOff >= 0) {
+        moveSandboxCursor(sandboxLineIdx, prevOff);
+      } else if (sandboxLineIdx > 0) {
+        moveSandboxCursor(sandboxLineIdx - 1, sandboxLines[sandboxLineIdx - 1].length - 1);
+      }
+    } else if (key === 'e') {
+      const endOff = getWordEndOffset(curLine, sandboxCharIdx);
+      if (endOff > sandboxCharIdx && endOff < curLine.length) {
+        moveSandboxCursor(sandboxLineIdx, endOff);
+      } else if (sandboxLineIdx < sandboxLines.length - 1) {
+        moveSandboxCursor(sandboxLineIdx + 1, getWordEndOffset(sandboxLines[sandboxLineIdx + 1], 0));
+      }
+    } else if (key === '0') {
+      moveSandboxCursor(sandboxLineIdx, 0);
+    } else if (key === '$') {
+      moveSandboxCursor(sandboxLineIdx, curLine.length - 1);
+    }
+  }
+
+  let demoBounceInterval: any = null;
+  function triggerBounceDemo() {
+    if (demoBounceInterval) clearInterval(demoBounceInterval);
+    const steps = [
+      { l: 0, c: 0 },
+      { l: 0, c: 8 },
+      { l: 1, c: 14 },
+      { l: 2, c: 0 },
+      { l: 2, c: 22 },
+      { l: 0, c: 4 }
+    ];
+    let stepIdx = 0;
+    demoBounceInterval = setInterval(() => {
+      const s = steps[stepIdx];
+      moveSandboxCursor(s.l, s.c, true);
+      stepIdx++;
+      if (stepIdx >= steps.length) {
+        clearInterval(demoBounceInterval);
+        demoBounceInterval = null;
+      }
+    }, 280);
+  }
+
+  $effect(() => {
+    // 依賴追蹤：當 Vim 設定變更或分頁切換至 vim 時，刷新沙盒游標
+    const _cfg = $vimConfigStore;
+    if (activeTab === 'vim') {
+      setTimeout(() => {
+        updateSandboxTarget(false);
+      }, 50);
+    }
+  });
 </script>
 
 <div class="flex-1 w-full h-full flex flex-col md:flex-row bg-[#1d2021] text-[#ebdbb2] overflow-hidden select-text">
@@ -592,15 +885,19 @@
               {#each pulseModes as item}
                 <button
                   type="button"
-                  class="flex flex-col items-start p-3.5 rounded-xl border text-left transition-all cursor-pointer {($vimConfigStore.pulseMode || 'blink') === item.id ? 'bg-[#3c3836] border-[#fe8019] shadow-md ring-1 ring-[#fe8019]/40' : 'bg-[#1d2021] border-[#3c3836] hover:border-[#504945]'}"
-                  onclick={() => updateVimConfig({ pulseMode: item.id, isBlinkEnabled: item.id !== 'steady' })}
+                  class="flex flex-col items-start p-3.5 rounded-xl border text-left transition-all cursor-pointer {effectivePulseMode === item.id ? 'bg-[#3c3836] border-[#fe8019] shadow-md ring-1 ring-[#fe8019]/40' : 'bg-[#1d2021] border-[#3c3836] hover:border-[#504945]'}"
+                  onclick={() => {
+                    updateVimConfig({ pulseMode: item.id, isBlinkEnabled: item.id !== 'steady' });
+                    sandboxIsMoving = false;
+                  }}
                 >
                   <div class="flex items-center justify-between w-full">
-                    <span class="font-medium text-xs {($vimConfigStore.pulseMode || 'blink') === item.id ? 'text-[#fe8019]' : 'text-[#ebdbb2]'} flex items-center gap-1.5">
+                    <span class="font-medium text-xs {effectivePulseMode === item.id ? 'text-[#fe8019]' : 'text-[#ebdbb2]'} flex items-center gap-1.5">
+                      <span class="w-2.5 h-2.5 rounded-xs border border-[#fe8019] bg-[#fe8019]/40 {item.id === 'breathe' ? 'animate-vim-breathe' : item.id === 'blink' ? 'animate-vim-blink' : ''}"></span>
                       <span class="material-symbols-outlined text-[16px]">{item.icon}</span>
                       <span>{item.label}</span>
                     </span>
-                    {#if ($vimConfigStore.pulseMode || 'blink') === item.id}
+                    {#if effectivePulseMode === item.id}
                       <span class="material-symbols-outlined text-[16px] text-[#fe8019]">check</span>
                     {/if}
                   </div>
@@ -683,24 +980,143 @@
             </div>
           </div>
 
-          <!-- 即時互動預覽沙盒 (Preview Sandbox) -->
+          <!-- 全功能即時互動物理沙盒 (Live Interactive Physics Sandbox) -->
           <div class="bg-[#141617] border border-[#fe8019]/40 p-5 rounded-xl flex flex-col gap-3 shadow-inner">
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between flex-wrap gap-2">
               <span class="font-mono text-xs text-[#fe8019] flex items-center gap-1.5 font-semibold">
                 <span class="material-symbols-outlined text-[16px]">visibility</span>
-                <span>即時游標效果沙盒 (Live Interactive Sandbox)</span>
+                <span>即時游標效果沙盒 (Interactive Physics Sandbox)</span>
               </span>
-              <span class="font-mono text-[10px] text-[#a89984]">形變阻尼與呼吸渲染展示</span>
-            </div>
-            <div class="p-4 bg-[#1d2021] rounded-lg border border-[#3c3836] text-xs leading-relaxed text-[#ebdbb2] select-none">
-              <p>
-                「手指引導視線閱讀，眼睛會自然跟隨指尖移動，能減少視線回跳並提升專注與沉浸感。」
-              </p>
-              <div class="mt-3 flex items-center gap-3 font-mono text-[11px] text-[#a89984]">
-                <span>目前形態：<strong class="text-[#fabd2f]">{$vimConfigStore.shape}</strong></span>
-                <span>脈動動效：<strong class="text-[#fabd2f]">{$vimConfigStore.pulseMode}</strong></span>
-                <span>筆觸粗細：<strong class="text-[#fabd2f]">{$vimConfigStore.thickness}px</strong></span>
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  class="px-2 py-1 rounded bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#ebdbb2] hover:text-[#fe8019] font-mono text-[10px] transition-colors cursor-pointer"
+                  onclick={() => moveSandboxCursor(sandboxLineIdx, sandboxCharIdx - 1)}
+                  title="向左移動 (h)"
+                >
+                  ← h
+                </button>
+                <button
+                  type="button"
+                  class="px-2 py-1 rounded bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#ebdbb2] hover:text-[#fe8019] font-mono text-[10px] transition-colors cursor-pointer"
+                  onclick={() => moveSandboxCursor(sandboxLineIdx + 1, sandboxCharIdx)}
+                  title="向下移動 (j)"
+                >
+                  ↓ j
+                </button>
+                <button
+                  type="button"
+                  class="px-2 py-1 rounded bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#ebdbb2] hover:text-[#fe8019] font-mono text-[10px] transition-colors cursor-pointer"
+                  onclick={() => moveSandboxCursor(sandboxLineIdx - 1, sandboxCharIdx)}
+                  title="向上移動 (k)"
+                >
+                  ↑ k
+                </button>
+                <button
+                  type="button"
+                  class="px-2 py-1 rounded bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#ebdbb2] hover:text-[#fe8019] font-mono text-[10px] transition-colors cursor-pointer"
+                  onclick={() => moveSandboxCursor(sandboxLineIdx, sandboxCharIdx + 1)}
+                  title="向右移動 (l)"
+                >
+                  → l
+                </button>
+                <button
+                  type="button"
+                  class="px-2 py-1 rounded bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#fabd2f] font-mono text-[10px] transition-colors cursor-pointer"
+                  onclick={() => {
+                    const nextW = getNextWordOffset(sandboxLines[sandboxLineIdx], sandboxCharIdx);
+                    moveSandboxCursor(sandboxLineIdx, nextW);
+                  }}
+                  title="下一詞首 (w)"
+                >
+                  w 詞首
+                </button>
+                <button
+                  type="button"
+                  class="px-2 py-1 rounded bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#fabd2f] font-mono text-[10px] transition-colors cursor-pointer"
+                  onclick={() => {
+                    const endW = getWordEndOffset(sandboxLines[sandboxLineIdx], sandboxCharIdx);
+                    moveSandboxCursor(sandboxLineIdx, endW);
+                  }}
+                  title="詞尾 (e)"
+                >
+                  e 詞尾
+                </button>
+                <button
+                  type="button"
+                  class="px-2.5 py-1 rounded bg-[#fe8019]/20 hover:bg-[#fe8019]/30 border border-[#fe8019]/50 text-[#fe8019] font-mono text-[10px] font-semibold transition-colors cursor-pointer flex items-center gap-1 shadow-sm"
+                  onclick={triggerBounceDemo}
+                  title="自動跨行跳躍展示梯形彈簧超調效果"
+                >
+                  <span class="material-symbols-outlined text-[13px]">bolt</span>
+                  <span>⚡ 物理彈跳演練</span>
+                </button>
               </div>
+            </div>
+
+            <!-- 可獲取焦點與鍵盤監聽的沙盒主體 (tabindex=0) -->
+            <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+            <div
+              bind:this={sandboxContainerEl}
+              tabindex="0"
+              class="relative p-5 bg-[#1d2021] rounded-xl border transition-all cursor-text outline-none select-none overflow-hidden {sandboxIsFocused ? 'border-[#fe8019] ring-2 ring-[#fe8019]/30 shadow-lg' : 'border-[#3c3836] hover:border-[#504945]'}"
+              onfocus={() => {
+                sandboxIsFocused = true;
+                updateSandboxTarget(false);
+              }}
+              onblur={() => sandboxIsFocused = false}
+              onkeydown={handleSandboxKeydown}
+            >
+              <!-- 聚焦引導提示條 -->
+              <div class="mb-3 flex items-center justify-between font-mono text-[10px] text-[#a89984] border-b border-[#3c3836]/60 pb-2">
+                <span class="flex items-center gap-1.5 {sandboxIsFocused ? 'text-[#b8bb26]' : 'text-[#a89984]'}">
+                  <span class="w-1.5 h-1.5 rounded-full {sandboxIsFocused ? 'bg-[#b8bb26] animate-ping' : 'bg-[#a89984]'}"></span>
+                  <span>{sandboxIsFocused ? '已獲取鍵盤焦點：可直接按 h, j, k, l, w, b, e 鍵位操作' : '點擊此區塊啟用鍵盤測試，或直接點擊任一字元吸附'}</span>
+                </span>
+                <span class="text-[#fe8019]">彈跳強度：{$vimConfigStore.bounceStrength ?? 60}%</span>
+              </div>
+
+              <!-- 示範文字段落（每個字元支援點擊吸附） -->
+              <div class="flex flex-col gap-2 font-mono text-sm leading-relaxed text-[#ebdbb2]">
+                {#each sandboxLines as line, lIdx}
+                  <div class="flex flex-wrap items-center">
+                    {#each Array.from(line) as char, cIdx}
+                      <!-- svelte-ignore a11y_click_events_have_key_events -->
+                      <span
+                        data-sb-line={lIdx}
+                        data-sb-char={cIdx}
+                        class="inline-block transition-colors rounded-xs cursor-pointer hover:bg-[#3c3836]/60 {sandboxLineIdx === lIdx && sandboxCharIdx === cIdx ? 'text-[#fe8019] font-bold' : ''}"
+                        onclick={() => moveSandboxCursor(lIdx, cIdx)}
+                      >
+                        {char === ' ' ? '\u00A0' : char}
+                      </span>
+                    {/each}
+                  </div>
+                {/each}
+              </div>
+
+              <!-- 沙盒專屬物理游標圖層 -->
+              <div
+                bind:this={sandboxCursorDiv}
+                class="absolute pointer-events-none select-none {sandboxPulseClass}"
+                style="
+                  z-index: 20;
+                  left: 0;
+                  top: 0;
+                  width: 12px;
+                  height: 20px;
+                  transform-origin: center center;
+                "
+                aria-hidden="true"
+              ></div>
+            </div>
+
+            <!-- 當前物理與形態狀態遙測膠囊 -->
+            <div class="flex items-center gap-4 font-mono text-[11px] text-[#a89984] px-1 flex-wrap">
+              <span>游標形態：<strong class="text-[#fabd2f]">{$vimConfigStore.shape}</strong></span>
+              <span>脈動動效：<strong class="text-[#fabd2f]">{$vimConfigStore.pulseMode}</strong></span>
+              <span>筆觸線寬：<strong class="text-[#fabd2f]">{($vimConfigStore.thickness ?? 1.5).toFixed(1)}px</strong></span>
+              <span>光暈半徑：<strong class="text-[#fabd2f]">{$vimConfigStore.glowRadius ?? 0}px</strong></span>
             </div>
           </div>
         {/if}
@@ -944,3 +1360,36 @@
     {/if}
   </main>
 </div>
+
+<style>
+  /* 經典淡入淡出閃爍 (Blink 1.1s) */
+  @keyframes vim-blink-kf {
+    0%   { opacity: 1; }
+    52%  { opacity: 1; }
+    63%  { opacity: 0; }
+    88%  { opacity: 0; }
+    100% { opacity: 1; }
+  }
+  :global(.animate-vim-blink) {
+    animation: vim-blink-kf 1.1s ease-in-out infinite !important;
+  }
+
+  /* 禪意深邃呼吸光暈 (Breathe 3.0s 雙層光暈) */
+  @keyframes vim-breathe-kf {
+    0%   {
+      opacity: 0.35;
+      filter: drop-shadow(0 0 1px rgba(254, 128, 25, 0.25));
+    }
+    50%  {
+      opacity: 1.0;
+      filter: drop-shadow(0 0 8px rgba(254, 128, 25, 0.85));
+    }
+    100% {
+      opacity: 0.35;
+      filter: drop-shadow(0 0 1px rgba(254, 128, 25, 0.25));
+    }
+  }
+  :global(.animate-vim-breathe) {
+    animation: vim-breathe-kf 3.0s ease-in-out infinite !important;
+  }
+</style>

@@ -37,3 +37,35 @@
   --font-mono: "JetBrains Mono", Consolas, monospace;
   --font-sans: "Geist", "Inter", sans-serif;
 }
+
+/* ── Vim 心流游標脈動動畫 (Global Vim Pulse Animations) ── */
+@keyframes vim-blink-kf {
+  0%   { opacity: 1; }
+  52%  { opacity: 1; }
+  63%  { opacity: 0; }
+  88%  { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes vim-breathe-kf {
+  0%   {
+    opacity: 0.35;
+    filter: drop-shadow(0 0 1px rgba(254, 128, 25, 0.25));
+  }
+  50%  {
+    opacity: 1.0;
+    filter: drop-shadow(0 0 8px rgba(254, 128, 25, 0.85));
+  }
+  100% {
+    opacity: 0.35;
+    filter: drop-shadow(0 0 1px rgba(254, 128, 25, 0.25));
+  }
+}
+
+.animate-vim-blink {
+  animation: vim-blink-kf 1.1s ease-in-out infinite;
+}
+
+.animate-vim-breathe {
+  animation: vim-breathe-kf 3.0s ease-in-out infinite;
+}

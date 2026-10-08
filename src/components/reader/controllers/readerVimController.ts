@@ -6,6 +6,7 @@ import {
   setVimHelpOpen
 } from '../../../stores/vimCursorStore';
 import { countWords, countPreciseWords } from '../../../stores/flowStore';
+import { getNextWordOffset, getPrevWordOffset, getWordEndOffset } from '../../../utils/wordNavigator';
 import { get } from 'svelte/store';
 
 export interface CursorReadingPos {
@@ -710,14 +711,13 @@ export class ReaderVimController {
       return;
     }
 
-    // w: 跳至下一詞
+    // w: 跳至下一詞（支援中英數 CJK 智慧分詞）
     if (key === 'w') {
       e.preventDefault();
       this.preferredColLeft = null;
-      const after = curPara.text.slice(this.currentCharIndex);
-      const match = after.match(/\s+\S/);
-      if (match && match.index !== undefined) {
-        this.currentCharIndex += match.index + match[0].length - 1;
+      const nextOffset = getNextWordOffset(curPara.text, this.currentCharIndex);
+      if (nextOffset < curPara.text.length && nextOffset > this.currentCharIndex) {
+        this.currentCharIndex = nextOffset;
         this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
         this.recordPositionChange(curPara.secId, curPara.pIndex, this.currentCharIndex, curPara.text, callbacks.onCursorProgress);
         callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
@@ -730,14 +730,13 @@ export class ReaderVimController {
       return;
     }
 
-    // b: 跳至上一詞
+    // b: 跳至上一詞（支援中英數 CJK 智慧分詞）
     if (key === 'b') {
       e.preventDefault();
       this.preferredColLeft = null;
-      const before = curPara.text.slice(0, this.currentCharIndex);
-      const match = before.match(/\S+\s*$/);
-      if (match && match.index !== undefined && match.index < this.currentCharIndex) {
-        this.currentCharIndex = match.index;
+      const prevOffset = getPrevWordOffset(curPara.text, this.currentCharIndex);
+      if (prevOffset < this.currentCharIndex && prevOffset >= 0) {
+        this.currentCharIndex = prevOffset;
         this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
         this.recordPositionChange(curPara.secId, curPara.pIndex, this.currentCharIndex, curPara.text, callbacks.onCursorProgress, 'regression');
         callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
@@ -751,6 +750,62 @@ export class ReaderVimController {
         this.currentCharIndex = Math.max(0, prev.text.length - 1);
         this.recordPositionChange(prev.secId, prev.pIndex, this.currentCharIndex, prev.text, callbacks.onCursorProgress, 'regression');
         callbacks.onParagraphClick(prev.secId, prev.pIndex, prev.text, this.currentCharIndex);
+      }
+      return;
+    }
+
+    // e: 跳至當前/下一詞末尾（支援中英數 CJK 智慧分詞）
+    if (key === 'e') {
+      e.preventDefault();
+      this.preferredColLeft = null;
+      const endOffset = getWordEndOffset(curPara.text, this.currentCharIndex);
+      if (endOffset > this.currentCharIndex && endOffset < curPara.text.length) {
+        this.currentCharIndex = endOffset;
+        this.syncCursor(curPara.secId, curPara.pIndex, this.currentCharIndex, true);
+        this.recordPositionChange(curPara.secId, curPara.pIndex, this.currentCharIndex, curPara.text, callbacks.onCursorProgress);
+        callbacks.onSyncFocus(curPara.secId, curPara.pIndex, curPara.text);
+      } else if (curIdx < paras.length - 1) {
+        const next = paras[curIdx + 1];
+        const nextEnd = getWordEndOffset(next.text, 0);
+        this.currentCharIndex = nextEnd;
+        this.recordPositionChange(next.secId, next.pIndex, nextEnd, next.text, callbacks.onCursorProgress);
+        callbacks.onParagraphClick(next.secId, next.pIndex, next.text, nextEnd);
+      }
+      return;
+    }
+
+    // d: 向下滾動半頁 (Half Page Down)
+    if (key === 'd') {
+      e.preventDefault();
+      if (!this.scrollContainer) return;
+      const viewH = this.scrollContainer.clientHeight;
+      const targetScroll = this.scrollContainer.scrollTop + viewH * 0.45;
+      animateScrollTo(this.scrollContainer, targetScroll, 260);
+
+      const targetIdx = Math.min(paras.length - 1, curIdx + 3);
+      if (targetIdx !== curIdx) {
+        const targetPara = paras[targetIdx];
+        this.currentCharIndex = 0;
+        this.recordPositionChange(targetPara.secId, targetPara.pIndex, 0, targetPara.text, callbacks.onCursorProgress);
+        callbacks.onParagraphClick(targetPara.secId, targetPara.pIndex, targetPara.text, 0);
+      }
+      return;
+    }
+
+    // u: 向上滾動半頁 (Half Page Up)
+    if (key === 'u') {
+      e.preventDefault();
+      if (!this.scrollContainer) return;
+      const viewH = this.scrollContainer.clientHeight;
+      const targetScroll = Math.max(0, this.scrollContainer.scrollTop - viewH * 0.45);
+      animateScrollTo(this.scrollContainer, targetScroll, 260);
+
+      const targetIdx = Math.max(0, curIdx - 3);
+      if (targetIdx !== curIdx) {
+        const targetPara = paras[targetIdx];
+        this.currentCharIndex = 0;
+        this.recordPositionChange(targetPara.secId, targetPara.pIndex, 0, targetPara.text, callbacks.onCursorProgress, 'regression');
+        callbacks.onParagraphClick(targetPara.secId, targetPara.pIndex, targetPara.text, 0);
       }
       return;
     }

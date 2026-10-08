@@ -516,8 +516,12 @@
               <span class="text-[#a89984]">{$t('vim.moveLine')}</span>
             </div>
             <div class="flex justify-between items-center py-0.5">
-              <span class="text-[#fabd2f] font-bold">w / b</span>
-              <span class="text-[#a89984]">{$t('vim.moveWord')}</span>
+              <span class="text-[#fabd2f] font-bold">w / b / e</span>
+              <span class="text-[#a89984]">跳至下一詞 / 上一詞 / 詞尾</span>
+            </div>
+            <div class="flex justify-between items-center py-0.5">
+              <span class="text-[#fabd2f] font-bold">u / d</span>
+              <span class="text-[#a89984]">向上 / 向下跳轉半頁</span>
             </div>
             <div class="flex justify-between items-center py-0.5">
               <span class="text-[#fabd2f] font-bold">0 / $</span>
