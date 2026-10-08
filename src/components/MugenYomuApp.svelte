@@ -7,7 +7,7 @@
   import CitationGraphView from './citation/CitationGraphView.svelte';
   import CognitiveNotesView from './notes/CognitiveNotesView.svelte';
   import DerivationsFiguresView from './reader/DerivationsFiguresView.svelte';
-  import SettingsModal from './settings/SettingsModal.svelte';
+  import SettingsView from './settings/SettingsView.svelte';
   import ImportPaperModal from './repository/ImportPaperModal.svelte';
   import DeletePaperConfirmModal from './common/DeletePaperConfirmModal.svelte';
 
@@ -37,11 +37,10 @@
   import { isRailCollapsedStore, setRailCollapsed } from '../stores/layoutStore';
 
   // --- App View & Studio Modes ---
-  let currentMainView: 'workspace' | 'repository' | 'citation-graph' | 'notes' | 'formula-lab' = 'workspace';
+  let currentMainView: 'workspace' | 'repository' | 'citation-graph' | 'notes' | 'formula-lab' | 'settings' = 'workspace';
   let readingMode: 'bilingual' | 'split' | 'zen' | 'figures' = 'bilingual';
   let isPdfDrawerOpen: boolean = false;
   let zoomLevel: number = 100;
-  let isByokOpen: boolean = false;
   let isImportOpen: boolean = false;
   let isDeleteDirectModalOpen: boolean = false;
   let paperToDeleteDirect: PaperDocument | null = null;
@@ -189,16 +188,16 @@
     }
   }
 
-  let prevByokOrImport = false;
+  let prevModalsOpen = false;
   // 彈窗開啟時立即關閉 Vim 游標；關閉時自動恢復游標
   $: {
-    const isAnyAppModalOpen = isByokOpen || isImportOpen;
-    if (isAnyAppModalOpen && !prevByokOrImport) {
+    const isAnyAppModalOpen = isImportOpen || isDeleteDirectModalOpen;
+    if (isAnyAppModalOpen && !prevModalsOpen) {
       deactivateCursor();
-    } else if (!isAnyAppModalOpen && prevByokOrImport) {
+    } else if (!isAnyAppModalOpen && prevModalsOpen) {
       activateCursor();
     }
-    prevByokOrImport = isAnyAppModalOpen;
+    prevModalsOpen = isAnyAppModalOpen;
   }
 
   // 全域事件委派：點擊任何 Modal 或遮罩層時，立即隱藏/關閉 Vim 游標
@@ -350,6 +349,7 @@
       currentMainView === 'notes' ? 'cognitive-notes' :
       currentMainView === 'citation-graph' ? 'citation-graph' :
       currentMainView === 'formula-lab' ? 'prompt-formula-lab' :
+      currentMainView === 'settings' ? 'system-settings' :
       'reading-workspace'
     }
     paperCount={paperLibrary.length}
@@ -370,6 +370,8 @@
           setPaper(paperLibrary[0]);
         }
         currentMainView = 'formula-lab';
+      } else if (data.path === 'system-settings') {
+        currentMainView = 'settings';
       } else if (data.path === 'reading-workspace') {
         currentMainView = 'workspace';
       }
@@ -392,7 +394,7 @@
       onmodeChange={handleModeChange}
       onzoomChange={handleZoomChange}
       ontogglePdfDrawer={() => isPdfDrawerOpen = !isPdfDrawerOpen}
-      onopenSettings={() => isByokOpen = true}
+      onopenSettings={() => currentMainView = 'settings'}
       onopenRepository={() => currentMainView = 'repository'}
       onopenImport={() => isImportOpen = true}
       onexportNotes={() => currentMainView = 'notes'}
@@ -452,6 +454,12 @@
           onsaveNote={handleSaveNoteFromFormula}
           onupdatePaper={(data) => handleUpdatePaper(data)}
         />
+      {:else if currentMainView === 'settings'}
+        <!-- Full-Page System & LLM Settings Studio View -->
+        <SettingsView
+          onbackToWorkspace={() => currentMainView = 'workspace'}
+          onsave={handleByokSave}
+        />
       {:else}
         <!-- Reading Workspace Studio View -->
         <ReadingWorkspaceView
@@ -462,7 +470,7 @@
           bind:isPdfDrawerOpen
           onupdatePaper={handleUpdatePaper}
           onimportPaper={handleDirectImportPaper}
-          onopenSettings={() => isByokOpen = true}
+          onopenSettings={() => currentMainView = 'settings'}
           onexportNotes={() => currentMainView = 'notes'}
           onrefreshCacheStats={refreshCacheStats}
         />
@@ -475,15 +483,8 @@
     bind:isOpen={isImportOpen}
     currentLibrary={paperLibrary}
     onpaperLoaded={handlePaperLoaded}
-    onopenSettings={() => { isImportOpen = false; isByokOpen = true; }}
+    onopenSettings={() => { isImportOpen = false; currentMainView = 'settings'; }}
     onclose={() => isImportOpen = false}
-  />
-
-  <!-- System & LLM Settings Modal -->
-  <SettingsModal
-    bind:isOpen={isByokOpen}
-    onsave={handleByokSave}
-    onclose={() => isByokOpen = false}
   />
 
   <!-- 風格化刪除確認 Modal (從 Header 快捷觸發) -->

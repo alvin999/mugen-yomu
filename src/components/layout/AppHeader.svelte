@@ -192,6 +192,18 @@
           <span class="material-symbols-outlined text-[12px]">arrow_back</span>
           <span>{$t('nav.backToWorkspace')}</span>
         </button>
+      {:else if currentMainView === 'settings'}
+        <span class="text-[#ebdbb2] font-semibold flex items-center gap-1.5 truncate">
+          <span class="material-symbols-outlined text-[15px] text-[#fe8019]">settings</span>
+          <span>{$t('rail.settings') || '系統設定'}</span>
+        </span>
+        <button
+          class="ml-2 px-2 py-0.5 bg-[#282828] hover:bg-[#32302f] border border-[#3c3836] text-[#fe8019] font-mono rounded text-[11px] flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+          onclick={backToWorkspace}
+        >
+          <span class="material-symbols-outlined text-[12px]">arrow_back</span>
+          <span>{$t('nav.backToWorkspace')}</span>
+        </button>
       {:else}
         <span class="text-[#ebdbb2] font-medium truncate max-w-[220px]" title={activePaper?.title}>
           {activePaper?.title || $t('header.loadingPaper')}
@@ -455,7 +467,7 @@
       >
         <span class="material-symbols-outlined text-[16px]">draw</span>
       </button>
-      <button class="w-7 h-7 rounded-lg flex items-center justify-center text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2] transition-colors cursor-pointer" onclick={openSettings} title={$t('header.settingsTooltip')}>
+      <button class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer {currentMainView === 'settings' ? 'bg-[#3c3836] text-[#fe8019]' : 'text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2]'}" onclick={openSettings} title={$t('header.settingsTooltip')}>
         <span class="material-symbols-outlined text-[16px]">settings</span>
       </button>
     </div>

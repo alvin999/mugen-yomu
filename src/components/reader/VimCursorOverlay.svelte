@@ -161,6 +161,13 @@
   function applyDivStyle(sx: number, sy: number, rotX: number = 0, rotY: number = 0) {
     if (!cursorDiv) return;
 
+    const cfg = $vimConfigStore;
+    const isUnderline = cfg.shape === 'underline';
+    const isHollow = cfg.shape === 'hollow';
+    const thickness = Math.max(1, cfg.thickness ?? 1.5);
+    const rad = Math.max(0, cfg.borderRadius ?? 1.5);
+    const glow = Math.max(0, cfg.glowRadius ?? 0);
+
     const baseW = Math.max(4, targetW);
     const baseH = Math.max(8, targetH);
 
@@ -172,10 +179,34 @@
     const ox = Math.round((baseW - w) / 2);
     const oy = Math.round((baseH - h) / 2);
 
+    const actualH = isUnderline ? Math.max(2, Math.round(thickness)) : h;
+    const actualTop = isUnderline ? Math.round(dispY + baseH - actualH) : (Math.round(dispY) + oy);
+
     cursorDiv.style.left   = `${Math.round(dispX) + ox}px`;
-    cursorDiv.style.top    = `${Math.round(dispY) + oy}px`;
+    cursorDiv.style.top    = `${actualTop}px`;
     cursorDiv.style.width  = `${w}px`;
-    cursorDiv.style.height = `${h}px`;
+    cursorDiv.style.height = `${actualH}px`;
+    cursorDiv.style.borderRadius = `${rad}px`;
+
+    if (isUnderline) {
+      cursorDiv.style.backgroundColor = 'rgba(254, 128, 25, 0.95)';
+      cursorDiv.style.outline = 'none';
+    } else if (isHollow) {
+      cursorDiv.style.backgroundColor = 'rgba(254, 128, 25, 0.04)';
+      cursorDiv.style.outline = `${thickness}px solid rgba(254, 128, 25, 0.95)`;
+      cursorDiv.style.outlineOffset = '-1px';
+    } else {
+      // block
+      cursorDiv.style.backgroundColor = 'rgba(254, 128, 25, 0.24)';
+      cursorDiv.style.outline = `${thickness}px solid rgba(254, 128, 25, 0.92)`;
+      cursorDiv.style.outlineOffset = '-1px';
+    }
+
+    if (glow > 0) {
+      cursorDiv.style.boxShadow = `0 0 ${glow * 2}px rgba(254, 128, 25, 0.65)`;
+    } else {
+      cursorDiv.style.boxShadow = 'none';
+    }
 
     // 透過 3D 透視產生自然動態
     if (rotX !== 0 || rotY !== 0) {
@@ -194,7 +225,14 @@
   });
 
   $: isVimActive = $vimConfigStore.isVimEnabled && $vimCursorState.active;
-  $: isBlinking  = $vimConfigStore.isBlinkEnabled && !$vimCursorState.isMoving;
+  $: pulseMode = $vimConfigStore.pulseMode || ($vimConfigStore.isBlinkEnabled ? 'blink' : 'steady');
+  $: pulseClass = $vimCursorState.isMoving
+    ? ''
+    : pulseMode === 'breathe'
+      ? 'animate-vim-breathe'
+      : pulseMode === 'blink'
+        ? 'animate-vim-blink'
+        : '';
 
   // display 可見性：用獨立 reactive 語句直接操作 DOM
   $: if (cursorDiv && mounted) {
@@ -204,11 +242,11 @@
 
 <!--
   游標方塊：動態屬性由 applyDivStyle() 直接操作 DOM 更新，
-  結合呼吸閃爍與物理平滑動態
+  結合呼吸閃爍/禪意呼吸與物理平滑動態
 -->
 <div
   bind:this={cursorDiv}
-  class="fixed pointer-events-none select-none {isBlinking ? 'animate-vim-blink' : ''}"
+  class="fixed pointer-events-none select-none {pulseClass}"
   style="
     z-index: 35;
     display: none;
@@ -216,10 +254,6 @@
     top: 0;
     width: 9px;
     height: 18px;
-    background-color: rgba(254, 128, 25, 0.22);
-    outline: 1.5px solid rgba(254, 128, 25, 0.92);
-    outline-offset: -1px;
-    border-radius: 1.5px;
     transform-origin: center center;
   "
   aria-hidden="true"
@@ -236,5 +270,15 @@
   }
   .animate-vim-blink {
     animation: vim-blink-kf 1.1s ease-in-out infinite;
+  }
+
+  /* 禪意深邃呼吸光暈 (3.0s 週期) */
+  @keyframes vim-breathe-kf {
+    0%   { opacity: 0.35; filter: drop-shadow(0 0 1px rgba(254, 128, 25, 0.2)); }
+    50%  { opacity: 1.0;  filter: drop-shadow(0 0 5px rgba(254, 128, 25, 0.7)); }
+    100% { opacity: 0.35; filter: drop-shadow(0 0 1px rgba(254, 128, 25, 0.2)); }
+  }
+  .animate-vim-breathe {
+    animation: vim-breathe-kf 3.0s ease-in-out infinite;
   }
 </style>

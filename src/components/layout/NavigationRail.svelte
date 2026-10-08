@@ -37,7 +37,8 @@
     { id: 'paper-repository', label: $t('rail.repo'), icon: 'library_books' },
     { id: 'citation-graph', label: $t('rail.citation'), icon: 'hub' },
     { id: 'cognitive-notes', label: $t('rail.notes'), icon: 'draw' },
-    { id: 'prompt-formula-lab', label: $t('rail.formula'), icon: 'functions' }
+    { id: 'prompt-formula-lab', label: $t('rail.formula'), icon: 'functions' },
+    { id: 'system-settings', label: $t('rail.settings') || '系統設定', icon: 'settings' }
   ]);
 
   function toggleCollapse() {

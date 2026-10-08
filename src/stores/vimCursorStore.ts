@@ -7,11 +7,19 @@ export interface CursorRect {
   height: number;
 }
 
+export type CursorShape = 'block' | 'hollow' | 'underline';
+export type PulseMode = 'blink' | 'breathe' | 'steady';
+
 export interface VimConfig {
   isVimEnabled: boolean;
-  isBlinkEnabled: boolean;
+  isBlinkEnabled: boolean; // 保留相容舊版屬性
+  pulseMode: PulseMode; // 'blink' (經典閃爍) | 'breathe' (禪意呼吸) | 'steady' (常駐微光)
+  shape: CursorShape; // 'block' (實心方塊) | 'hollow' (空心外框) | 'underline' (閱讀底線)
   bounceStrength: number; // 彈跳強度：0 (關閉/無彈跳) ~ 100 (最大彈性)，預設 60
   cursorColor: string;
+  thickness: number; // 筆觸/框線粗細 (px)：1 ~ 3，預設 1.5
+  borderRadius: number; // 圓角半徑 (px)：0 ~ 4，預設 1.5
+  glowRadius: number; // 微光暈擴散半徑 (px)：0 ~ 12，預設 0
   isSmoothScrollEnabled: boolean; // 跨段落平滑捲動：跨段或長距離導航時提供流暢視線引導
 }
 
@@ -20,8 +28,13 @@ const CONFIG_STORAGE_KEY = 'mugen_vim_cursor_config';
 const defaultConfig: VimConfig = {
   isVimEnabled: true,
   isBlinkEnabled: true,
+  pulseMode: 'blink',
+  shape: 'block',
   bounceStrength: 60,
   cursorColor: '#fe8019', // Gruvbox 經典亮橘
+  thickness: 1.5,
+  borderRadius: 1.5,
+  glowRadius: 0,
   isSmoothScrollEnabled: true
 };
 
@@ -31,9 +44,21 @@ function loadStoredConfig(): VimConfig {
     const raw = localStorage.getItem(CONFIG_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
+      // 相容舊版 isBlinkEnabled 升級為 pulseMode
+      const resolvedPulseMode: PulseMode = parsed.pulseMode
+        ? parsed.pulseMode
+        : parsed.isBlinkEnabled === false
+          ? 'steady'
+          : 'blink';
+
       return {
         ...defaultConfig,
         ...parsed,
+        pulseMode: resolvedPulseMode,
+        shape: parsed.shape || 'block',
+        thickness: typeof parsed.thickness === 'number' ? parsed.thickness : 1.5,
+        borderRadius: typeof parsed.borderRadius === 'number' ? parsed.borderRadius : 1.5,
+        glowRadius: typeof parsed.glowRadius === 'number' ? parsed.glowRadius : 0,
         bounceStrength: typeof parsed.bounceStrength === 'number' ? parsed.bounceStrength : 60,
         isSmoothScrollEnabled: typeof parsed.isSmoothScrollEnabled === 'boolean' ? parsed.isSmoothScrollEnabled : true
       };
