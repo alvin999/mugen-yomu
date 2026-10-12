@@ -17,6 +17,8 @@
   import { getStoredApiKey } from '../../services/cognitiveDispatcher';
   import { cleanPaperText } from '../../utils/paperTextSanitizer';
   import { pdfViewerStore } from '../../stores/pdfViewerStore';
+  import { clearPaperReadingState, clearLastReadingPosition } from '../../stores/readingStore';
+  import { resetSectionsProgress } from '../../utils/readingTreeUtils';
   import { get } from 'svelte/store';
   import { t } from '../../stores/localeStore';
 
@@ -501,16 +503,26 @@
 
   // --- Common Import Handler ---
   function importAndActivatePaper(paper: PaperDocument) {
+    // 匯入新文章時，重置/清除該文獻先前的任何閱讀進度與游標位置，確保從頭開始閱讀
+    clearLastReadingPosition(paper.id);
+    clearPaperReadingState(paper.id);
+
+    // 重置各章節進度狀態
+    const freshPaper: PaperDocument = {
+      ...paper,
+      sections: paper.sections ? resetSectionsProgress(paper.sections) : []
+    };
+
     // Check if already in library by ID
-    const exists = currentLibrary.some(p => p.id === paper.id);
+    const exists = currentLibrary.some(p => p.id === freshPaper.id);
     let updatedLibrary = exists
-      ? currentLibrary.map(p => p.id === paper.id ? paper : p)
-      : [paper, ...currentLibrary];
+      ? currentLibrary.map(p => p.id === freshPaper.id ? freshPaper : p)
+      : [freshPaper, ...currentLibrary];
 
     saveLibraryToStorage(updatedLibrary);
-    setActivePaperId(paper.id);
+    setActivePaperId(freshPaper.id);
 
-    onpaperLoaded?.({ paper, library: updatedLibrary });
+    onpaperLoaded?.({ paper: freshPaper, library: updatedLibrary });
     close();
   }
 </script>

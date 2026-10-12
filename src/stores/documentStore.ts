@@ -165,13 +165,26 @@ export async function saveLibraryToIndexedDB(library: PaperDocument[]): Promise<
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_PAPERS, 'readwrite');
       const store = tx.objectStore(STORE_PAPERS);
-      store.clear().onsuccess = () => {
-        for (const paper of library) {
-          store.put(paper);
+      
+      // 在同一個交易內連續排隊執行 clear 與 put，避免異步回調導致交易過早提交而報錯
+      store.clear();
+      for (const paper of library) {
+        if (paper && paper.id) {
+          // 確保以純物件寫入，移除任何可能造成結構化複製失敗的非常規屬性
+          const cleanPaper = JSON.parse(JSON.stringify(paper));
+          store.put(cleanPaper);
         }
-      };
+      }
+
       tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
+      tx.onerror = () => {
+        console.warn('寫入 IndexedDB 交易錯誤:', tx.error);
+        reject(tx.error);
+      };
+      tx.onabort = () => {
+        console.warn('寫入 IndexedDB 交易中止:', tx.error);
+        reject(tx.error);
+      };
     });
   } catch (e) {
     console.warn('寫入 IndexedDB 文獻庫失敗:', e);
@@ -243,15 +256,18 @@ export function getInitialLibrary(): PaperDocument[] {
     console.error('Failed to parse paper library from localStorage', e);
   }
 
-  saveLibraryToStorage(defaults);
+  // 注意：不要在此處執行 saveLibraryToStorage(defaults) 覆寫 IndexedDB！
+  // 避免非同步 IndexedDB 尚未完成或 LocalStorage 超限時誤將已存在的使用者文獻洗白
   return defaults;
 }
 
 export function saveLibraryToStorage(library: PaperDocument[]): void {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || !Array.isArray(library)) return;
 
   // 1. 永遠優先非同步寫入無容量限制之 IndexedDB（可容納數百 MB 電子書與 Base64 圖表）
-  saveLibraryToIndexedDB(library).catch(() => {});
+  saveLibraryToIndexedDB(library).catch((err) => {
+    console.warn('IndexedDB 儲存失敗:', err);
+  });
 
   // 2. 備援寫入 LocalStorage（若資料超過 5MB 拋出 QuotaExceeded 則優雅忽略，保護主儲存）
   try {

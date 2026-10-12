@@ -347,8 +347,9 @@
   // --- 閱讀進度保留 (有游標以游標為主，無游標以段落為主) ---
   let savePositionTimer: any = null;
 
-  function persistReadingPosition(forcedType?: 'cursor' | 'paragraph') {
-    if (!paper || !paper.id) return;
+  function persistReadingPosition(forcedType?: 'cursor' | 'paragraph', targetPaperId?: string) {
+    const pId = targetPaperId || paper?.id;
+    if (!pId) return;
 
     const isCursorActive = $vimConfigStore.isVimEnabled && $vimCursorState.active;
     const targetType = forcedType || (isCursorActive ? 'cursor' : 'paragraph');
@@ -361,7 +362,7 @@
       const pKey = `${secId}_${pIndex}`;
 
       const record: ReadingPositionRecord = {
-        paperId: paper.id,
+        paperId: pId,
         type: 'cursor',
         sectionId: secId,
         paraIndex: pIndex,
@@ -369,7 +370,7 @@
         charIndex,
         timestamp: Date.now()
       };
-      saveLastReadingPosition(paper.id, record);
+      saveLastReadingPosition(pId, record);
       return;
     }
 
@@ -404,14 +405,14 @@
 
     if (secId) {
       const record: ReadingPositionRecord = {
-        paperId: paper.id,
+        paperId: pId,
         type: 'paragraph',
         sectionId: secId,
         paraIndex: pIndex,
         paragraphKey: pKey || `${secId}_${pIndex}`,
         timestamp: Date.now()
       };
-      saveLastReadingPosition(paper.id, record);
+      saveLastReadingPosition(pId, record);
     }
   }
 
@@ -426,21 +427,28 @@
     if (!paper || !paper.id) return;
     const lastPos = loadLastReadingPosition(paper.id);
     if (!lastPos) {
-      // 若無歷史進度，執行原預設：捲動至焦點章節並在 Vim 啟用時選第一段
-      if (activeSectionId) {
+      // 若無歷史進度（新文章），強制自頂部開始瀏覽
+      if (scrollContainer) {
+        scrollContainer.scrollTop = 0;
+      }
+      const firstSecId = allSections[0]?.id || activeSectionId;
+      if (firstSecId) {
+        activeSectionId = firstSecId;
         isProgrammaticScrolling = true;
         setTimeout(() => {
-          scrollToTarget('sec-' + activeSectionId);
+          if (scrollContainer) scrollContainer.scrollTop = 0;
+          scrollToTarget('sec-' + firstSecId);
           setTimeout(() => { isProgrammaticScrolling = false; }, 500);
         }, 100);
       }
       setTimeout(() => {
-        if ($vimConfigStore.isVimEnabled && !$vimCursorState.active) {
-          const paras = getAllRenderedParas(scrollContainer, activeSectionId);
-          if (paras.length > 0) {
-            const first = paras[0];
-            focusedParagraphKey = first.key;
-            focusedParagraphText = first.text;
+        const targetSecId = firstSecId || activeSectionId;
+        const paras = getAllRenderedParas(scrollContainer, targetSecId);
+        if (paras.length > 0) {
+          const first = paras[0];
+          focusedParagraphKey = first.key;
+          focusedParagraphText = first.text;
+          if ($vimConfigStore.isVimEnabled) {
             vimController.syncCursor(first.secId, first.pIndex, 0, false);
           }
         }
@@ -495,10 +503,13 @@
       const isNewPaper = paper.id !== currentPaperId;
       if (isNewPaper) {
         if (currentPaperId) {
-          persistReadingPosition();
+          // 正確保存舊文章自身之閱讀進度，避免污染新文章
+          persistReadingPosition(undefined, currentPaperId);
         }
         currentPaperId = paper.id;
         passedParaKeys = new Set<string>();
+        focusedParagraphKey = '';
+        focusedParagraphText = '';
         restoreLastReadingPosition();
       }
       const allSecs = paper.sections ? flattenSections(paper.sections) : [];
@@ -1229,13 +1240,14 @@
         showToast('正在翻譯選取片段...');
         try {
           const res = await translateAcademicText(selText, p, k, m, o);
-          showToast(`譯文: ${res.slice(0, 80)}${res.length > 80 ? '...' : ''}`);
+          const transText = res.translation || '';
+          showToast(`譯文: ${transText.slice(0, 80)}${transText.length > 80 ? '...' : ''}`);
           const sec = allSections.find(s => s.id === secId) || { id: secId, title: secId };
           dispatch('readerAction', {
             action: 'focusCompanion',
             section: sec as ChapterSection,
             paragraphIndex: pIndex,
-            text: `【原文片段】\n${selText}\n\n【繁中釋義】\n${res}`
+            text: `【原文片段】\n${selText}\n\n【繁中釋義】\n${transText}`
           });
         } catch (err) {
           showToast('選取片段翻譯失敗');

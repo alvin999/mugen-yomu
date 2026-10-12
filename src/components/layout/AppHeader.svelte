@@ -3,7 +3,6 @@
   import type { CacheStats } from '../../services/cacheService';
   import { THEMES, currentTheme, setTheme } from '../../stores/themeStore';
   import { vimCursorState, vimConfigStore, updateVimConfig, setVimHelpOpen } from '../../stores/vimCursorStore';
-  import { toggleJumpMenu } from '../../stores/jumpStackStore';
   import {
     currentLocale,
     setLocale,
@@ -461,27 +460,10 @@
         {/if}
       </div>
 
-      <button
-        class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer {currentMainView === 'notes' ? 'bg-[#3c3836] text-[#fabd2f]' : 'text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2]'}"
-        onclick={exportNotes}
-        title={$t('header.notesTooltip')}
-      >
-        <span class="material-symbols-outlined text-[16px]">draw</span>
-      </button>
       <button class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer {currentMainView === 'settings' ? 'bg-[#3c3836] text-[#fe8019]' : 'text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#ebdbb2]'}" onclick={openSettings} title={$t('header.settingsTooltip')}>
         <span class="material-symbols-outlined text-[16px]">settings</span>
       </button>
     </div>
-
-    <!-- Neovim Jump Menu HUD (Ctrl+J / M) -->
-    <button
-      type="button"
-      class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer text-[#d5c4a1] hover:bg-[#3c3836] hover:text-[#fabd2f]"
-      onclick={() => toggleJumpMenu()}
-      title="Neovim Jump Menu HUD (Ctrl+J / M)"
-    >
-      <span class="material-symbols-outlined text-[16px]">swap_calls</span>
-    </button>
 
     <!-- Vim 操作說明指南 (取代頭像) -->
     <div class="relative" id="vim-help-container">

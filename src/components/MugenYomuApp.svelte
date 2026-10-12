@@ -26,6 +26,8 @@
   import {
     calculateReadingStats,
     loadPaperReadingState,
+    clearPaperReadingState,
+    clearLastReadingPosition,
     applyProgressToSections
   } from '../stores/readingStore';
   import { flowStore } from '../stores/flowStore';
@@ -223,6 +225,8 @@
   function handleDirectImportPaper(e: { paper: PaperDocument } | CustomEvent<{ paper: PaperDocument }>) {
     const detail = 'detail' in e ? e.detail : e;
     const paper = normalizePaper(detail.paper);
+    clearLastReadingPosition(paper.id);
+    clearPaperReadingState(paper.id);
     const exists = paperLibrary.some(p => p.id === paper.id);
     const updatedLibrary = exists
       ? paperLibrary.map(p => p.id === paper.id ? paper : p)
@@ -234,8 +238,12 @@
 
   function handlePaperLoaded(event: { paper: PaperDocument; library: PaperDocument[] } | CustomEvent<{ paper: PaperDocument; library: PaperDocument[] }>) {
     const detail = 'detail' in event ? event.detail : event;
+    const paper = normalizePaper(detail.paper);
+    clearLastReadingPosition(paper.id);
+    clearPaperReadingState(paper.id);
     paperLibrary = (detail.library || []).map(normalizePaper);
-    setPaper(normalizePaper(detail.paper));
+    saveLibraryToStorage(paperLibrary);
+    setPaper(paper);
   }
 
   function handleDeletePaperDirect(paperId: string) {
