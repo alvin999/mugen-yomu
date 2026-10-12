@@ -766,6 +766,28 @@ export class ReaderVimController {
     };
   }
 
+  /**
+   * 解析當前游標在渲染段落陣列中的索引位置
+   */
+  public resolveCurrentParagraphIndex(paras: RenderedPara[], fallbackKey?: string): number {
+    if (paras.length === 0) return -1;
+    if (this.currentParaKey) {
+      const idx = paras.findIndex(p => p.key === this.currentParaKey);
+      if (idx !== -1) return idx;
+    }
+    const cursorState = get(vimCursorState);
+    if (cursorState.active) {
+      const stateKey = `${cursorState.sectionId}_${cursorState.paraIndex}`;
+      const idx = paras.findIndex(p => p.key === stateKey);
+      if (idx !== -1) return idx;
+    }
+    if (fallbackKey) {
+      const idx = paras.findIndex(p => p.key === fallbackKey);
+      if (idx !== -1) return idx;
+    }
+    return 0;
+  }
+
   public handleKeydown(
     e: KeyboardEvent,
     callbacks: {
@@ -786,6 +808,8 @@ export class ReaderVimController {
       onClearSelection?: () => void;
     }
   ) {
+    if (isTypingContext(e.target)) return;
+
     if (e.key === 'Escape') {
       if (this.visualMode) {
         this.exitVisualMode(callbacks);
@@ -811,33 +835,48 @@ export class ReaderVimController {
       return;
     }
 
+    // ' 或 `: 按一下立即開啟跳轉歷史 HUD；若選單已開啟或 500ms 內連按兩次則回溯跳轉
+    // 支援 e.key 與 e.code (Quote/Backquote) 避免輸入法或 Dead Key 干擾
+    const isQuoteKey = (e.key === "'" || e.code === 'Quote') && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey;
+    const isBacktickKey = (e.key === '`' || e.code === 'Backquote') && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey;
+
+    if (isQuoteKey || isBacktickKey) {
+      e.preventDefault();
+      const now = Date.now();
+      const lastPress = isQuoteKey ? this.lastQuotePressTime : this.lastBacktickPressTime;
+      const isDouble = (now - lastPress < 500);
+
+      if (isQuoteKey) this.lastQuotePressTime = now;
+      if (isBacktickKey) this.lastBacktickPressTime = now;
+
+      const jumpState = get(jumpStackStore);
+      if (jumpState.isMenuOpen || isDouble) {
+        closeJumpMenu();
+        const paras = getAllRenderedParas(this.scrollContainer);
+        if (paras.length > 0) {
+          const curIdx = this.resolveCurrentParagraphIndex(paras, callbacks.focusedParagraphKey);
+          if (curIdx >= 0) {
+            this.performJumpReturn(paras, curIdx, callbacks, isQuoteKey);
+          }
+        }
+        return;
+      }
+
+      // 按一下：立即彈出歷史記錄選單
+      toggleJumpMenu(true);
+      return;
+    }
+
     const config = get(vimConfigStore);
     if (!config.isVimEnabled) return;
-    if (isTypingContext(e.target)) return;
     if (e.ctrlKey || e.altKey || e.metaKey) return;
 
     const paras = getAllRenderedParas(this.scrollContainer, callbacks.activeSectionId);
     if (paras.length === 0) return;
 
     const cursorState = get(vimCursorState);
-
-    // 優先用 controller 自身維護的 currentParaKey（無 Svelte 時序問題），
-    // 其次用 vimCursorState（updateCursorPosition 同步更新），
-    // 最後才用外部傳入的 focusedParagraphKey
-    let curIdx = -1;
-    if (this.currentParaKey) {
-      curIdx = paras.findIndex(p => p.key === this.currentParaKey);
-    }
-    if (curIdx === -1 && cursorState.active) {
-      const stateKey = `${cursorState.sectionId}_${cursorState.paraIndex}`;
-      curIdx = paras.findIndex(p => p.key === stateKey);
-    }
-    if (curIdx === -1) {
-      curIdx = paras.findIndex(p => p.key === callbacks.focusedParagraphKey);
-    }
-    if (curIdx === -1) {
-      curIdx = 0;
-    }
+    const curIdx = this.resolveCurrentParagraphIndex(paras, callbacks.focusedParagraphKey);
+    if (curIdx === -1) return;
     const curPara = paras[curIdx];
     const key = e.key;
 
@@ -1060,36 +1099,6 @@ export class ReaderVimController {
         this.recordPositionChange(targetPara.secId, targetPara.pIndex, 0, targetPara.text, callbacks.onCursorProgress, 'regression');
         callbacks.onParagraphClick(targetPara.secId, targetPara.pIndex, targetPara.text, 0);
       }
-      return;
-    }
-
-    // '': 開啟跳轉歷史 HUD，若 500ms 內連按兩次則直接執行 '' 跳轉 (段首)
-    if (key === "'") {
-      e.preventDefault();
-      const now = Date.now();
-      if (now - this.lastQuotePressTime < 500) {
-        this.lastQuotePressTime = 0;
-        closeJumpMenu();
-        this.performJumpReturn(paras, curIdx, callbacks, true);
-        return;
-      }
-      this.lastQuotePressTime = now;
-      toggleJumpMenu(true);
-      return;
-    }
-
-    // `: 開啟跳轉歷史 HUD，若 500ms 內連按兩次則直接執行 `` 跳轉 (精確位置)
-    if (key === '`') {
-      e.preventDefault();
-      const now = Date.now();
-      if (now - this.lastBacktickPressTime < 500) {
-        this.lastBacktickPressTime = 0;
-        closeJumpMenu();
-        this.performJumpReturn(paras, curIdx, callbacks, false);
-        return;
-      }
-      this.lastBacktickPressTime = now;
-      toggleJumpMenu(true);
       return;
     }
 

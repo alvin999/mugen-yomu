@@ -20,7 +20,7 @@
     if (!$jumpStackStore.isMenuOpen) return;
 
     // 再次按下 ' 立即執行 '' 跳轉回溯（段首）
-    if (e.key === "'") {
+    if (e.key === "'" || e.code === 'Quote') {
       e.preventDefault();
       e.stopPropagation();
       closeJumpMenu();
@@ -29,7 +29,7 @@
     }
 
     // 再次按下 ` 立即執行 `` 跳轉回溯（精確位置）
-    if (e.key === '`') {
+    if (e.key === '`' || e.code === 'Backquote') {
       e.preventDefault();
       e.stopPropagation();
       closeJumpMenu();
