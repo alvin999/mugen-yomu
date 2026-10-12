@@ -10,10 +10,12 @@ export interface JumpPoint {
   sectionTitle?: string;
   paraIndex: number;
   charIndex: number;
+  lineIndex?: number; // 視覺行號 (0-indexed，行導航)
+  lineStartCharIndex?: number; // 該行行首字元索引 (供 ' 跳轉行首使用)
   textSnippet: string; // 段落摘要（前 50 字元）
   progressPercent: number; // 全文閱讀進度百分比 (0 ~ 100)
   timestamp: number;
-  source: 'semantic' | 'jump' | 'manual' | 'scroll' | 'click';
+  source: 'semantic' | 'jump' | 'manual' | 'scroll' | 'click' | 'nav';
 }
 
 export interface JumpStackState {
@@ -97,13 +99,16 @@ export function closeJumpMenu() {
 }
 
 /**
- * 設定 HUD 當前鍵盤反白項目
+ * 設定 HUD 當前鍵盤反白項目（限制在顯示的前 9 筆範圍內）
  */
 export function setJumpMenuSelectedIndex(idx: number) {
-  jumpStackStore.update((s) => ({
-    ...s,
-    selectedIndex: Math.max(0, Math.min(s.stack.length - 1, idx))
-  }));
+  jumpStackStore.update((s) => {
+    const maxIdx = Math.max(0, Math.min(8, s.stack.length - 1));
+    return {
+      ...s,
+      selectedIndex: Math.max(0, Math.min(maxIdx, idx))
+    };
+  });
 }
 
 /**

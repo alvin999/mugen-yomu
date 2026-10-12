@@ -3,7 +3,8 @@ import {
   vimCursorState,
   updateCursorPosition,
   setVimHelpOpen,
-  setVimMode
+  setVimMode,
+  type CursorRect
 } from '../../../stores/vimCursorStore';
 import { countWords, countPreciseWords } from '../../../stores/flowStore';
 import { getNextWordOffset, getPrevWordOffset, getWordEndOffset } from '../../../utils/wordNavigator';
@@ -13,6 +14,7 @@ import {
   jumpStackStore,
   toggleJumpMenu,
   closeJumpMenu,
+  setJumpMenuSelectedIndex,
   type JumpPoint
 } from '../../../stores/jumpStackStore';
 import { get } from 'svelte/store';
@@ -177,6 +179,25 @@ export function getAllRenderedParas(scrollContainer: HTMLElement | null, fallbac
     const pIndex = parseInt(key.split('_').pop() || '0', 10);
     return { el, key, secId, pIndex, text };
   });
+}
+
+/**
+ * 依據游標所在字元位置，萃取前後約 25~30 個字元的鄰近上下文摘要
+ * 讓讀者能清晰辨識游標當下停留在句中的哪一句話或公式旁
+ */
+export function extractContextSnippetAroundChar(fullText: string, charIndex: number, radius = 28): string {
+  if (!fullText) return '';
+  const clean = fullText.replace(/\s+/g, ' ').trim();
+  if (clean.length <= radius * 2) return clean;
+
+  const validCharIdx = Math.max(0, Math.min(clean.length - 1, charIndex));
+  const start = Math.max(0, validCharIdx - radius);
+  const end = Math.min(clean.length, validCharIdx + radius);
+
+  const prefix = start > 0 ? '…' : '';
+  const suffix = end < clean.length ? '…' : '';
+
+  return `${prefix}${clean.slice(start, end).trim()}${suffix}`;
 }
 
 /**
@@ -491,6 +512,9 @@ export class ReaderVimController {
   public lastBacktickPressTime: number = 0;
   public lastReadingPos: CursorReadingPos | null = null;
   private lastHLTime: number = 0;
+  /** 追蹤讀者停留在某處靜止閱讀的出發錨點 (停留 > 600ms 自動註冊) */
+  public lastRestPosition: { secId: string; pIndex: number; charIndex: number; text: string; time: number } | null = null;
+  private restAnchorTimer: any = null;
 
   // VISUAL 模式狀態
   public visualMode: boolean = false;
@@ -526,6 +550,18 @@ export class ReaderVimController {
   }
 
   /**
+   * 游標在某處就位後啟動靜止計時，260ms 後自動登記為出發錨點並留存至跳轉堆疊
+   */
+  public noteCursorSettled(secId: string, pIndex: number, charIndex: number, text: string) {
+    if (this.restAnchorTimer) clearTimeout(this.restAnchorTimer);
+    this.restAnchorTimer = setTimeout(() => {
+      this.lastRestPosition = { secId, pIndex, charIndex, text, time: Date.now() };
+      // 讀者停留閱讀超過 260ms 即自動留存出發錨點（pushJumpPoint 具備 4 字元位移去重防抖）
+      this.recordCurrentJumpPoint('nav', { secId, pIndex, charIndex, text });
+    }, 260);
+  }
+
+  /**
    * 記錄當前游標閱讀位置至跳轉堆疊 (Jump Stack)
    * 支援外部提供出發點段落資訊（例如滑鼠跨段落點擊前留存前次段落）
    */
@@ -537,7 +573,6 @@ export class ReaderVimController {
     let secId = explicitPos?.secId;
     let pIndex = explicitPos?.pIndex;
     let charIndex = explicitPos?.charIndex ?? this.currentCharIndex;
-    let snippet = explicitPos?.text?.slice(0, 50).trim() || '';
     let paraKey = (secId && pIndex !== undefined) ? `${secId}_${pIndex}` : '';
 
     if (!paraKey) {
@@ -552,15 +587,49 @@ export class ReaderVimController {
     if (!secId || pIndex === undefined) return;
 
     const allParas = getAllRenderedParas(this.scrollContainer);
-    const curIdx = allParas.findIndex(p => p.paraKey === paraKey);
-    if (!snippet && curIdx >= 0) {
-      snippet = allParas[curIdx].text.slice(0, 50).trim();
-    }
+    // 依據段落 key 比對（RenderedPara 欄位為 key）
+    const curIdx = allParas.findIndex(p => p.key === paraKey);
+    const fullText = explicitPos?.text || (curIdx >= 0 ? allParas[curIdx].text : '');
+    // 以當前游標所在字元為中心，萃取前後鄰近字元預覽，讓讀者能精確判斷停留上下文
+    const snippet = extractContextSnippetAroundChar(fullText, charIndex, 28);
     const progress = allParas.length > 0 && curIdx >= 0 ? Math.round(((curIdx + 1) / allParas.length) * 100) : 0;
+
+    // 精確計算當前字元所屬的視覺行號 (lineIndex) 與該行行首字元 (lineStartCharIndex)
+    let lineIndex: number | undefined;
+    let lineStartCharIndex: number | undefined;
+    if (curIdx >= 0 && this.scrollContainer) {
+      try {
+        const containerRect = this.scrollContainer.getBoundingClientRect();
+        const visualLines = getParagraphVisualLines(
+          allParas[curIdx].el,
+          containerRect,
+          this.scrollContainer.scrollLeft,
+          this.scrollContainer.scrollTop
+        );
+        if (visualLines.length > 0) {
+          let minDiff = Infinity;
+          let bestLine = 0;
+          for (let l = 0; l < visualLines.length; l++) {
+            for (const c of visualLines[l]) {
+              const diff = Math.abs(c.index - charIndex);
+              if (diff < minDiff) {
+                minDiff = diff;
+                bestLine = l;
+              }
+            }
+          }
+          lineIndex = bestLine;
+          lineStartCharIndex = visualLines[bestLine][0]?.index ?? 0;
+        }
+      } catch (e) {}
+    }
+
     pushJumpPoint({
       sectionId: secId,
       paraIndex: pIndex,
       charIndex,
+      lineIndex,
+      lineStartCharIndex,
       textSnippet: snippet,
       progressPercent: progress,
       source
@@ -569,6 +638,8 @@ export class ReaderVimController {
 
   /**
    * 執行 Vim '' 與 `` 跳轉回溯
+   * toStart === true ('): 跳轉至該行的行首 (lineStartCharIndex)
+   * toStart === false (`): 精確跳轉至該字元 (charIndex)
    */
   private performJumpReturn(
     paras: RenderedPara[],
@@ -582,7 +653,7 @@ export class ReaderVimController {
       sectionId: curPara.secId,
       paraIndex: curPara.pIndex,
       charIndex: this.currentCharIndex,
-      textSnippet: curPara.text.slice(0, 50).trim(),
+      textSnippet: extractContextSnippetAroundChar(curPara.text, this.currentCharIndex, 28),
       progressPercent: paras.length > 0 ? Math.round(((curIdx + 1) / paras.length) * 100) : 0,
       timestamp: Date.now(),
       source: 'jump'
@@ -608,12 +679,24 @@ export class ReaderVimController {
     const targetPara = targetIdx >= 0 ? paras[targetIdx] : paras.find(p => p.secId === target!.sectionId);
 
     if (targetPara) {
-      const targetCharIdx = toStart ? 0 : Math.max(0, Math.min(targetPara.text.length - 1, target.charIndex));
+      // 復刻 Vim 原生語義：
+      // ' (toStart = true): 跳轉至該行的行首 (target.lineStartCharIndex ?? 0)
+      // ` (toStart = false): 精確跳轉至字元位置 (target.charIndex)
+      const targetCharIdx = toStart
+        ? Math.max(0, Math.min(targetPara.text.length - 1, target.lineStartCharIndex ?? 0))
+        : Math.max(0, Math.min(targetPara.text.length - 1, target.charIndex ?? 0));
+
       this.currentCharIndex = targetCharIdx;
       this.preferredColLeft = null;
       this.recordPositionChange(targetPara.secId, targetPara.pIndex, targetCharIdx, targetPara.text, callbacks.onCursorProgress, 'jump');
       callbacks.onParagraphClick(targetPara.secId, targetPara.pIndex, targetPara.text, targetCharIdx);
-      callbacks.onShowToast(toStart ? '已跳回前次錨點（段首）' : '已跳回前次錨點（精確位置）');
+
+      const lineDesc = target.lineIndex !== undefined ? `第 ${target.lineIndex + 1} 行` : '行首';
+      if (toStart) {
+        callbacks.onShowToast(`已跳回前次錨點（§ ${target.sectionTitle || target.sectionId} · ${lineDesc} 行首）`);
+      } else {
+        callbacks.onShowToast(`已跳回前次錨點（§ ${target.sectionTitle || target.sectionId} · 精確第 ${targetCharIdx} 字）`);
+      }
     } else {
       callbacks.onShowToast(`跳轉目標章節 ${target.sectionId} 未在畫面上渲染`);
     }
@@ -810,6 +893,79 @@ export class ReaderVimController {
   ) {
     if (isTypingContext(e.target)) return;
 
+    const activeJumpState = get(jumpStackStore);
+    if (activeJumpState.isMenuOpen) {
+      // HUD 開啟狀態：完全接管所有鍵盤導航，正文游標絕不跟隨移動！
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeJumpMenu();
+        return;
+      }
+      const isQuote = (e.key === "'" || e.code === 'Quote');
+      const isBacktick = (e.key === '`' || e.code === 'Backquote');
+      if (isQuote || isBacktick) {
+        e.preventDefault();
+        closeJumpMenu();
+        const paras = getAllRenderedParas(this.scrollContainer);
+        if (paras.length > 0) {
+          const curIdx = this.resolveCurrentParagraphIndex(paras, callbacks.focusedParagraphKey);
+          if (curIdx >= 0) {
+            this.performJumpReturn(paras, curIdx, callbacks, isQuote);
+          }
+        }
+        return;
+      }
+      const isDown = e.key === 'ArrowDown' || e.key === 'j' || e.key === 'J' || e.code === 'KeyJ' || e.code === 'ArrowDown';
+      const isUp = e.key === 'ArrowUp' || e.key === 'k' || e.key === 'K' || e.code === 'KeyK' || e.code === 'ArrowUp';
+
+      if (isDown) {
+        e.preventDefault();
+        const curState = get(jumpStackStore);
+        const total = Math.min(9, curState.stack.length);
+        if (total > 0) {
+          const nextIdx = (curState.selectedIndex + 1) % total;
+          setJumpMenuSelectedIndex(nextIdx);
+        }
+        return;
+      }
+      if (isUp) {
+        e.preventDefault();
+        const curState = get(jumpStackStore);
+        const total = Math.min(9, curState.stack.length);
+        if (total > 0) {
+          const prevIdx = (curState.selectedIndex - 1 + total) % total;
+          setJumpMenuSelectedIndex(prevIdx);
+        }
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const curState = get(jumpStackStore);
+        const target = curState.stack[curState.selectedIndex];
+        if (target) {
+          closeJumpMenu();
+          callbacks.onParagraphClick(target.sectionId, target.paraIndex, target.textSnippet, target.charIndex);
+          callbacks.onShowToast(`已跳至 § ${target.sectionTitle || target.sectionId} · 第 ${target.charIndex} 字`);
+        }
+        return;
+      }
+      const num = parseInt(e.key, 10);
+      if (!isNaN(num) && num >= 1 && num <= 9) {
+        const curState = get(jumpStackStore);
+        const target = curState.stack[num - 1];
+        if (target) {
+          e.preventDefault();
+          closeJumpMenu();
+          callbacks.onParagraphClick(target.sectionId, target.paraIndex, target.textSnippet, target.charIndex);
+          callbacks.onShowToast(`已跳至 § ${target.sectionTitle || target.sectionId} · 第 ${target.charIndex} 字`);
+        }
+        return;
+      }
+      // 攔截其他任何按鍵，防止滲透到正文游標
+      e.preventDefault();
+      return;
+    }
+
     if (e.key === 'Escape') {
       if (this.visualMode) {
         this.exitVisualMode(callbacks);
@@ -849,8 +1005,7 @@ export class ReaderVimController {
       if (isQuoteKey) this.lastQuotePressTime = now;
       if (isBacktickKey) this.lastBacktickPressTime = now;
 
-      const jumpState = get(jumpStackStore);
-      if (jumpState.isMenuOpen || isDouble) {
+      if (isDouble) {
         closeJumpMenu();
         const paras = getAllRenderedParas(this.scrollContainer);
         if (paras.length > 0) {
@@ -862,7 +1017,8 @@ export class ReaderVimController {
         return;
       }
 
-      // 按一下：立即彈出歷史記錄選單
+      // 按一下：在彈出歷史選單前先記錄當前游標位置，確保選單中包含剛才的閱讀出發錨點
+      this.recordCurrentJumpPoint('nav');
       toggleJumpMenu(true);
       return;
     }
@@ -879,6 +1035,22 @@ export class ReaderVimController {
     if (curIdx === -1) return;
     const curPara = paras[curIdx];
     const key = e.key;
+
+    // 若正要執行導航移動，且先前有靜止停留位置，自動將出發點儲存為 Jump Point！
+    const navKeys = ['j', 'J', 'k', 'K', 'h', 'H', 'l', 'L', 'w', 'W', 'b', 'B', 'e', 'E', '0', '$'];
+    if (navKeys.includes(key) && this.lastRestPosition) {
+      const rest = this.lastRestPosition;
+      this.lastRestPosition = null;
+      this.recordCurrentJumpPoint('nav', {
+        secId: rest.secId,
+        pIndex: rest.pIndex,
+        charIndex: rest.charIndex,
+        text: rest.text
+      });
+    }
+
+    // 啟動當前位置靜止計時，500ms 後登記為潛在出發錨點
+    this.noteCursorSettled(curPara.secId, curPara.pIndex, this.currentCharIndex, curPara.text);
 
     // 快捷鍵指南切換
     if (key === '?') {

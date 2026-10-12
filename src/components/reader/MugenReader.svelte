@@ -1404,7 +1404,7 @@
       if (vimController && scrollContainer) {
         const allParas = getAllRenderedParas(scrollContainer);
         const curPos = vimController.getCurrentCursorReadingPos();
-        const curIdx = allParas.findIndex(p => p.paraKey === curPos?.key);
+        const curIdx = allParas.findIndex(p => p.key === curPos?.key);
         if (curIdx >= 0) {
           vimController.performJumpReturnPublic(allParas, curIdx, {
             onParagraphClick: handleParagraphClick,
