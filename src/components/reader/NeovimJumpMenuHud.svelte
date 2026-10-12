@@ -99,6 +99,8 @@
         return { label: 'Vim 跳躍', color: 'bg-[#fabd2f]/15 border-[#fabd2f]/50 text-[#fabd2f]' };
       case 'scroll':
         return { label: '半頁視野', color: 'bg-[#83a598]/15 border-[#83a598]/50 text-[#83a598]' };
+      case 'click':
+        return { label: '滑鼠點擊', color: 'bg-[#8ec07c]/15 border-[#8ec07c]/50 text-[#8ec07c]' };
       default:
         return { label: '閱讀錨點', color: 'bg-[#fe8019]/15 border-[#fe8019]/50 text-[#fe8019]' };
     }
@@ -155,7 +157,7 @@
             <span class="material-symbols-outlined text-3xl text-[#504945]">history_toggle_off</span>
             <p class="text-xs font-medium text-[#ebdbb2]">目前尚無跳躍記錄</p>
             <p class="text-[11px] max-w-sm leading-relaxed">
-              當您使用語意搜尋、文首/文末跳轉（gg / G）或半頁快速導航時，系統將自動記錄跳躍點。隨時按 <kbd class="px-1 py-0.2 bg-[#282828] rounded border border-[#3c3836] text-[#fabd2f]">''</kbd> 或 <kbd class="px-1 py-0.2 bg-[#282828] rounded border border-[#3c3836] text-[#fabd2f]">``</kbd> 可原路返回。
+              當您點擊不同段落、使用語意搜尋、文首/文末跳轉（gg / G）或半頁快速導航時，系統將自動記錄跳躍點。隨時按 <kbd class="px-1 py-0.2 bg-[#282828] rounded border border-[#3c3836] text-[#fabd2f]">''</kbd> 或 <kbd class="px-1 py-0.2 bg-[#282828] rounded border border-[#3c3836] text-[#fabd2f]">``</kbd> 可原路返回。
             </p>
           </div>
         {:else}

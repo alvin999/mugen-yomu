@@ -567,7 +567,28 @@
 
   function handleParagraphClick(secId: string, pIndex: number, text: string, clickCharIdx?: number) {
     const key = `${secId}_${pIndex}`;
-    const isCross = focusedParagraphKey !== '' && focusedParagraphKey !== key;
+    const isCross = (focusedParagraphKey !== '' && focusedParagraphKey !== key) ||
+                    (vimController.currentParaKey !== '' && vimController.currentParaKey !== key);
+    const isSignificantIntraMove = !isCross && clickCharIdx !== undefined &&
+      Math.abs(clickCharIdx - vimController.currentCharIndex) >= 20;
+
+    // 跨段落跳轉或同段落顯著位移：在游標位置更新前，將出發點記錄至 Jump Stack（便於 ' 或 `` 隨時回溯）
+    if (isCross || isSignificantIntraMove) {
+      if (focusedParagraphKey) {
+        const parts = focusedParagraphKey.split('_');
+        const oldPIdx = parseInt(parts.pop() || '0', 10);
+        const oldSecId = parts.join('_');
+        vimController.recordCurrentJumpPoint('click', {
+          secId: oldSecId,
+          pIndex: oldPIdx,
+          charIndex: vimController.currentCharIndex,
+          text: focusedParagraphText
+        });
+      } else {
+        vimController.recordCurrentJumpPoint('click');
+      }
+    }
+
     focusedParagraphKey = key;
     focusedParagraphText = text;
     activeSectionId = secId;
@@ -798,6 +819,18 @@
     const pText = targetParaEl.getAttribute('data-para-text') || '';
     const pSecId = targetParaEl.getAttribute('data-sec-id') || cleanSecId;
     const pIndex = parseInt(pKey.split('_').pop() || '0', 10);
+
+    if (focusedParagraphKey && focusedParagraphKey !== pKey && vimController) {
+      const parts = focusedParagraphKey.split('_');
+      const oldPIdx = parseInt(parts.pop() || '0', 10);
+      const oldSecId = parts.join('_');
+      vimController.recordCurrentJumpPoint('jump', {
+        secId: oldSecId,
+        pIndex: oldPIdx,
+        charIndex: vimController.currentCharIndex,
+        text: focusedParagraphText
+      });
+    }
 
     focusedParagraphKey = pKey;
     focusedParagraphText = pText;

@@ -527,18 +527,40 @@ export class ReaderVimController {
 
   /**
    * 記錄當前游標閱讀位置至跳轉堆疊 (Jump Stack)
+   * 支援外部提供出發點段落資訊（例如滑鼠跨段落點擊前留存前次段落）
    */
-  public recordCurrentJumpPoint(source: JumpPoint['source'] = 'jump') {
-    const pos = this.getCurrentCursorReadingPos();
-    if (!pos || !this.scrollContainer) return;
+  public recordCurrentJumpPoint(
+    source: JumpPoint['source'] = 'jump',
+    explicitPos?: { secId: string; pIndex: number; charIndex?: number; text?: string }
+  ) {
+    if (!this.scrollContainer) return;
+    let secId = explicitPos?.secId;
+    let pIndex = explicitPos?.pIndex;
+    let charIndex = explicitPos?.charIndex ?? this.currentCharIndex;
+    let snippet = explicitPos?.text?.slice(0, 50).trim() || '';
+    let paraKey = (secId && pIndex !== undefined) ? `${secId}_${pIndex}` : '';
+
+    if (!paraKey) {
+      const pos = this.getCurrentCursorReadingPos();
+      if (!pos) return;
+      secId = pos.secId;
+      pIndex = pos.pIndex;
+      charIndex = pos.charIndex;
+      paraKey = pos.key;
+    }
+
+    if (!secId || pIndex === undefined) return;
+
     const allParas = getAllRenderedParas(this.scrollContainer);
-    const curIdx = allParas.findIndex(p => p.paraKey === pos.key);
-    const snippet = curIdx >= 0 ? allParas[curIdx].text.slice(0, 50).trim() : '';
+    const curIdx = allParas.findIndex(p => p.paraKey === paraKey);
+    if (!snippet && curIdx >= 0) {
+      snippet = allParas[curIdx].text.slice(0, 50).trim();
+    }
     const progress = allParas.length > 0 && curIdx >= 0 ? Math.round(((curIdx + 1) / allParas.length) * 100) : 0;
     pushJumpPoint({
-      sectionId: pos.secId,
-      paraIndex: pos.pIndex,
-      charIndex: pos.charIndex,
+      sectionId: secId,
+      paraIndex: pIndex,
+      charIndex,
       textSnippet: snippet,
       progressPercent: progress,
       source

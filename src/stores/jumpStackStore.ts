@@ -13,7 +13,7 @@ export interface JumpPoint {
   textSnippet: string; // 段落摘要（前 50 字元）
   progressPercent: number; // 全文閱讀進度百分比 (0 ~ 100)
   timestamp: number;
-  source: 'semantic' | 'jump' | 'manual' | 'scroll';
+  source: 'semantic' | 'jump' | 'manual' | 'scroll' | 'click';
 }
 
 export interface JumpStackState {
