@@ -90,8 +90,63 @@
   let deepWords = $derived(readingStats.deepWords);
   let totalWords = $derived(readingStats.totalWords);
 
+  /**
+   * 將扁平章節陣列轉換為具備父子階層關係的樹狀結構（用於 Markdown/PDF 等平面導入章節）
+   */
+  function buildTreeFromFlatSections(secs: ChapterSection[]): ChapterSection[] {
+    if (!secs || secs.length === 0) return [];
+    // 若原本已有巢狀 children 樹狀結構，則直接保留
+    if (secs.some(s => s.children && s.children.length > 0)) {
+      return secs;
+    }
+
+    // 計算每個節點的有效層級
+    function getEffectiveLevel(sec: ChapterSection): number {
+      if (sec.level && sec.level > 1) return sec.level;
+      const match = (sec.title || '').trim().match(/^(?:§\s*|section\s+)?([0-9]+(?:\.[0-9]+)+)/i);
+      if (match) {
+        return match[1].split('.').length; // 例如 "3.1" 為 2, "3.1.2" 為 3
+      }
+      return sec.level || 1;
+    }
+
+    // 檢查是否有層級大於 1 的小節；若全部都是 Level 1，直接返回
+    const hasDeeperLevel = secs.some(s => getEffectiveLevel(s) > 1);
+    if (!hasDeeperLevel) {
+      return secs;
+    }
+
+    const rootNodes: ChapterSection[] = [];
+    const stack: { node: ChapterSection; level: number }[] = [];
+
+    for (const s of secs) {
+      const level = getEffectiveLevel(s);
+      const node: ChapterSection = { ...s, children: [] };
+
+      // 向上回溯尋找父層節點
+      while (stack.length > 0 && stack[stack.length - 1].level >= level) {
+        stack.pop();
+      }
+
+      if (stack.length === 0) {
+        rootNodes.push(node);
+      } else {
+        const parent = stack[stack.length - 1].node;
+        if (!parent.children) parent.children = [];
+        parent.children.push(node);
+      }
+
+      stack.push({ node, level });
+    }
+
+    return rootNodes;
+  }
+
+  // 將可能為平面陣列的章節結構組織為樹狀結構，使子標題具備縮排與從屬感
+  let structuredSections = $derived(buildTreeFromFlatSections(sections));
+
   // Filter sections recursively based on search query
-  let filteredSections = $derived(filterSections(sections, searchQuery.toLowerCase().trim()));
+  let filteredSections = $derived(filterSections(structuredSections, searchQuery.toLowerCase().trim()));
 
   function filterSections(secs: ChapterSection[], query: string): ChapterSection[] {
     if (!query) return secs;
@@ -350,13 +405,16 @@
 
       {#each filteredSections as section}
         {@const isAct = activeSectionId === section.id}
+        {@const hasSubsections = section.children && section.children.length > 0}
         <!-- Level 1 Section -->
         <div class="flex flex-col">
           <div
             class="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-left transition-colors {
               isAct
                 ? 'bg-[#3c3836] text-[#fe8019] font-semibold border-l-2 border-[#fe8019]'
-                : 'text-[#ebdbb2] hover:bg-[#282828] hover:text-[#fabd2f]'
+                : hasSubsections
+                  ? 'text-[#ebdbb2] hover:bg-[#282828] hover:text-[#fabd2f] font-medium'
+                  : 'text-[#ebdbb2] hover:bg-[#282828] hover:text-[#fabd2f]'
             }"
           >
             <!-- Toggle Checkmark / Icon & Section Title -->
@@ -381,7 +439,7 @@
               </button>
               <button
                 type="button"
-                class="text-xs truncate text-left bg-transparent border-0 p-0 text-inherit cursor-pointer flex-1 min-w-0"
+                class="text-xs truncate text-left bg-transparent border-0 p-0 text-inherit cursor-pointer flex-1 min-w-0 {hasSubsections ? 'font-semibold tracking-wide' : 'font-normal'}"
                 onclick={() => selectSection(section.id)}
               >
                 {section.title}
@@ -395,7 +453,7 @@
                 <span class="font-mono text-[10px] text-[#fabd2f]">{section.progress}%</span>
               {/if}
 
-              {#if section.children && section.children.length > 0}
+              {#if hasSubsections}
                 <button
                   class="w-5 h-5 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#504945]/40 transition-colors"
                   onclick={(e) => toggleSectionCollapse(section.id, e)}
@@ -409,11 +467,12 @@
             </div>
           </div>
 
-          <!-- Level 2 Children -->
-          {#if section.children && section.children.length > 0 && !collapsedSections[section.id]}
-            <div class="ml-2.5 pl-2.5 flex flex-col gap-0.5 mt-0.5 border-l border-[#504945]">
+          <!-- Level 2 Children (加強縮排與左側階層導軌) -->
+          {#if hasSubsections && !collapsedSections[section.id]}
+            <div class="ml-3 pl-2.5 flex flex-col gap-0.5 mt-0.5 border-l-2 border-[#504945]/70 hover:border-[#fe8019]/40 transition-colors">
               {#each section.children as sub}
                 {@const isSubAct = activeSectionId === sub.id}
+                {@const hasSubSub = sub.children && sub.children.length > 0}
                 <div
                   class="w-full flex items-center justify-between px-2 py-1 rounded text-left transition-colors {
                     isSubAct
@@ -421,7 +480,7 @@
                       : 'text-[#d5c4a1] hover:text-[#ebdbb2] hover:bg-[#282828]'
                   }"
                 >
-                  <div class="flex-1 text-left truncate text-xs flex items-center gap-1.5 min-w-0">
+                  <div class="flex-1 text-left truncate text-[11.5px] flex items-center gap-1.5 min-w-0">
                     <button
                       type="button"
                       class="hover:scale-125 transition-transform flex items-center shrink-0 cursor-pointer bg-transparent border-0 p-0 text-inherit"
@@ -448,7 +507,13 @@
                   </div>
 
                   <div class="flex items-center gap-1 shrink-0">
-                    {#if sub.children && sub.children.length > 0}
+                    {#if sub.isRead}
+                      <span class="font-mono text-[9px] text-[#b8bb26] font-semibold">100%</span>
+                    {:else if sub.progress > 0}
+                      <span class="font-mono text-[9px] text-[#fabd2f]">{sub.progress}%</span>
+                    {/if}
+
+                    {#if hasSubSub}
                       <button
                         class="w-4 h-4 rounded flex items-center justify-center text-[#a89984] hover:text-[#ebdbb2]"
                         onclick={(e) => toggleSectionCollapse(sub.id, e)}
@@ -461,16 +526,16 @@
                   </div>
                 </div>
 
-                <!-- Level 3 Children -->
-                {#if sub.children && sub.children.length > 0 && !collapsedSections[sub.id]}
-                  <div class="ml-2 pl-2 border-l border-[#504945]/70 flex flex-col gap-0.5 py-0.5">
+                <!-- Level 3 Children (更深一層縮排) -->
+                {#if hasSubSub && !collapsedSections[sub.id]}
+                  <div class="ml-3 pl-2.5 border-l border-[#504945]/50 flex flex-col gap-0.5 py-0.5">
                     {#each sub.children as subsub}
                       {@const isSubSubAct = activeSectionId === subsub.id}
                       <button
-                        class="w-full text-left px-1.5 py-0.5 font-mono text-[10px] rounded transition-colors flex items-center gap-1 {
+                        class="w-full text-left px-1.5 py-0.5 font-mono text-[10.5px] rounded transition-colors flex items-center gap-1 {
                           isSubSubAct
                             ? 'bg-[#32302f] text-[#fe8019] font-semibold'
-                            : 'text-[#d5c4a1] hover:text-[#ebdbb2] hover:bg-[#32302f]'
+                            : 'text-[#a89984] hover:text-[#ebdbb2] hover:bg-[#32302f]'
                         }"
                         onclick={() => selectSection(subsub.id)}
                       >
