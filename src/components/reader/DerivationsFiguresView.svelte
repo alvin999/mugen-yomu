@@ -18,7 +18,7 @@
     extractDynamicFigures,
     extractDynamicFormulas
   } from '../../utils/derivationExtractor';
-  import { getStoredApiKey } from '../../services/aiService';
+  import { getStoredApiKey, getApiKey, FALLBACK_MODELS } from '../../services/aiService';
   import ImageLightboxModal from '../common/ImageLightboxModal.svelte';
   import FigureDeconstructionPanel from './derivations/FigureDeconstructionPanel.svelte';
   import FormulaDerivationPanel from './derivations/FormulaDerivationPanel.svelte';
@@ -122,8 +122,11 @@
     scanError = '';
     try {
       const p = (typeof window !== 'undefined' ? localStorage.getItem('mugen_provider') : null) || 'groq';
-      const k = getStoredApiKey(p);
-      const m = (typeof window !== 'undefined' ? localStorage.getItem('mugen_model') : null) || 'llama-3.3-70b-versatile';
+      let k = getStoredApiKey(p);
+      if (!k && p !== 'ollama') {
+        k = await getApiKey(p);
+      }
+      const m = (typeof window !== 'undefined' ? localStorage.getItem('mugen_model') : null) || (FALLBACK_MODELS[p]?.[0]?.id) || 'llama-3.3-70b-versatile';
       const o = (typeof window !== 'undefined' ? localStorage.getItem('mugen_ollama_url') : null) || 'http://localhost:11434';
 
       const result = await scanAndExtractDocumentDerivationsHeuristically(paper, p, k, m, o);
@@ -219,8 +222,11 @@
       isAnalyzingFigure = true;
       try {
         const p = (typeof window !== 'undefined' ? localStorage.getItem('mugen_provider') : null) || 'groq';
-        const k = getStoredApiKey(p);
-        const m = (typeof window !== 'undefined' ? localStorage.getItem('mugen_model') : null) || 'llama-3.3-70b-versatile';
+        let k = getStoredApiKey(p);
+        if (!k && p !== 'ollama') {
+          k = await getApiKey(p);
+        }
+        const m = (typeof window !== 'undefined' ? localStorage.getItem('mugen_model') : null) || (FALLBACK_MODELS[p]?.[0]?.id) || 'llama-3.3-70b-versatile';
         const o = (typeof window !== 'undefined' ? localStorage.getItem('mugen_ollama_url') : null) || 'http://localhost:11434';
 
         const res = await fetchFigureDeconstruction(fig, paper, p, k, m, o);
@@ -266,8 +272,11 @@
       isDerivingFormula = true;
       try {
         const p = (typeof window !== 'undefined' ? localStorage.getItem('mugen_provider') : null) || 'groq';
-        const k = getStoredApiKey(p);
-        const m = (typeof window !== 'undefined' ? localStorage.getItem('mugen_model') : null) || 'llama-3.3-70b-versatile';
+        let k = getStoredApiKey(p);
+        if (!k && p !== 'ollama') {
+          k = await getApiKey(p);
+        }
+        const m = (typeof window !== 'undefined' ? localStorage.getItem('mugen_model') : null) || (FALLBACK_MODELS[p]?.[0]?.id) || 'llama-3.3-70b-versatile';
         const o = (typeof window !== 'undefined' ? localStorage.getItem('mugen_ollama_url') : null) || 'http://localhost:11434';
 
         const res = await fetchFormulaDerivation(formula, paper, p, k, m, o);
@@ -432,8 +441,11 @@ ${scratchpadAiResult ? $t('derivations.aiMentorCritiqueHeader', { verdict: scrat
     isVerifyingScratchpad = true;
     try {
       const p = (typeof window !== 'undefined' ? localStorage.getItem('mugen_provider') : null) || 'groq';
-      const k = getStoredApiKey(p);
-      const m = (typeof window !== 'undefined' ? localStorage.getItem('mugen_model') : null) || 'llama-3.3-70b-versatile';
+      let k = getStoredApiKey(p);
+      if (!k && p !== 'ollama') {
+        k = await getApiKey(p);
+      }
+      const m = (typeof window !== 'undefined' ? localStorage.getItem('mugen_model') : null) || (FALLBACK_MODELS[p]?.[0]?.id) || 'llama-3.3-70b-versatile';
       const o = (typeof window !== 'undefined' ? localStorage.getItem('mugen_ollama_url') : null) || 'http://localhost:11434';
 
       scratchpadAiResult = await verifyScratchpadDerivation(scratchpadLatex, scratchpadNotes, p, k, m, o);

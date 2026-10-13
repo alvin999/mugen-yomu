@@ -13,7 +13,8 @@
     translateAcademicText,
     generatePaperAbstractCore,
     FALLBACK_MODELS,
-    getStoredApiKey
+    getStoredApiKey,
+    getApiKey
   } from '../../services/aiService';
   import { normalizeParagraphs } from '../../utils/paragraphUtils';
   import { copyLatexToClipboard } from '../../utils/katexUtils';
@@ -211,13 +212,13 @@
   let sectionJumpTimer: any = null;
   let scrollDebounceTimer: any = null;
 
-  // Paragraph Translation State
-  let paragraphTranslations: Record<string, string> = {};
-  let showTranslationMap: Record<string, boolean> = {};
-  let translatingMap: Record<string, boolean> = {};
-  let translationSourceMap: Record<string, string> = {};
-  let translationNoticeMap: Record<string, string> = {};
-  let isTypingMap: Record<string, boolean> = {};
+  // Paragraph Translation State (Svelte 5 Runes Reactive Proxies)
+  let paragraphTranslations = $state<Record<string, string>>({});
+  let showTranslationMap = $state<Record<string, boolean>>({});
+  let translatingMap = $state<Record<string, boolean>>({});
+  let translationSourceMap = $state<Record<string, string>>({});
+  let translationNoticeMap = $state<Record<string, string>>({});
+  let isTypingMap = $state<Record<string, boolean>>({});
   let isSectionTranslating = $state<boolean>(false);
 
   // Abstract Generation State
@@ -951,8 +952,11 @@
 
     try {
       const p = (typeof window !== 'undefined' ? localStorage.getItem('mugen_provider') : null) || 'groq';
-      const k = getStoredApiKey(p);
-      const m = (typeof window !== 'undefined' ? localStorage.getItem('mugen_model') : null) || 'llama-3.3-70b-versatile';
+      let k = getStoredApiKey(p);
+      if (!k && p !== 'ollama') {
+        k = await getApiKey(p);
+      }
+      const m = (typeof window !== 'undefined' ? localStorage.getItem('mugen_model') : null) || (FALLBACK_MODELS[p]?.[0]?.id) || 'llama-3.3-70b-versatile';
       const o = (typeof window !== 'undefined' ? localStorage.getItem('mugen_ollama_url') : null) || 'http://localhost:11434';
 
       const streamResult = await translateAcademicText(
@@ -1018,7 +1022,10 @@
 
     try {
       const activeProvider = localStorage.getItem('mugen_provider') || 'groq';
-      const apiKey = getStoredApiKey(activeProvider);
+      let apiKey = getStoredApiKey(activeProvider);
+      if (!apiKey && activeProvider !== 'ollama') {
+        apiKey = await getApiKey(activeProvider);
+      }
       const activeModel = localStorage.getItem('mugen_model') || (FALLBACK_MODELS[activeProvider]?.[0]?.id) || '';
       const ollamaUrl = localStorage.getItem('mugen_ollama_url') || 'http://localhost:11434';
 
@@ -1234,8 +1241,11 @@
       isLightboxOpen: Boolean(activeLightboxImg),
       onTranslateSelection: async (selText, secId, pIndex) => {
         const p = (typeof window !== 'undefined' ? localStorage.getItem('mugen_provider') : null) || 'groq';
-        const k = getStoredApiKey(p);
-        const m = (typeof window !== 'undefined' ? localStorage.getItem('mugen_model') : null) || 'llama-3.3-70b-versatile';
+        let k = getStoredApiKey(p);
+        if (!k && p !== 'ollama') {
+          k = await getApiKey(p);
+        }
+        const m = (typeof window !== 'undefined' ? localStorage.getItem('mugen_model') : null) || (FALLBACK_MODELS[p]?.[0]?.id) || 'llama-3.3-70b-versatile';
         const o = (typeof window !== 'undefined' ? localStorage.getItem('mugen_ollama_url') : null) || 'http://localhost:11434';
         showToast('正在翻譯選取片段...');
         try {

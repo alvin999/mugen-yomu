@@ -147,7 +147,8 @@ export async function translateAcademicText(
     }
 
     if (errorNotice) {
-      const displayErr = `[翻譯服務連線異常]：${errorNotice}。請檢查網路或於右上角重新確認金鑰與模型設定。`;
+      const cleanNotice = errorNotice.replace(/[。.]+$/, '').trim();
+      const displayErr = `[翻譯服務連線異常]：${cleanNotice}。請點選卡片右上角「重新翻譯」再試，或檢查網路與模型金鑰設定。`;
       if (onChunk) {
         await playTypewriter(displayErr, onChunk, 12);
       }
@@ -155,7 +156,9 @@ export async function translateAcademicText(
         translation: displayErr,
         cached: false,
         latencyMs: 30,
-        fallbackNotice: `連線失敗: ${errorNotice.slice(0, 35)}`
+        fallbackNotice: cleanNotice.includes('unexpected EOF') || cleanNotice.includes('過載') || cleanNotice.includes('繁忙')
+          ? '伺服器短暫過載 (unexpected EOF)，請點選右上角「重新翻譯」再試'
+          : `連線失敗: ${cleanNotice}，可點選「重新翻譯」再試`
       };
     }
   }

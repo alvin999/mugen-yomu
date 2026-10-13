@@ -501,6 +501,16 @@
                 <span class="material-symbols-outlined text-[12px]">tune</span>
                 <span>{$t('reader.paragraphs.configureKey')}</span>
               </button>
+            {:else if translationNotice.includes('重新翻譯') || translationNotice.includes('再試') || translationNotice.includes('過載') || translationNotice.includes('失敗')}
+              <button
+                type="button"
+                class="font-mono text-[10px] bg-[#fabd2f] hover:bg-[#fe8019] text-[#1d2021] font-semibold px-2 py-0.5 rounded cursor-pointer transition-colors shadow-xs ml-auto shrink-0 flex items-center gap-1 active:scale-95"
+                onclick={(e) => { e.stopPropagation(); onretranslate?.({ secId: sec.id, pIndex, text: para }); }}
+                title={$t('reader.paragraphs.retranslateTooltip')}
+              >
+                <span class="material-symbols-outlined text-[12px]">refresh</span>
+                <span>{$t('reader.paragraphs.retranslate')}</span>
+              </button>
             {/if}
           </div>
         {/if}

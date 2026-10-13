@@ -219,17 +219,37 @@ export async function callGroqChat(
 
     if (!response.ok) {
       const errorText = await response.text();
-      // 若遭遇伺服器 EOF、499 或 500/502/503/負載限制，自動切換為 8b-instant 非串流救急
-      if (errorText.includes('unexpected EOF') || errorText.includes('stream reading') || response.status >= 500) {
-        console.warn('[Groq 容錯] 伺服器端遭遇 EOF 或服務異常，自動切換為 llama-3.1-8b-instant 應急重試...', errorText);
-        await delay(400);
-        const fbResult = await tryFallback8B();
-        if (fbResult) return fbResult;
+      let parsedError = '';
+      try {
+        const parsedJson = JSON.parse(errorText);
+        parsedError = parsedJson.error?.message || '';
+      } catch {
+        parsedError = errorText;
       }
 
-      if (!response.ok) {
-        throw new Error(`Groq 服務暫時繁忙或連線中斷 (${response.status})，已自動嘗試應急重試。`);
+      // 若為串流或連線異常 (EOF/500/503)，優先切換為非串流模式直接取得完整結果
+      if (isStreaming && (response.status >= 500 || response.status === 499 || errorText.includes('EOF') || errorText.includes('stream'))) {
+        console.warn('[Groq 容錯] 串流請求異常，切換為非串流模式直接請求完整 JSON...');
+        await delay(350);
+        const retryNonStream = await doGroqRequest(false);
+        if (retryNonStream.ok) {
+          const json = await retryNonStream.json();
+          const reply = json.choices?.[0]?.message?.content || '';
+          if (reply) {
+            if (onChunk) await playTypewriter(reply, onChunk, 10);
+            const latencyMs = Math.round(performance.now() - startTime);
+            return { reply, latencyMs, model: model || 'llama-3.3-70b-versatile', provider: 'groq' };
+          }
+        }
       }
+
+      // 嘗試 8B-Instant 應急重試
+      await delay(400);
+      const fbResult = await tryFallback8B();
+      if (fbResult) return fbResult;
+
+      const finalErrMsg = parsedError ? `Groq: ${parsedError}` : `Groq 服務暫時繁忙 (${response.status})，請於稍後再試`;
+      throw new Error(finalErrMsg);
     }
 
     let reply = '';
@@ -237,10 +257,20 @@ export async function callGroqChat(
       try {
         reply = await streamOpenAICompatible(response, onChunk);
       } catch (streamErr: any) {
-        console.warn('[Groq 串流容錯] 串流解析中斷，切換為 8B-Instant 應急重試:', streamErr);
-        await delay(400);
+        console.warn('[Groq 串流容錯] 串流解析中斷，切換為非串流模式救急:', streamErr);
+        await delay(350);
+        const retryNonStream = await doGroqRequest(false);
+        if (retryNonStream.ok) {
+          const json = await retryNonStream.json();
+          const nonStreamReply = json.choices?.[0]?.message?.content || '';
+          if (nonStreamReply) {
+            if (onChunk) await playTypewriter(nonStreamReply, onChunk, 10);
+            return { reply: nonStreamReply, latencyMs: Math.round(performance.now() - startTime), model: model || 'llama-3.3-70b-versatile', provider: 'groq' };
+          }
+        }
         const fbResult = await tryFallback8B();
         if (fbResult) return fbResult;
+        throw new Error('Groq 伺服器短暫過載 (unexpected EOF)，請於稍後再試');
       }
     } else {
       const json = await response.json();
@@ -256,7 +286,7 @@ export async function callGroqChat(
     if (!reply || reply.trim().length === 0) {
       const fbResult = await tryFallback8B();
       if (fbResult) return fbResult;
-      throw new Error('Groq 回應為空，未獲得模型有效回覆。');
+      throw new Error('Groq 伺服器短暫過載 (unexpected EOF)，請於稍後再試');
     }
 
     const latencyMs = Math.round(performance.now() - startTime);
@@ -274,7 +304,7 @@ export async function callGroqChat(
       await delay(500);
       const fbResult = await tryFallback8B();
       if (fbResult) return fbResult;
-      throw new Error('Groq 伺服器短暫過載 (unexpected EOF)，請於稍後再次發送。');
+      throw new Error('Groq 伺服器短暫過載 (unexpected EOF)，請於稍後再試');
     }
     throw err;
   }

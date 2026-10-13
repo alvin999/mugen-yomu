@@ -26,6 +26,7 @@
   } from '../../services/readingProgressService';
   import {
     getStoredAiConfig,
+    resolveStoredAiConfig,
     dispatchGenerateIntuition,
     dispatchGenerateSyntax,
     dispatchGenerateTerminology
@@ -393,7 +394,8 @@
     if (!sec || !sec.id || !activePaper) return;
     loadingIntuitionId = sec.id;
     try {
-      await dispatchGenerateIntuition(activePaper, sec, getStoredAiConfig());
+      const aiConfig = await resolveStoredAiConfig();
+      await dispatchGenerateIntuition(activePaper, sec, aiConfig);
       dispatch('updatePaper', { paper: { ...activePaper } });
       dispatch('refreshCacheStats');
       setTimeout(() => {
@@ -410,7 +412,8 @@
     if (!sec || !sec.id || !activePaper) return;
     loadingSyntaxId = sec.id;
     try {
-      await dispatchGenerateSyntax(activePaper, sec, selectedText, getStoredAiConfig());
+      const aiConfig = await resolveStoredAiConfig();
+      await dispatchGenerateSyntax(activePaper, sec, selectedText, aiConfig);
       dispatch('updatePaper', { paper: { ...activePaper } });
       dispatch('refreshCacheStats');
       setTimeout(() => {
@@ -427,7 +430,8 @@
     if (!sec || !sec.id || !activePaper) return;
     loadingTerminologyId = sec.id;
     try {
-      await dispatchGenerateTerminology(activePaper, sec, getStoredAiConfig());
+      const aiConfig = await resolveStoredAiConfig();
+      await dispatchGenerateTerminology(activePaper, sec, aiConfig);
       dispatch('updatePaper', { paper: { ...activePaper } });
       dispatch('refreshCacheStats');
       setTimeout(() => {

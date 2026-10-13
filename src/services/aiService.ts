@@ -67,4 +67,5 @@ export { generatePaperAbstractCore } from './abstractAiService';
 
 // 8. 導出配置與金鑰存取工具
 export type { AiClientConfig } from './cognitiveDispatcher';
-export { getStoredApiKey, getStoredAiConfig } from './cognitiveDispatcher';
+export { getStoredApiKey, getStoredAiConfig, resolveStoredAiConfig } from './cognitiveDispatcher';
+export { getApiKey } from './crypto/keyVaultService';
